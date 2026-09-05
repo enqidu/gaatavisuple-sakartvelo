@@ -214,6 +214,11 @@ inescapable loop.
 Khachapuri makes him immune, which is the joke: the only thing that beats it is
 lunch.
 
+`assets/laugh.mp3` plays as you come into her radius — on the rising edge only,
+and skipped if the clip is still running from the last one. It runs 5.7s, far
+longer than it takes to walk past someone, so restarting it on every approach
+would stutter it constantly.
+
 `CHARM.immune` is the number that matters, not `cooldown`. Being charmed pins
 him where he stands — which is inside her hitbox — so a per-character cooldown
 alone did not stop a loop: it expired while he was still on top of her, and the

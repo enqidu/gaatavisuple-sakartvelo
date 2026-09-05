@@ -460,13 +460,18 @@ const Stinger = (() => {
     return el;
   };
   return {
-    laugh() {
+    /* onlyIfIdle matters for the proximity trigger: the clip runs 5.7s, far
+       longer than it takes to walk past someone, so restarting it on every
+       approach would stutter it constantly. Let it finish instead. */
+    laugh({ onlyIfIdle = false } = {}) {
       if (Sfx.muted) return;
       const a = ensure();
       if (!a) return;
+      if (onlyIfIdle && !a.paused && !a.ended) return;
       try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
       a.play().catch(() => { /* no gesture yet */ });
     },
+    get playing() { return !!el && !el.paused && !el.ended; },
     get element() { return el; },
   };
 })();
@@ -1423,7 +1428,10 @@ class Admirer extends Entity {
 
     const d = p.cx - this.cx;
     const inRange = Math.abs(d) < CHARM.radius && Math.abs(p.bottom - this.bottom) < 44;
+    const wasActive = this.active;
     this.active = inRange && this.cd <= 0 && p.invincible <= 0 && p.charmImmune <= 0;
+    // Laughs as you come into range, on the rising edge only.
+    if (this.active && !wasActive) Stinger.laugh({ onlyIfIdle: true });
 
     if (this.active && p.charmed <= 0) {
       p.charmPull -= Math.sign(d) * CHARM.pull;
@@ -1564,7 +1572,7 @@ game.addCombo = function (p, x, y, base) {
 game.lose = function () {
   if (this.state !== 'play') return;
   this.state = 'lost'; this.endT = 0;
-  shake = 7; flash = 0.7; Sfx.lose(); Stinger.laugh();
+  shake = 7; flash = 0.7; Sfx.lose();
   burst(this.player.cx, this.player.y + 8, 30, { colors: ['#e8434f', '#fff'], speed: 160, life: 1 });
   // Death pop: hop up, then fall clean through the level. No collision, so it
   // reads as leaving the stage rather than landing somewhere.
