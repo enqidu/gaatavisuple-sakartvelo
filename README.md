@@ -1,4 +1,4 @@
-# Aslan Mode — *Gaatavisuple Achara*
+# Misha Mode — *Gaatavisuple Achara*
 
 An 8-bit side-scrolling platformer built for screen recording. No dependencies,
 no build step.

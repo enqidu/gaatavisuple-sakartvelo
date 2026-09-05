@@ -2471,7 +2471,7 @@ function drawCoinIcon(x, y) {
 function drawTitle() {
   g.fillStyle = 'rgba(8,10,20,.62)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
   const bounce = Math.round(Math.sin(game.time * 2.4) * 2);
-  drawTextCentered(g, 'ASLAN MODE', VIEW_W / 2, 44 + bounce, '#ffd85e', 3);
+  drawTextCentered(g, 'MISHA MODE', VIEW_W / 2, 44 + bounce, '#ffd85e', 3);
   drawTextCentered(g, 'GAATAVISUPLE ACHARA', VIEW_W / 2, 80, '#7ec8f0', 1);
   if (Math.floor(game.time * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 116, '#fff', 1);
