@@ -31,9 +31,30 @@ background key-out reads canvas pixels, which browsers block on file origins.
 Music and effects mute separately — the track is the loud one, and wanting it
 off is not the same as wanting the coin blips off.
 
+## Pickups
+
+Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
+114px wide and the whole screen is 320.
+
+| | |
+|---|---|
+| **Acharuli khachapuri** | Invincibility. Also immunity to the distraction. |
+| **White powder** | Double jump, for the rest of the life. Not on a timer — it exists so you can reach places, and a countdown would just mean rushing the platforming. Placed ahead of every boss so a death is never a walk back in without it. |
+| **Rose** | Heals a heart, or 500 points at full health. |
+
+The second jump is a flat velocity set, not an add, so hammering it mid-rise
+cannot stack into an arbitrarily high launch — measured at 55px when spammed
+versus 119px used properly.
+
+**Jump apex is 70px single, 119px with powder.** It was 61.8px, and a block four
+tiles up needs a 64px rise — so six surfaces in the level, including a `?` block
+and the first mid boss's own platform, missed by 2.2px and simply could not be
+reached.
+
 ## Music
 
-`assets/music.mp3`, looping at 0.4 volume. It starts on the keypress that
+`assets/music.m4a` (AAC, about a third the size of the original mp3), looping at
+0.4 volume. It starts on the keypress that
 leaves the title screen, never at load: browsers refuse audio until a real user
 gesture, so a `play()` on page load just throws and leaves the track silently
 dead.
@@ -67,6 +88,7 @@ Drop five PNGs into `assets/`:
 | `boss.png` | Flying boss — tracks you forever, **cannot be killed** |
 | `death.png` | Death pose — hops up and falls off the bottom of the screen |
 | `lady.png` | The distraction hazard (see below) |
+| `powder.png` | Grants a double jump (see below) |
 | `bg.png` | Parallax backdrop (scrolls at 0.34×, mirrored so it tiles seamlessly) |
 
 Anything missing falls back to a generated placeholder, so the game always runs.

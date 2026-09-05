@@ -426,10 +426,10 @@ const Music = (() => {
   let el = null, failed = false, muted = false;
   const ensure = () => {
     if (el || failed) return el;
-    el = new Audio('assets/music.mp3');
+    el = new Audio('assets/music.m4a');   // AAC: about a third the size of the mp3
     el.loop = true;
     el.volume = 0.4;
-    el.addEventListener('error', () => { failed = true; console.warn('music: assets/music.mp3 failed to load'); });
+    el.addEventListener('error', () => { failed = true; console.warn('music: assets/music.m4a failed to load'); });
     return el;
   };
   return {
@@ -1466,6 +1466,12 @@ class Coin extends Entity {
 
 const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12] };
 
+// [line 1, line 2, colour] — drawn above the pickup so it names itself.
+const ITEM_LABEL = {
+  khachapuri: ['ACHARULI', 'KHACHAPURI', '#ffd85e'],
+  powder:     ['WHITE', 'POWDER', '#9ee8ff'],
+};
+
 class Item extends Entity {
   constructor(tx, ty, kind) {
     const [w, h] = ITEM_SIZE[kind];
@@ -2204,6 +2210,14 @@ function drawEntities() {
     if (it.kind === 'khachapuri') drawKhachapuri(it.x, it.y);
     else if (it.kind === 'powder') drawSprite(ART.powder, it);
     else drawRose(it.x, it.y);
+
+    // Named on two lines: "ACHARULI KHACHAPURI" on one line is 114px wide and
+    // the whole screen is only 320.
+    const label = ITEM_LABEL[it.kind];
+    if (label) {
+      drawTextCentered(g, label[0], it.cx, it.y - 17, label[2], 1);
+      drawTextCentered(g, label[1], it.cx, it.y - 9,  label[2], 1);
+    }
   }
 
   /* No walk bob.
