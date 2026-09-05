@@ -448,6 +448,29 @@ const Music = (() => {
   };
 })();
 
+/* One-shot sample for the end of a run. Counts as an effect, not music, so it
+   follows the effects mute (N) rather than the music mute (M). */
+const Stinger = (() => {
+  let el = null, failed = false;
+  const ensure = () => {
+    if (el || failed) return el;
+    el = new Audio('assets/laugh.mp3');
+    el.volume = 0.8;
+    el.addEventListener('error', () => { failed = true; console.warn('laugh: assets/laugh.mp3 failed to load'); });
+    return el;
+  };
+  return {
+    laugh() {
+      if (Sfx.muted) return;
+      const a = ensure();
+      if (!a) return;
+      try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
+      a.play().catch(() => { /* no gesture yet */ });
+    },
+    get element() { return el; },
+  };
+})();
+
 /* ---------------------------------------------------------- input */
 
 const Input = {
@@ -1541,7 +1564,7 @@ game.addCombo = function (p, x, y, base) {
 game.lose = function () {
   if (this.state !== 'play') return;
   this.state = 'lost'; this.endT = 0;
-  shake = 7; flash = 0.7; Sfx.lose();
+  shake = 7; flash = 0.7; Sfx.lose(); Stinger.laugh();
   burst(this.player.cx, this.player.y + 8, 30, { colors: ['#e8434f', '#fff'], speed: 160, life: 1 });
   // Death pop: hop up, then fall clean through the level. No collision, so it
   // reads as leaving the stage rather than landing somewhere.
@@ -1562,7 +1585,7 @@ game.escape = function () {
 game.win = function () {
   this.state = 'won'; this.endT = 0;
   this.best = Math.max(this.best, this.score);
-  Sfx.win();
+  Sfx.win(); Stinger.laugh();
   for (let i = 0; i < 70; i++)
     burst(this.player.cx + rand(-70, 70), this.player.y - rand(0, 90), 1,
           { colors: ['#ffd85e', '#e8434f', '#3ad47a', '#41a6f0', '#fff'], speed: 80, life: 1.8, size: 2, grav: 170 });
