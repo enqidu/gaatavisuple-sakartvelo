@@ -38,7 +38,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 
 | | |
 |---|---|
-| **Acharuli khachapuri** | Invincibility. Also immunity to the distraction. |
+| **Acharuli khachapuri** | 9s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
 | **Rose** | Heals a heart, or 500 points at full health. |
 
@@ -85,7 +85,7 @@ Drop five PNGs into `assets/`:
 | `hero.png` | Player character |
 | `walker.png` | Basic enemy — one stomp kills |
 | `mid.png` | Mid boss — three stomps, charges when you get close |
-| `boss.png` | Flying boss — tracks you forever, **cannot be killed** |
+| `boss.png` | Flying boss — stalks you, then fights in the arena |
 | `death.png` | Death pose — hops up and falls off the bottom of the screen |
 | `lady.png` | The distraction hazard (see below) |
 | `powder.png` | Grants a double jump (see below) |
@@ -139,17 +139,10 @@ on-screen height in buffer pixels — the tile grid is 16, so `h: 30` is a
 character just under two tiles tall. `hitW`/`hitH` set the collision box as a
 fraction of the drawn sprite, so the hitbox tracks whatever art you supply.
 
-## Pickups
-
-| Item | Effect |
-|---|---|
-| **Acharuli khachapuri** | 9 seconds of invincibility. Touching any enemy destroys it, scoring 400 with the combo multiplier. The flying boss stays untouchable — he is unkillable by design — but he cannot hurt you either. A gold ACHARULI bar in the HUD counts it down, and the sprite flickers for the last 1.6s as a warning. |
-| **Rose** | Heals one heart. At full health it pays 500 points instead of overhealing. |
-
-Both are drawn from hand-placed rectangles rather than image assets — at 320×180
-a downscaled photo of a khachapuri would be unreadable mush, whereas 14×10 of
-deliberate pixels reads instantly. Same for the Georgian flags planted along the
-route, the flag at the finish line, the helicopter, and the rose the hero carries.
+Both khachapuri and rose are drawn from hand-placed rectangles rather than
+image assets — at 320x180 a downscaled photo would be unreadable mush, whereas
+14x10 of deliberate pixels reads instantly. Same for the Georgian flags, the
+finish flag, the helicopter, and the rose the hero carries.
 
 Placement is in `LEVEL.items` and `LEVEL.flags`, in tile coordinates.
 
