@@ -39,7 +39,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 | | |
 |---|---|
 | **Acharuli khachapuri** | Invincibility. Also immunity to the distraction. |
-| **White powder** | Double jump, for the rest of the life. Not on a timer — it exists so you can reach places, and a countdown would just mean rushing the platforming. Placed ahead of every boss so a death is never a walk back in without it. |
+| **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
 | **Rose** | Heals a heart, or 500 points at full health. |
 
 The second jump is a flat velocity set, not an add, so hammering it mid-rise
@@ -352,3 +352,19 @@ before landing still fires).
 Jump apex is `jumpVel² / (2 × gravity)`. If you raise pipe or platform heights,
 re-check that number against `(13 - pipe.y) × 16` — the ground surface is row
 13, so a pipe at `y: 10` stands 48px proud, not 64.
+
+## High scores
+
+Top 5, with arcade-style three-letter entry after any qualifying run. Stored in
+`localStorage` under `mishamode.scores.v1`, so **the board is per-browser** —
+GitHub Pages serves static files and there is no server to hold a shared one.
+Clearing site data clears the board.
+
+Every storage call is wrapped in try/catch: `localStorage` throws outright in
+some private-browsing modes rather than returning null, and `load()` also
+filters rows with a non-numeric score so a hand-edited or half-written payload
+cannot break the title screen.
+
+To make it global you would need a backend Pages cannot provide — a free tier of
+Firebase/Supabase, or a small serverless function — plus some abuse handling,
+since a client-side score can be posted by anyone.

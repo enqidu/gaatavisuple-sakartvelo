@@ -866,7 +866,7 @@ class Player extends Entity {
     this.invuln = 0; this.invincible = 0; this.coyote = 0; this.buffer = 0;
     this.runT = 0; this.combo = 0;
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
-    this.doubleJump = false; this.airJumps = 0;
+    this.doubleJumpT = 0; this.airJumps = 0;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
     // rescales the sprite every frame, and at 4x upscale each 1px change in
     // the rounded draw size is a visible 4px jolt — it reads as vibration.
@@ -904,6 +904,8 @@ class Player extends Entity {
     return { x: landTx * TILE, y: gy - this.h };
   }
 
+  get doubleJump() { return this.doubleJumpT > 0; }
+
   fellInPit() {
     this.hp--;
     this.combo = 0;
@@ -938,6 +940,12 @@ class Player extends Entity {
   update(dt) {
     this.charmed = Math.max(0, this.charmed - dt);
     this.charmImmune = Math.max(0, this.charmImmune - dt);
+    const hadDJ = this.doubleJumpT > 0;
+    this.doubleJumpT = Math.max(0, this.doubleJumpT - dt);
+    if (hadDJ && this.doubleJumpT === 0) {
+      this.airJumps = 0;
+      floatText(this.cx, this.y - 12, 'WORN OFF', '#8890a4');
+    }
     const stuck = this.charmed > 0;
 
     const wantL = !stuck && Input.left(), wantR = !stuck && Input.right();
@@ -1521,6 +1529,48 @@ class Item extends Entity {
   }
 }
 
+/* ---------------------------------------------------------- high scores
+
+   Local to the browser. GitHub Pages serves static files only, so there is no
+   server to hold a shared board — see the README for what a global one would
+   need. Every localStorage call is wrapped: it throws outright in some private
+   modes rather than just returning null. */
+
+const ENTRY_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ.- ';
+
+const Scores = {
+  KEY: 'mishamode.scores.v1',
+  MAX: 5,
+  load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(this.KEY));
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .filter(r => r && typeof r.score === 'number' && isFinite(r.score))
+        .map(r => ({ name: String(r.name || '---').slice(0, 3), score: Math.max(0, Math.floor(r.score)) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, this.MAX);
+    } catch (e) { return []; }
+  },
+  save(list) {
+    try { localStorage.setItem(this.KEY, JSON.stringify(list.slice(0, this.MAX))); }
+    catch (e) { /* storage unavailable — board is just not persisted */ }
+  },
+  qualifies(score) {
+    if (!(score > 0)) return false;
+    const l = this.load();
+    return l.length < this.MAX || score > l[l.length - 1].score;
+  },
+  add(name, score) {
+    const l = this.load();
+    l.push({ name, score: Math.max(0, Math.floor(score)) });
+    l.sort((a, b) => b.score - a.score);
+    const top = l.slice(0, this.MAX);
+    this.save(top);
+    return top;
+  },
+};
+
 /* ---------------------------------------------------------- game state */
 
 const game = {
@@ -1529,6 +1579,7 @@ const game = {
 };
 
 const KHACHAPURI_TIME = 9;   // seconds of invincibility
+const POWDER_TIME = 18;      // seconds of double jump
 
 function reset(toTitle = false) {
   buildGrid();
@@ -1552,6 +1603,7 @@ function reset(toTitle = false) {
   ];
   game.flagsConverted = 0;
   game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
+  game.entry = null;
   game.score = 0; game.endT = 0; game.time = 0;
   game.state = toTitle ? 'title' : 'play';
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
@@ -1598,6 +1650,31 @@ game.win = function () {
     burst(this.player.cx + rand(-70, 70), this.player.y - rand(0, 90), 1,
           { colors: ['#ffd85e', '#e8434f', '#3ad47a', '#41a6f0', '#fff'], speed: 80, life: 1.8, size: 2, grav: 170 });
 };
+
+/* Arcade-style three-letter entry: no HTML input, so it stays inside the
+   320x180 buffer and the pixel font. */
+function startEntry(score) {
+  game.entry = { idx: [0, 0, 0], slot: 0, score, t: 0 };
+  game.state = 'entry';
+}
+
+function updateEntry(dt) {
+  const e = game.entry;
+  e.t += dt;
+  const n = ENTRY_CHARS.length;
+  if (Input.justDown('ArrowUp'))    e.idx[e.slot] = (e.idx[e.slot] + 1) % n;
+  if (Input.justDown('ArrowDown'))  e.idx[e.slot] = (e.idx[e.slot] + n - 1) % n;
+  if (Input.justDown('ArrowRight')) e.slot = Math.min(2, e.slot + 1);
+  if (Input.justDown('ArrowLeft'))  e.slot = Math.max(0, e.slot - 1);
+  // Guard: the same Space that dismissed the results screen would otherwise
+  // confirm a blank name on the very next frame.
+  if (e.t > 0.3 && (Input.justDown('Space') || Input.justDown('Enter'))) {
+    Scores.add(e.idx.map(i => ENTRY_CHARS[i]).join(''), e.score);
+    game.entry = null;
+    Sfx.win();
+    reset(true);
+  }
+}
 
 /* ---------------------------------------------------------- camera */
 
@@ -1667,7 +1744,7 @@ function resolveItems() {
     if (it.kind === 'powder') {
       // Lasts for the rest of the life, not on a timer: it exists so you can
       // reach places, and a countdown would just mean rushing the platforming.
-      p.doubleJump = true;
+      p.doubleJumpT = POWDER_TIME;
       p.airJumps = 1;
       game.score += 500;
       floatText(p.cx, p.y - 14, 'DOUBLE JUMP', '#9ee8ff');
@@ -1792,6 +1869,8 @@ function update(dt) {
     return;
   }
 
+  if (game.state === 'entry') { game.time += dt; updateEntry(dt); return; }
+
   if (freeze > 0) { freeze -= dt; updateEffects(dt * 0.25); return; }
 
   if (game.state === 'escape') {
@@ -1816,14 +1895,21 @@ function update(dt) {
     }
     updateEffects(dt);
     updateCamera(dt);
-    if (Input.justDown('KeyR') || (game.endT > 1.4 && Input.jumpTap())) reset();
+    if (Input.justDown('KeyR') || (game.endT > 1.4 && Input.jumpTap())) {
+      if (Scores.qualifies(game.score)) startEntry(game.score);
+      else reset(true);            // back to the title so the board is visible
+    }
     return;
   }
 
   game.time += dt;
   game.player.update(dt);
 
-  if (!game.boss && game.player.cx > LEVEL.bossTriggerX * TILE) {
+  /* `!game.bossBeaten` matters: his exit sets game.boss to null, and the
+     player is still standing well past the trigger line when it does, so
+     without it he was immediately respawned at full health the frame after
+     escaping. */
+  if (!game.boss && !game.bossBeaten && game.player.cx > LEVEL.bossTriggerX * TILE) {
     game.boss = new FlyingBoss(game.player.cx + 200, 60);
     floatText(game.player.cx, game.player.y - 24, 'HE IS HERE', '#c9a0ff');
     shake = 4; flash = 0.45; Sfx.deny();
@@ -2457,18 +2543,21 @@ function drawHud() {
   if (game.player.combo > 1)
     drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
   if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
-  if (game.player.doubleJump) {
-    const ready = game.player.airJumps > 0;
-    drawText(g, '2X JUMP', 8, 40, ready ? '#9ee8ff' : '#4a5866', 1);
-  }
-
-  if (game.player.invincible > 0) {
-    const frac = game.player.invincible / KHACHAPURI_TIME;
-    drawText(g, 'ACHARULI', 8, 41, '#ffd85e', 1);
-    g.fillStyle = '#2a2f3a'; g.fillRect(8, 51, 62, 4);
-    g.fillStyle = '#ffd85e'; g.fillRect(8, 51, Math.round(62 * frac), 4);
-    g.fillStyle = '#fff2c0'; g.fillRect(8, 51, Math.round(62 * frac), 1);
-  }
+  /* Stacked, not overlaid. Both timers used to draw a label at y=40/41, so
+     holding powder and khachapuri at once printed them on top of each other. */
+  let ty = 40;
+  const timerBar = (label, frac, col, hi, dim) => {
+    drawText(g, label, 8, ty, frac > 0.28 || Math.floor(game.time * 6) % 2 === 0 ? col : dim, 1);
+    g.fillStyle = '#2a2f3a'; g.fillRect(8, ty + 9, 62, 4);
+    g.fillStyle = col;       g.fillRect(8, ty + 9, Math.round(62 * frac), 4);
+    g.fillStyle = hi;        g.fillRect(8, ty + 9, Math.round(62 * frac), 1);
+    ty += 18;
+  };
+  if (game.player.doubleJumpT > 0)
+    timerBar(game.player.airJumps > 0 ? '2X JUMP' : '2X USED',
+             game.player.doubleJumpT / POWDER_TIME, '#9ee8ff', '#e8f8ff', '#4a5866');
+  if (game.player.invincible > 0)
+    timerBar('ACHARULI', game.player.invincible / KHACHAPURI_TIME, '#ffd85e', '#fff2c0', '#6a5a20');
 }
 
 function drawCoinIcon(x, y) {
@@ -2476,15 +2565,52 @@ function drawCoinIcon(x, y) {
   g.fillStyle = '#e8a020'; g.fillRect(x, y, 5, 1); g.fillRect(x, y + 6, 5, 1);
 }
 
+function drawScoreboard(cx, y) {
+  const list = Scores.load();
+  drawTextCentered(g, 'TOP 5', cx, y, '#ffd85e', 1);
+  if (!list.length) {
+    drawTextCentered(g, 'NO SCORES YET', cx, y + 12, '#8890a4', 1);
+    return;
+  }
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    drawTextCentered(g, `${i + 1} ${r.name} ${String(r.score).padStart(6, '0')}`,
+                     cx, y + 12 + i * 8, i === 0 ? '#fff' : '#9aa4b8', 1);
+  }
+}
+
 function drawTitle() {
   g.fillStyle = 'rgba(8,10,20,.62)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
   const bounce = Math.round(Math.sin(game.time * 2.4) * 2);
-  drawTextCentered(g, 'MISHA MODE', VIEW_W / 2, 44 + bounce, '#ffd85e', 3);
-  drawTextCentered(g, 'GAATAVISUPLE ACHARA', VIEW_W / 2, 80, '#7ec8f0', 1);
+  drawTextCentered(g, 'MISHA MODE', VIEW_W / 2, 22 + bounce, '#ffd85e', 3);
+  drawTextCentered(g, 'GAATAVISUPLE ACHARA', VIEW_W / 2, 50, '#7ec8f0', 1);
+  drawScoreboard(VIEW_W / 2, 68);
   if (Math.floor(game.time * 2) % 2 === 0)
-    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 116, '#fff', 1);
-  drawTextCentered(g, 'ARROWS MOVE   SHIFT RUN   H HUD   C CRT', VIEW_W / 2, 152, '#8890a4', 1);
-  drawTextCentered(g, 'M MUSIC   N SOUND   R RESTART', VIEW_W / 2, 164, '#8890a4', 1);
+    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 128, '#fff', 1);
+  drawTextCentered(g, 'ARROWS MOVE   SHIFT RUN   H HUD   C CRT', VIEW_W / 2, 150, '#8890a4', 1);
+  drawTextCentered(g, 'M MUSIC   N SOUND   R RESTART', VIEW_W / 2, 162, '#8890a4', 1);
+}
+
+function drawEntry() {
+  const e = game.entry;
+  if (!e) return;
+  g.fillStyle = 'rgba(8,10,20,.80)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
+  drawTextCentered(g, 'NEW HIGH SCORE', VIEW_W / 2, 30, '#ffd85e', 2);
+  drawTextCentered(g, `SCORE ${e.score}`, VIEW_W / 2, 58, '#fff', 1);
+
+  const gap = 26;
+  let x = VIEW_W / 2 - gap;
+  for (let i = 0; i < 3; i++) {
+    const ch = ENTRY_CHARS[e.idx[i]];
+    const sel = i === e.slot;
+    const blink = sel && Math.floor(game.time * 4) % 2 === 0;
+    drawTextCentered(g, ch === ' ' ? '-' : ch, x, 80,
+                     blink ? '#fff' : sel ? '#ffd85e' : '#9aa4b8', 3);
+    if (sel) { g.fillStyle = '#ffd85e'; g.fillRect(Math.round(x - 8), 106, 16, 2); }
+    x += gap;
+  }
+  drawTextCentered(g, 'UP DOWN LETTER   LEFT RIGHT SLOT', VIEW_W / 2, 130, '#8890a4', 1);
+  drawTextCentered(g, 'SPACE TO CONFIRM', VIEW_W / 2, 144, '#8890a4', 1);
 }
 
 function drawOverlay() {
@@ -2553,6 +2679,7 @@ function render() {
   }
 
   if (game.state === 'title') drawTitle();
+  else if (game.state === 'entry') drawEntry();
   else { drawHud(); drawOverlay(); }
 
   dctx.imageSmoothingEnabled = false;
