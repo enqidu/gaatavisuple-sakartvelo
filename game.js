@@ -73,7 +73,7 @@ const SPRITES = {
   l2svani: { src: 'assets/l2_svani.png',     h: 32, hitW: 0.62, hitH: 0.88, color: '#a03040' },
   l2bomb:  { src: 'assets/l2_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
              key: { minHolePct: Infinity } },
-  l2dard:  { src: 'assets/l2_dardubala.png', h: 34, hitW: 0.55, hitH: 0.90, color: '#c03030' },
+  l2dard:  { src: 'assets/l2_dardubala.png', h: 40, hitW: 0.55, hitH: 0.90, color: '#c03030' },
   l2bg:    { src: 'assets/l2_bg.png',    h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
   l2bg2:   { src: 'assets/l2_bg2.png',   h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
   l2arena: { src: 'assets/l2_arena.png', h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
@@ -679,7 +679,7 @@ const LEVEL_2 = {
   finalGate: null,
   voidColor: '#0a0c16',
   subtitle: 'GAATAVISUPLE PARLAMENTI',
-  winLines: [['VARDEBIS', '#ffd85e'], ['REVOLUTSIA!', '#7ae07a']],
+  winLines: [['REVOLUTSIA!', '#7ae07a']],
 
   backdrops: [
     { art: 'l2bg',    fromX: 0,   par: 0.34, tile: true },
@@ -1865,7 +1865,48 @@ class Bomb extends Entity {
    so the final boss was mechanically weaker than a mid boss and read as one.
    He also gets a named health bar, which is what actually sells "this is the
    last one" - Aslan has had one since act 1. */
-const DARD = { hp: 6, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1 };
+/* Four hits, alternating form: man, fox, man, two foxes. Each hit flips him,
+   so the fight never repeats a beat.
+     hp 4  MAN  - paces his step and slams; waves run along the floor
+     hp 3  FOX  - fast, charges and leaps; the window is after a pounce
+     hp 2  MAN  - as above but quicker off the mark
+     hp 1  FOX  + a second fox. Only one of them is really him; the other
+                  pops when stomped.                                        */
+/* The second fox at the last stage. Behaves like him and hurts on contact,
+   but stomping it only pops it - the real one still owes you a hit. */
+class DecoyFox extends Entity {
+  constructor(x, y, dir) {
+    super(x, y, 14, 12);
+    this.dir = dir; this.turnCd = 0; this.t = rand(0, 3); this.phase = 'prowl'; this.phaseT = 0;
+  }
+  get bossGrade() { return true; }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitWall = false;
+    const p = game.player;
+    const d = p.cx - this.cx;
+    if (Math.abs(d) > 12) this.dir = Math.sign(d);
+    this.vx = this.dir * DARD.foxRun * 0.85;
+    if (this.onGround && Math.random() < dt * 2.0) this.vy = -180;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    if (this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    this.face = this.dir;
+  }
+  onStomp(p) {
+    this.dead = true;
+    p.vy = CFG.stompBounce * 0.85;
+    game.score += 300;
+    floatText(this.cx, this.y - 8, 'NOT HIM', '#8890a4');
+    burst(this.cx, this.y + 6, 18, { colors: ['#dde3ec', '#fff'], speed: 120, life: .7, size: 2 });
+    shake = 3; Sfx.deny();
+  }
+}
+
+const DARD = { hp: 4, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1,
+               foxRun: 132, foxLeap: -300, prowl: 1.5, pounce: 1.0, pant: 1.6 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -1885,12 +1926,14 @@ class Dardubala extends Entity {
     this.quip = 1.4; this.quipN = 0;
   }
   get bossGrade() { return true; }
+  // man on even hp, fox on odd - he flips with every hit he takes
+  get isFox() { return this.hp % 2 === 1; }
   /* Safe to touch while rearing back, as well as while winded. He shares his
      step with you and damages on contact, so with only the 2.5s window safe a
      handful of unavoidable brushes ended the run before a stomp ever landed.
      Telegraphing and striking should not both be lethal. Note onStomp still
      only accepts a hit during 'winded' - windup is safe, not open. */
-  get harmless() { return this.phase === 'winded' || this.phase === 'windup'; }
+  get harmless() { return this.phase === 'winded' || this.phase === 'windup' || this.phase === 'pant'; }
   /* Latches. Without it, retreating back past the arena line switched his
      slams off, so he never opened a window and the fight deadlocked - a bot
      playing it correctly landed zero hits in two minutes. */
@@ -1910,6 +1953,48 @@ class Dardubala extends Entity {
       this.quip = DARD.quipEvery + (this.quipN % 2) * 0.9;
       floatText(this.cx, this.y - 14, `*${DARD_QUIPS[this.quipN++ % DARD_QUIPS.length]}*`, '#c9a0ff');
       Sfx.bump();
+    }
+
+    // ---- fox form: prowl, pounce, pant. Nothing like the man's rhythm.
+    if (this.isFox) {
+      const p = game.player;
+      const d = p.cx - this.cx;
+      if (this.phase !== 'prowl' && this.phase !== 'pounce' && this.phase !== 'pant') {
+        this.phase = 'prowl'; this.phaseT = 0;
+      }
+      switch (this.phase) {
+        case 'prowl':
+          if (Math.abs(d) > 12) this.dir = Math.sign(d);
+          this.vx = this.dir * DARD.foxRun;
+          if (this.onGround && Math.random() < dt * 2.2) this.vy = -190;   // skittish hops
+          if (this.phaseT > DARD.prowl && this.engaged) {
+            this.phase = 'pounce'; this.phaseT = 0;
+            if (this.onGround) this.vy = DARD.foxLeap;
+            this.dir = Math.sign(d) || this.dir;
+            Sfx.deny();
+          }
+          break;
+        case 'pounce':
+          this.vx = this.dir * DARD.foxRun * 1.45;
+          if (this.phaseT > DARD.pounce || (this.onGround && this.phaseT > 0.35)) {
+            this.phase = 'pant'; this.phaseT = 0;
+            burst(this.cx, this.bottom, 12,
+                  { colors: ['#dde3ec', '#fff'], speed: 80, grav: 300, life: .5, size: 2, spread: Math.PI });
+          }
+          break;
+        case 'pant':
+          this.vx *= Math.pow(0.05, dt);
+          if (this.phaseT > DARD.pant) { this.phase = 'prowl'; this.phaseT = 0; }
+          break;
+      }
+      this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+      moveAndCollide(this, dt, { oneWay: false });
+      const fa = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+      const fb = Math.floor((this.bottom + 3) / TILE);
+      if (this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+      leash(this);
+      this.face = this.dir;
+      return;
     }
 
     switch (this.phase) {
@@ -1932,7 +2017,14 @@ class Dardubala extends Entity {
              instead, which is what makes the climb the point. */
           // + TILE, not + 4: groundBelow starts scanning at the row his feet
           // are already in, so a smaller offset just finds his own platform
-          const floorY = groundBelow(this.cx, this.bottom + TILE) ?? (13 * TILE);
+          /* The real floor, not merely the first surface below him. Standing
+             over the 196-201 step, groundBelow returned that step, so the wave
+             spawned on a six-tile ledge and died two tiles later - it looked
+             like it dropped at his feet and went nowhere. */
+          const tx = Math.floor(this.cx / TILE);
+          const onGroundSpan = LEVEL.ground.some(([a, b]) => tx >= a && tx < b);
+          const floorY = onGroundSpan ? 13 * TILE
+                       : (groundBelow(this.cx, this.bottom + TILE) ?? 13 * TILE);
           for (const dir of [-1, 1]) game.hazards.push(new Shockwave(this.cx, floorY, dir, '#c9a0ff'));
         }
         break;
@@ -1953,21 +2045,37 @@ class Dardubala extends Entity {
   }
   onStomp(p) {
     p.vy = CFG.stompBounce * 0.85;
-    if (this.phase !== 'winded') {
+    /* The open beat differs by form: 'winded' as a man, 'pant' as a fox.
+       Checking only 'winded' left the fox untouchable, so the fight stuck at
+       3 hp forever no matter how cleanly you landed on him. */
+    const open = this.isFox ? this.phase === 'pant' : this.phase === 'winded';
+    if (!open) {
       floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff');
       shake = 4; Sfx.deny();
       return;
     }
     this.hp--; this.hitFlash = 0.4;
-    this.phase = 'pace'; this.phaseT = 0;
+    this.phase = this.isFox ? 'prowl' : 'pace'; this.phaseT = 0;
     shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
-    burst(this.cx, this.y + this.h / 2, 24, { colors: ['#c9a0ff', '#ffd85e', '#fff'], speed: 170, size: 3 });
+    burst(this.cx, this.y + this.h / 2, 26,
+          { colors: this.isFox ? ['#dde3ec', '#fff', '#c9a0ff'] : ['#c9a0ff', '#ffd85e', '#fff'],
+            speed: 180, size: 3 });
     if (this.hp <= 0) {
       game.addCombo(p, this.cx, this.y, 3000);
-      floatText(this.cx, this.y - 18, 'HE IS FINISHED', '#7ae07a');
+      floatText(this.cx, this.y - 18, 'SAXLSHIIIIIIII', '#ffd85e');
       shake = 14; flash = 0.8; freeze = 0.2;
       game.teaOutro();
     } else {
+      // the transformation itself, announced
+      floatText(this.cx, this.y - 20, this.isFox ? '*BECOMES A FOX*' : '*BACK AGAIN*',
+                this.isFox ? '#dde3ec' : '#c9a0ff');
+      if (this.hp === 1 && !this.split) {      // last stage: a second fox
+        this.split = true;
+        const dec = new DecoyFox(this.cx + (this.face > 0 ? -26 : 26), this.y, -this.face || 1);
+        dec.home = this.home;
+        game.enemies.push(dec);
+        floatText(this.cx, this.y - 30, 'TWO OF THEM', '#ff5ec4');
+      }
       game.addCombo(p, this.cx, this.y, 600);
       floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
     }
@@ -2496,28 +2604,46 @@ function updateEntry(dt) {
 /* The Silver Fox, which is what he was always called. Drawn from rects like
    the helicopter and the teacup - at this size a downscaled photo would be
    mush, and there is no fox asset anyway. */
-function drawFox(x, y, face, t) {
+function foxTo(ctx, x, y, face, t) {
   x = Math.round(x); y = Math.round(y);
-  // silver, not red - the nickname was the point
   const o = '#dde3ec', d = '#9aa6b8', w = '#ffffff', k = '#232a34';
   const step = Math.floor(t * 9) % 2;
+  ctx.save();
+  if (face < 0) { ctx.translate(x + 22, y); ctx.scale(-1, 1); ctx.translate(-x, -y); }
+  ctx.fillStyle = o; ctx.fillRect(x, y + 3, 6, 5);            // tail
+  ctx.fillStyle = w; ctx.fillRect(x, y + 3, 3, 3);
+  ctx.fillStyle = o; ctx.fillRect(x + 5, y + 4, 11, 6);       // body
+  ctx.fillStyle = d; ctx.fillRect(x + 5, y + 9, 11, 1);
+  ctx.fillStyle = w; ctx.fillRect(x + 12, y + 7, 5, 3);       // chest
+  ctx.fillStyle = o; ctx.fillRect(x + 14, y, 7, 6);           // head
+  ctx.fillStyle = d; ctx.fillRect(x + 14, y - 2, 2, 2); ctx.fillRect(x + 19, y - 2, 2, 2);
+  ctx.fillStyle = w; ctx.fillRect(x + 19, y + 3, 3, 2);       // snout
+  ctx.fillStyle = k; ctx.fillRect(x + 21, y + 3, 1, 1);
+  ctx.fillStyle = k; ctx.fillRect(x + 17, y + 2, 1, 1);       // eye
+  ctx.fillStyle = k;                                           // legs
+  ctx.fillRect(x + 6, y + 10, 2, 3 - step);
+  ctx.fillRect(x + 13, y + 10, 2, 2 + step);
+  ctx.restore();
+}
+
+const foxCv = document.createElement('canvas');
+foxCv.width = 26; foxCv.height = 18;
+const foxCx = foxCv.getContext('2d');
+
+/* Scaled by rendering at 1x into a scratch and blitting, so every edge stays
+   on a whole pixel instead of the rect coordinates smearing. */
+function drawFox(x, y, face, t, sc = 1) {
+  if (sc === 1) { foxTo(g, x, y, face, t); return; }
+  foxCx.clearRect(0, 0, foxCv.width, foxCv.height);
+  foxTo(foxCx, 0, 3, 1, t);
+  const w = Math.round(26 * sc), h = Math.round(18 * sc);
   g.save();
-  if (face < 0) { g.translate(x + 22, y); g.scale(-1, 1); g.translate(-x, -y); }
-  g.fillStyle = o; g.fillRect(x, y + 3, 6, 5);            // tail
-  g.fillStyle = w; g.fillRect(x, y + 3, 3, 3);
-  g.fillStyle = o; g.fillRect(x + 5, y + 4, 11, 6);       // body
-  g.fillStyle = d; g.fillRect(x + 5, y + 9, 11, 1);
-  g.fillStyle = w; g.fillRect(x + 12, y + 7, 5, 3);       // chest
-  g.fillStyle = o; g.fillRect(x + 14, y, 7, 6);           // head
-  g.fillStyle = d; g.fillRect(x + 14, y - 2, 2, 2); g.fillRect(x + 19, y - 2, 2, 2);
-  g.fillStyle = w; g.fillRect(x + 19, y + 3, 3, 2);       // snout
-  g.fillStyle = k; g.fillRect(x + 21, y + 3, 1, 1);
-  g.fillStyle = k; g.fillRect(x + 17, y + 2, 1, 1);       // eye
-  g.fillStyle = k;                                         // legs
-  g.fillRect(x + 6, y + 10, 2, 3 - step);
-  g.fillRect(x + 13, y + 10, 2, 2 + step);
+  g.imageSmoothingEnabled = false;
+  if (face < 0) { g.translate(Math.round(x) + w, Math.round(y)); g.scale(-1, 1); g.drawImage(foxCv, 0, 0, w, h); }
+  else g.drawImage(foxCv, Math.round(x), Math.round(y), w, h);
   g.restore();
 }
+
 
 function drawCup(x, y, steamT) {
   x = Math.round(x); y = Math.round(y);
@@ -3413,6 +3539,24 @@ function drawHeli(x, y, t) {
 const INV_TINTS = ['rgba(255,214,60,.42)', 'rgba(255,94,196,.42)',
                    'rgba(126,200,240,.42)', 'rgba(122,224,122,.42)'];
 
+/* His white forelock, drawn on rather than keyed from the art.
+
+   The source tuft is ~20px inside a 223px image, so downscaling to a 21px
+   sprite averages it against its own black outline and it vanishes - measured
+   at zero white pixels in the rendered sprite, and still only 19 even at a
+   64px render height. Hand-placing it is the only thing that survives. */
+function drawTuft(e, art) {
+  const dw = art.w, dh = art.h;
+  const x = Math.round(e.cx - dw / 2), y = Math.round(e.bottom - dh);
+  const f = e.face < 0 ? -1 : 1;
+  const bx = f > 0 ? x + Math.round(dw * 0.46) : x + dw - Math.round(dw * 0.46) - 4;
+  g.fillStyle = '#ffffff';
+  g.fillRect(bx, y + 1, 4, 2);
+  g.fillRect(bx + (f > 0 ? 2 : 0), y - 2, 2, 3);
+  g.fillStyle = '#c8d0dc';
+  g.fillRect(bx, y + 3, 4, 1);
+}
+
 function drawEntities() {
   for (const c of game.coins) drawCoin(c);
   for (const it of game.items) {
@@ -3486,13 +3630,24 @@ function drawEntities() {
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
       drawSprite(ART.l2bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
       if (e.taunt > 0) drawTextCentered(g, 'ARMOURED', e.cx, e.y - 11, '#ff8a5c', 1);
+    } else if (e instanceof DecoyFox) {
+      drawFox(e.cx - 17, e.y - 2, e.face, e.t, 1.3);
     } else if (e instanceof Dardubala) {
       if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
+      if (e.isFox && !e.scriptedOut) {        // fight form: bigger than the cameo
+        drawFox(e.cx - 20, e.bottom - 22, e.face, e.t, 1.55);
+        if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
+          drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
+        if (e.phase === 'pounce' && Math.floor(game.time * 14) % 2 === 0)
+          drawTextCentered(g, '!', e.cx, e.y - 12, '#ff5ec4', 2);
+        continue;
+      }
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
       const open = e.harmless && Math.floor(game.time * 10) % 2 === 0;
       drawSprite(ART.l2dard, e, {
         tint: flashing ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.5)' : null,
       });
+      drawTuft(e, ART.l2dard);
       if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)
         drawTextCentered(g, '!', e.cx, e.y - 12, '#c9a0ff', 2);
       if (e.harmless && Math.floor(game.time * 8) % 2 === 0)

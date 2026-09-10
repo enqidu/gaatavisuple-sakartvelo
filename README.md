@@ -395,7 +395,7 @@ its 525 and skate the edge, so it runs at 0.15 and reads as planted.
 | **Sleepy** | Asleep on his feet. Noise only accrues while you are on the ground AND moving near him, so the answer is to jump the whole approach. Asleep he is harmless and stompable; awake he cannot be touched. A hit wakes him. |
 | **Svani** | Five hits across three stages. Stage 2 adds a floor slam whose wave you jump; stage 3 chains stun straight back into wind-up. He hunts, so backing away does not stall the fight. |
 | **Bomber** | Armoured — stomping him does nothing. His own bombs are the only thing that hurt him, and you punt a live one back by stomping it. |
-| **Dardubala** | Holds the top step and slams; the waves run along the **floor**, so the fight is about climbing to him during the window after a slam. Never chases, never dives — deliberately not the Act 1 boss reskinned. Emits deadpan stage directions instead of dialogue. Beaten, he turns into the Silver Fox on the way out. |
+| **Dardubala** | Four hits, and he changes form with every one: **man → fox → man → two foxes.** As a man he holds the top step and slams, and the waves run along the **floor**, so the fight is about climbing to him during the window after a slam. As a fox he is fast, charges and leaps, and the window is after a pounce. On the last hit a second fox joins him — only one is really him; the other pops when stomped. Never chases, never dives: deliberately not the Act 1 boss reskinned. Emits deadpan stage directions instead of dialogue, and goes out shouting SAXLSHIIIIIIII. |
 
 Every one of those was found broken by testing and fixed: Sleepy's hearing
 range equalled the jump reach so the intended approach was impossible; Svani
@@ -430,3 +430,12 @@ it is happening.
 
 `?act=2` boots straight into that act instead of replaying everything before
 it — <http://localhost:8123/?act=2>. Clamped, so a junk value is harmless.
+
+
+## Dardubala's forelock is drawn, not keyed
+
+The white tuft in his art is about 20px inside a 223px image, so downscaling to
+a 21px sprite averages it against its own black outline and it disappears
+entirely — measured at **zero** white pixels in the rendered sprite, and still
+only 19 at a 64px render height. `drawTuft` hand-places it instead, the same
+way the rose, teacup, helicopter and fox are drawn.
