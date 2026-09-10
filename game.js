@@ -2543,53 +2543,77 @@ const Scores = {
   },
 };
 
-/* One of the crowd. Small, but built like a person: head, hair, shoulders,
-   torso, two legs and an arm - the first version was a 5x9 block with a 3x4
-   block on top, which at this scale reads as a bollard, not a human. */
-const CROWD_SKIN = ['#e8c9a0', '#d8a878', '#f0d8b8'];
-const CROWD_TOP  = ['#8a3b46', '#3d5a8a', '#5a4a7a', '#7a6a3a', '#4a6a52'];
-const CROWD_LEG  = ['#2c3242', '#3a3142', '#242a38'];
+/* One of the crowd.
+
+   Silhouette first: narrow head, a neck, shoulders wider than the torso, and
+   legs with daylight between them. The previous pass was a 5x9 rectangle with
+   a 3x4 rectangle on top, which reads as a bollard no matter what colour it
+   is - at this size the outline is doing all the work, not the detail. */
+const CROWD_SKIN = ['#e8c39a', '#c98f62', '#f2dcc0', '#a9714a'];
+const CROWD_HAIR = ['#241c22', '#33231a', '#171419', '#3d3128'];   // all well below any skin tone
+const CROWD_COAT = ['#8f3b46', '#39557f', '#57457a', '#7a6a34', '#3f6b55', '#8a5a2e'];
+const CROWD_LEGS = ['#2b3040', '#37303f', '#232733', '#3d3a30'];
 
 function drawPerson(cx, groundY, seed, back, step, rose) {
-  const h = back ? 17 : 20;
-  const x = Math.round(cx) - 3, y = Math.round(groundY) - h;
-  const skin = CROWD_SKIN[seed % CROWD_SKIN.length];
-  const top  = CROWD_TOP[seed % CROWD_TOP.length];
-  const leg  = CROWD_LEG[seed % CROWD_LEG.length];
-  const dim  = back ? 0.62 : 1;                    // the back row sits deeper
-  const mix = (hex) => {
+  const H = back ? 22 : 26;
+  const x = Math.round(cx) - 4, y = Math.round(groundY) - H;
+  const dim = back ? 0.66 : 1;
+  const mix = hex => {
     if (dim === 1) return hex;
     const n = parseInt(hex.slice(1), 16);
-    const r = Math.round(((n >> 16) & 255) * dim + 18 * (1 - dim));
-    const gg = Math.round(((n >> 8) & 255) * dim + 22 * (1 - dim));
-    const b = Math.round((n & 255) * dim + 38 * (1 - dim));
+    const r = Math.round(((n >> 16) & 255) * dim + 20 * (1 - dim));
+    const gg = Math.round(((n >> 8) & 255) * dim + 26 * (1 - dim));
+    const b = Math.round((n & 255) * dim + 44 * (1 - dim));
     return `rgb(${r},${gg},${b})`;
   };
+  const skin = CROWD_SKIN[seed % CROWD_SKIN.length];
+  const hair = CROWD_HAIR[(seed * 3) % CROWD_HAIR.length];
+  const coat = CROWD_COAT[(seed * 5) % CROWD_COAT.length];
+  const legs = CROWD_LEGS[(seed * 7) % CROWD_LEGS.length];
+  const sh = back ? 4 : 5;                       // shoulder half-width
 
-  const legH = back ? 5 : 6;
-  g.fillStyle = mix(leg);                          // legs, one striding
-  g.fillRect(x + 1, y + h - legH, 2, legH - step);
-  g.fillRect(x + 4, y + h - legH, 2, legH - (1 - step));
-  g.fillStyle = mix(top);                          // torso
-  g.fillRect(x + 1, y + 6, 5, h - legH - 6);
-  g.fillRect(x, y + 7, 7, 3);                      // shoulders
-  g.fillStyle = mix(skin);                         // head
-  g.fillRect(x + 2, y + 1, 4, 4);
-  g.fillRect(x + 2, y + 5, 3, 1);                  // neck
-  g.fillStyle = mix('#2a2028');                    // hair
-  g.fillRect(x + 2, y, 4, 2);
-  g.fillRect(seed % 2 ? x + 1 : x + 5, y + 1, 1, 2);
+  // legs, one forward: a gap between them is what stops it reading as a post
+  const legTop = y + H - 8;
+  g.fillStyle = mix(legs);
+  g.fillRect(x + 2, legTop, 2, 8 - step);
+  g.fillRect(x + 5, legTop, 2, 8 - (1 - step));
+  g.fillStyle = mix('#1a1a20');                  // shoes
+  g.fillRect(x + 1, y + H - 1, 3, 1);
+  g.fillRect(x + 5, y + H - 1, 3, 1);
 
-  if (rose) {                                      // an arm up, holding one
-    g.fillStyle = mix(skin);
-    g.fillRect(x + 6, y + 3, 1, 5);
-    g.fillStyle = mix('#8f1526'); g.fillRect(x + 6, y + 1, 2, 2);
-    g.fillStyle = mix('#2f8a3a'); g.fillRect(x + 6, y + 3, 1, 1);
+  // torso, narrower than the shoulders
+  g.fillStyle = mix(coat);
+  g.fillRect(x + 2, y + 10, 5, legTop - (y + 10));
+  g.fillRect(x + 9 - sh - 4, y + 8, sh + 3, 3);  // shoulder line
+  g.fillStyle = mix('#00000030');
+  g.fillRect(x + 2, legTop - 1, 5, 1);
+
+  // arms
+  g.fillStyle = mix(coat);
+  if (rose) {
+    g.fillRect(x + 7, y + 5, 1, 5);              // one raised
+    g.fillStyle = mix(skin); g.fillRect(x + 7, y + 3, 1, 2);
+    g.fillStyle = mix('#8f1526'); g.fillRect(x + 6, y, 3, 3);
+    g.fillStyle = mix('#c0303f'); g.fillRect(x + 7, y + 1, 1, 1);
+    g.fillStyle = mix('#2f8a3a'); g.fillRect(x + 7, y + 3, 1, 1);
+    g.fillStyle = mix(coat); g.fillRect(x + 1, y + 10, 1, 5);
   } else {
-    g.fillStyle = mix(top);
-    g.fillRect(x, y + 8, 1, 4);
-    g.fillRect(x + 6, y + 8, 1, 4);
+    g.fillRect(x + 1, y + 10, 1, 5);
+    g.fillRect(x + 7, y + 10, 1, 5);
   }
+
+  // neck, then head: narrow, with hair over the crown and down one side
+  g.fillStyle = mix(skin);
+  g.fillRect(x + 4, y + 7, 2, 2);
+  g.fillRect(x + 3, y + 3, 4, 5);
+  g.fillStyle = mix('#00000028');                // cheek shadow
+  g.fillRect(x + 6, y + 4, 1, 4);
+  g.fillStyle = mix(hair);
+  g.fillRect(x + 3, y + 2, 4, 2);
+  // rim down the leading edge: without it neighbours merge into one mass
+  g.fillStyle = 'rgba(8,10,18,.55)';
+  g.fillRect(x + 1, y + 8, 1, 8);
+  g.fillRect(seed % 2 ? x + 2 : x + 6, y + 3, 1, 3);
 }
 
 /* ---------------------------------------------------------- the crowd
@@ -2639,7 +2663,7 @@ const crowd = {
     const shown = Math.min(this.n, 8);
     for (let i = 0; i < shown; i++) {
       // deterministic scatter and depth: no jitter frame to frame
-      const ox = ((i * 37) % 13) - 6 - i * 6;
+      const ox = ((i * 37) % 9) - 4 - i * 9;
       const back = i % 3 === 2;                       // a row standing further off
       const step = Math.floor(this.t * 5 + i * 1.7) % 2;
       drawPerson(this.x + ox, gy, i, back, step, i % 2 === 0);
