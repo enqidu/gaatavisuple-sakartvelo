@@ -47,7 +47,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 
 | | |
 |---|---|
-| **Acharuli khachapuri** (Act 1) | 9s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
+| **Acharuli khachapuri** (Act 1) | 7s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
 | **Hot tea** (Act 2) | Act 2's version of the same 9s invincibility. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
@@ -465,3 +465,24 @@ a cordon, not a minister.
 
 They are pressure, not units: no controls, no collision, and they never block
 you. `LEVEL.crowd` gates them to Act 2.
+
+
+## Damage order
+
+Every path that costs health goes through `Player.spendHeart()`, so a
+**temporary rose heart is always what breaks first**. That used to live inline
+in `hurt()`, which meant `fellInPit()` — a second, separate damage path — took
+a real heart straight off the top while rose hearts sat there untouched.
+Verified against contact, pit falls, bomb blasts and shockwaves.
+
+## Invincibility versus bosses
+
+Stomping a boss's own open window is still the fast way to hurt him, but while
+invincible the **contact itself wears him down** — one point every
+`INV_BOSS_CD` (3s), so a 7s pickup is worth about three hits rather than a
+health bar. Svani goes 5→2, Edika 4→1. There are only two pickups per act now,
+down from four.
+
+`takeHit` refuses to run at zero: Edika is never flagged dead — his defeat
+hands off to the tea outro — so without that guard the contact path kept
+chipping him and drove his bar negative.

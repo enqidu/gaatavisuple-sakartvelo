@@ -616,14 +616,12 @@ const LEVEL_1 = {
     { x: 70,  y: 9,  t: 'khachapuri' },
     { x: 100, y: 10, t: 'rose' },
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
-    { x: 126, y: 6,  t: 'khachapuri' },
     { x: 154, y: 10, t: 'powder' },      // before the second mid boss
     { x: 158, y: 6,  t: 'rose' },
     { x: 195, y: 10, t: 'powder' },      // before the third mid boss
     { x: 202, y: 9,  t: 'khachapuri' },
     { x: 212, y: 10, t: 'powder' },      // inside the arena, before Aslan
     { x: 218, y: 9,  t: 'rose' },
-    { x: 222, y: 7,  t: 'khachapuri' },
   ],
 
   // Flagpoles flying the old republic flag; touching one changes it over.
@@ -754,10 +752,8 @@ const LEVEL_2 = {
     { x: 38,  y: 8,  t: 'tea' },
     { x: 70,  y: 8,  t: 'rose' },
     { x: 89,  y: 8,  t: 'powder' },
-    { x: 91,  y: 6,  t: 'tea' },
     { x: 118, y: 8,  t: 'rose' },
     { x: 136, y: 10, t: 'powder' },
-    { x: 138, y: 8,  t: 'tea' },
     { x: 172, y: 8,  t: 'rose' },
     { x: 190, y: 10, t: 'powder' },
     { x: 193, y: 10, t: 'tea' },
@@ -1040,21 +1036,31 @@ class Player extends Entity {
     this.squashT = 0; this.stretchT = 0;
   }
 
-  hurt(fromX) {
-    if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
-    // temporary rose hearts are spent before the real ones
+  /* Every path that costs health goes through this, so a rose heart is
+     always the thing that breaks first. It used to live inline in hurt(),
+     which meant fellInPit() - a second, separate damage path - took a real
+     heart straight off the top while rose hearts sat there untouched. */
+  spendHeart() {
     if (this.extra > 0) {
       this.extra--;
       if (this.extra === 0) this.extraT = 0;
+      floatText(this.cx, this.y - 12, '-1 ROSE', '#ff8fd0');
+      burst(this.cx, this.y + this.h / 2, 12, { colors: ['#ff8fd0', '#fff'], speed: 100 });
+      return 'rose';
+    }
+    this.hp--;
+    return 'heart';
+  }
+
+  hurt(fromX) {
+    if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
+    if (this.spendHeart() === 'rose') {
       this.invuln = CFG.hurtInvuln;
       this.vy = -150;
       this.vx = (this.cx < fromX ? -1 : 1) * 110;
       shake = 4; flash = 0.4; Sfx.hurt();
-      floatText(this.cx, this.y - 12, '-1 ROSE', '#ff8fd0');
-      burst(this.cx, this.y + this.h / 2, 12, { colors: ['#ff8fd0', '#fff'], speed: 100 });
       return;
     }
-    this.hp--;
     this.invuln = CFG.hurtInvuln;
     this.vy = -150;
     this.vx = (this.cx < fromX ? -1 : 1) * 110;
@@ -1086,16 +1092,17 @@ class Player extends Entity {
   get doubleJump() { return this.doubleJumpT > 0; }
 
   fellInPit() {
-    this.hp--;
+    const lost = this.spendHeart();
     this.combo = 0;
     shake = 6; flash = 0.5; Sfx.pit();
     if (this.hp <= 0) { game.lose(); return; }
+    // a pit still puts you back on the ledge even if a rose absorbed the cost
     const spot = this.respawnSpot();
     this.x = spot.x; this.y = spot.y;
     this.vx = 0; this.vy = 0;
     this.invuln = Math.max(this.invuln, 1.2);
     this.charmed = 0;
-    floatText(this.cx, this.y - 12, '-1 HEART', '#ff8f9c');
+    if (lost === 'heart') floatText(this.cx, this.y - 12, '-1 HEART', '#ff8f9c');
     burst(this.cx, this.bottom, 14, { colors: ['#fff', '#8890a4'], speed: 80, life: 0.6, size: 2 });
   }
 
@@ -1543,6 +1550,7 @@ class Sleepy extends Entity {
   }
   get bossGrade() { return true; }
   get bossName() { return 'SLEEPY'; }
+  chip(p) { this.damage(p); }
   get maxHp() { return SLEEP.hp; }
   get harmless() { return this.phase === 'doze' || this.phase === 'reel'; }
   update(dt) {
@@ -1640,6 +1648,7 @@ class Svani extends Entity {
   }
   get bossGrade() { return true; }
   get bossName() { return 'SVANI'; }
+  chip(p) { this.damage(p); }
   get maxHp() { return SVANI.hp; }
   get stage() { return this.hp > 3 ? 1 : this.hp > 1 ? 2 : 3; }
   get harmless() { return this.phase === 'stun'; }
@@ -1815,6 +1824,7 @@ class Bomber extends Entity {
   }
   get bossGrade() { return true; }
   get bossName() { return 'BOMBER'; }
+  chip(p) { this.blastHit(p); }
   get maxHp() { return BOMBER.hp; }
   blastHit(p) {
     this.hp--; this.hitFlash = 0.4;
@@ -2094,6 +2104,16 @@ class Dardubala extends Entity {
       shake = 4; Sfx.deny();
       return;
     }
+    this.takeHit(p);
+  }
+
+  chip(p) { this.takeHit(p); }
+
+  takeHit(p) {
+    /* He is never marked dead - his defeat hands off to the tea outro - so
+       without this guard the invincible-contact path kept chipping him past
+       zero and drove his health bar negative. */
+    if (this.hp <= 0 || this.scriptedOut) return;
     this.hp--; this.hitFlash = 0.4;
     this.phase = this.isFox ? 'prowl' : 'pace'; this.phaseT = 0;
     shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
@@ -2278,6 +2298,12 @@ class FlyingBoss extends Entity {
       return;
     }
 
+    this.takeHit(p);
+  }
+
+  chip(p) { this.takeHit(p); }
+
+  takeHit(p) {
     this.hp--;
     this.hitFlash = 0.4;
     this.phase = 'recover'; this.phaseT = 0;      // knocked straight out of the window
@@ -2588,7 +2614,11 @@ const game = {
   score: 0, state: 'title', endT: 0, time: 0, best: 0,
 };
 
-const KHACHAPURI_TIME = 9;   // seconds of invincibility
+/* Invincibility can wear a boss down by contact, but slowly: one point every
+   INV_BOSS_CD seconds, so a full pickup is worth about three hits rather than
+   a whole health bar. Stomping his own open window is still the fast way. */
+const KHACHAPURI_TIME = 7;   // seconds of invincibility
+const INV_BOSS_CD = 3.0;     // ...between contact hits on a boss (~2 per pickup)
 const EXTRA_HEART_TIME = 22; // how long a rose-granted 4th heart lasts
 const EXTRA_HEART_MAX = 2;   // ...and how many can stack above the normal 3
 const POWDER_TIME = 18;      // seconds of double jump
@@ -2924,7 +2954,15 @@ function resolveEnemies(dt) {
       const open = e.vulnerable ?? e.harmless ?? false;
       const falling = open ? p.vy >= 0 : p.vy > 15;
       const band = open ? e.h * 0.9 : e.h * 0.5;
-      if (falling && p.bottom - p.vy * dt <= e.y + band && open) e.onStomp(p);
+      if (falling && p.bottom - p.vy * dt <= e.y + band && open) { e.onStomp(p); continue; }
+      // otherwise the contact itself wears him down, on a cooldown
+      if (!(e.invCd > 0) && e.chip && !e.scriptedOut && e.hp > 0) {
+        e.invCd = INV_BOSS_CD;
+        flash = 0.3; shake = 4;
+        floatText(e.cx, e.y - 14, 'BURNED', '#ffd85e');
+        burst(e.cx, e.y + e.h / 2, 16, { colors: ['#ffd85e', '#ff5ec4', '#fff'], speed: 130, size: 2 });
+        e.chip(p);
+      }
       continue;
     }
 
@@ -3178,6 +3216,7 @@ function update(dt) {
   for (const e of game.enemies) {
     /* Stunned enemies are frozen and harmless for the duration. Handled here
        rather than in each class so a new enemy gets it for free. */
+    if (e.invCd > 0) e.invCd -= dt;
     if (e.stun > 0) {
       e.stun -= dt;
       e.vx = 0;
