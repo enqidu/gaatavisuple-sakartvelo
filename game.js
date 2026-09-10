@@ -535,6 +535,7 @@ const LEVEL_1 = {
   w: 240, h: LEVEL_H,
   backdrops: [{ art: 'bg', fromX: 0, par: 0.34, tile: true }],
   subtitle: 'GAATAVISUPLE ACHARA',
+  invincibleLabel: 'ACHARULI',
   winLines: [['ASLANI GAIQTSA', '#ffd85e'], ['ACHARA TAVISUPALIA!', '#7ae07a']],
   start: { x: 3, y: 11 },
   finishX: 231,
@@ -679,6 +680,7 @@ const LEVEL_2 = {
   finalGate: null,
   voidColor: '#0a0c16',
   subtitle: 'GAATAVISUPLE PARLAMENTI',
+  invincibleLabel: 'HOT TEA',
   winLines: [['REVOLUTSIA!', '#7ae07a']],
 
   backdrops: [
@@ -1277,6 +1279,8 @@ class Dog extends Entity {
 }
 
 class MidBoss extends Entity {
+  get bossName() { return 'THE WALKER'; }
+  get maxHp() { return 3; }
   constructor(tx, gate = null) {
     const hb = hitboxFor('mid');
     super(tx * TILE, 0, hb.w, hb.h);
@@ -1516,6 +1520,8 @@ class Sleepy extends Entity {
     this.home = spanAround(tx);
   }
   get bossGrade() { return true; }
+  get bossName() { return 'SLEEPY'; }
+  get maxHp() { return SLEEP.hp; }
   get harmless() { return this.phase === 'doze' || this.phase === 'reel'; }
   update(dt) {
     this.t += dt; this.phaseT += dt;
@@ -1611,6 +1617,8 @@ class Svani extends Entity {
     this.home = spanAround(tx);
   }
   get bossGrade() { return true; }
+  get bossName() { return 'SVANI'; }
+  get maxHp() { return SVANI.hp; }
   get stage() { return this.hp > 3 ? 1 : this.hp > 1 ? 2 : 3; }
   get harmless() { return this.phase === 'stun'; }
   update(dt) {
@@ -1784,6 +1792,8 @@ class Bomber extends Entity {
     leash(this);
   }
   get bossGrade() { return true; }
+  get bossName() { return 'BOMBER'; }
+  get maxHp() { return BOMBER.hp; }
   blastHit(p) {
     this.hp--; this.hitFlash = 0.4;
     shake = 7; freeze = 0.09; flash = 0.3;
@@ -1926,6 +1936,8 @@ class Dardubala extends Entity {
     this.quip = 1.4; this.quipN = 0;
   }
   get bossGrade() { return true; }
+  get bossName() { return 'DARDUBALA'; }
+  get maxHp() { return DARD.hp; }
   // man on even hp, fox on odd - he flips with every hit he takes
   get isFox() { return this.hp % 2 === 1; }
   /* Safe to touch while rearing back, as well as while winded. He shares his
@@ -3855,19 +3867,26 @@ function drawHud() {
     drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
   if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
 
-  // final-boss bar, once he is actually fighting
-  const fin = game.enemies.find(e => e instanceof Dardubala && e.engaged && !e.scriptedOut);
-  if (fin) {
+  /* One bar for whichever boss you are currently up against. Previously only
+     Dardubala had one, so Svani's five hits and Sleepy's three were tracked by
+     nothing but a floating "N LEFT" that vanished in half a second. */
+  const near = game.enemies
+    .filter(e => !e.dead && e.bossName && !e.scriptedOut &&
+                 Math.abs(e.cx - game.player.cx) < 190 &&
+                 (!(e instanceof Dardubala) || e.engaged))
+    .sort((a, b) => Math.abs(a.cx - game.player.cx) - Math.abs(b.cx - game.player.cx))[0];
+  if (near) {
+    const mx = near.maxHp || 1;
     const bw = 120, bx = Math.round((VIEW_W - bw) / 2), by = 14;
-    drawTextCentered(g, 'DARDUBALA', VIEW_W / 2, by - 9, '#c9a0ff', 1);
+    drawTextCentered(g, near.bossName, VIEW_W / 2, by - 9, '#c9a0ff', 1);
     g.fillStyle = '#1a1420'; g.fillRect(bx - 1, by - 1, bw + 2, 7);
     g.fillStyle = '#3a2f4a'; g.fillRect(bx, by, bw, 5);
-    const w = Math.round(bw * clamp(fin.hp / DARD.hp, 0, 1));
-    g.fillStyle = fin.harmless ? '#ffd85e' : '#a04bd0'; g.fillRect(bx, by, w, 5);
+    const w = Math.round(bw * clamp(near.hp / mx, 0, 1));
+    g.fillStyle = near.harmless ? '#ffd85e' : '#a04bd0'; g.fillRect(bx, by, w, 5);
     g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(bx, by, w, 1);
-    for (let i = 1; i < DARD.hp; i++) {
+    for (let i = 1; i < mx; i++) {
       g.fillStyle = '#1a1420';
-      g.fillRect(bx + Math.round(bw * i / DARD.hp), by, 1, 5);
+      g.fillRect(bx + Math.round(bw * i / mx), by, 1, 5);
     }
   }
   /* Stacked, not overlaid. Both timers used to draw a label at y=40/41, so
@@ -3884,7 +3903,8 @@ function drawHud() {
     timerBar(game.player.airJumps > 0 ? '2X JUMP' : '2X USED',
              game.player.doubleJumpT / POWDER_TIME, '#9ee8ff', '#e8f8ff', '#4a5866');
   if (game.player.invincible > 0)
-    timerBar('ACHARULI', game.player.invincible / KHACHAPURI_TIME, '#ffd85e', '#fff2c0', '#6a5a20');
+    timerBar(LEVEL.invincibleLabel || 'ACHARULI',
+             game.player.invincible / KHACHAPURI_TIME, '#ffd85e', '#fff2c0', '#6a5a20');
 }
 
 function drawCoinIcon(x, y) {
