@@ -2453,7 +2453,8 @@ function updateEntry(dt) {
    mush, and there is no fox asset anyway. */
 function drawFox(x, y, face, t) {
   x = Math.round(x); y = Math.round(y);
-  const o = '#e07a2a', d = '#a8501a', w = '#f4ece0', k = '#241a14';
+  // silver, not red - the nickname was the point
+  const o = '#dde3ec', d = '#9aa6b8', w = '#ffffff', k = '#232a34';
   const step = Math.floor(t * 9) % 2;
   g.save();
   if (face < 0) { g.translate(x + 22, y); g.scale(-1, 1); g.translate(-x, -y); }
@@ -2532,8 +2533,8 @@ function updateTea(dt) {
     if (!b.foxed && b.y < 96) {
       b.foxed = true;
       burst(b.cx, b.y + 8, 22,
-            { colors: ['#e07a2a', '#f4ece0', '#ffd85e'], speed: 90, grav: -20, life: .9, size: 2 });
-      floatText(b.cx, b.y - 10, '*SILVER FOX*', '#e07a2a');
+            { colors: ['#dde3ec', '#ffffff', '#9aa6b8'], speed: 90, grav: -20, life: .9, size: 2 });
+      floatText(b.cx, b.y - 10, '*SILVER FOX*', '#dde3ec');
       Sfx.deny();
     }
     if (b.y < -60) t.boss = null;
