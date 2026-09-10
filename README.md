@@ -1,4 +1,12 @@
-# Misha Mode — *Gaatavisuple Achara*
+# Gaatavisuple Sakartvelo
+
+Two acts:
+
+| | |
+|---|---|
+| **Act 1** | *Gaatavisuple Achara* — the coast, ending with Aslan's helicopter |
+| **Act 2** | *Gaatavisuple Parlamenti* — Rustaveli Avenue, November 2003, ending with the tea |
+
 
 An 8-bit side-scrolling platformer built for screen recording. No dependencies,
 no build step.
@@ -365,3 +373,36 @@ cannot break the title screen.
 To make it global you would need a backend Pages cannot provide — a free tier of
 Firebase/Supabase, or a small serverless function — plus some abuse handling,
 since a client-side score can be posted by anyone.
+
+
+## Act 2
+
+Opens on a typed card — "BUT EVERYTHING STARTED / WITH ROSES...." then
+"2003 NOVEMBER:" — over Act 2's own backdrop, which is loaded before the card
+draws. Score carries across acts; hearts reset.
+
+Three backdrop zones (`LEVEL.backdrops`), each clipped to its own world span so
+the change happens at a fixed column rather than snapping across the screen.
+Two tile-and-mirror; the Parliament does not, because a building is not
+wallpaper. An untiled zone must satisfy `artW >= VIEW_W + drift`, where drift is
+`(camMax - camAtEntry) * par` — at level 1's 0.34 the arena would need 516px of
+its 525 and skate the edge, so it runs at 0.15 and reads as planted.
+
+| Boss | |
+|---|---|
+| **Guard** | Cordon, not a Goomba. Walking into one breaks the nearby line into a short charge. One stomp. |
+| **Sleepy** | Asleep on his feet. Noise only accrues while you are on the ground AND moving near him, so the answer is to jump the whole approach. Asleep he is harmless and stompable; awake he cannot be touched. A hit wakes him. |
+| **Svani** | Five hits across three stages. Stage 2 adds a floor slam whose wave you jump; stage 3 chains stun straight back into wind-up. He hunts, so backing away does not stall the fight. |
+| **Bomber** | Armoured — stomping him does nothing. His own bombs are the only thing that hurt him, and you punt a live one back by stomping it. |
+| **Dardubala** | Holds the top step and slams; the waves run along the **floor**, so the fight is about climbing to him during the window after a slam. Never chases, never dives — deliberately not the Act 1 boss reskinned. Emits deadpan stage directions instead of dialogue. Beaten, he turns into the Silver Fox on the way out. |
+
+Every one of those was found broken by testing and fixed: Sleepy's hearing
+range equalled the jump reach so the intended approach was impossible; Svani
+only charged from close range so a retreating player deadlocked him and he
+walked into pits; Dardubala's waves swept his own platform, punishing the one
+surface you had to stand on. Bosses are leashed to their ground span, because
+a gate holder that falls in a pit opens its gate by dying — the fight "won" by
+watching it commit suicide.
+
+`bossGrade` marks anything a khachapuri must not delete. The exemption used to
+be `instanceof FlyingBoss`, so invincibility one-shot every Act 2 boss.

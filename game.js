@@ -50,6 +50,9 @@ const CFG = {
    hitW/H  — hitbox as a fraction of the drawn sprite, so the collision
              box tracks whatever art actually gets dropped in
    raw     — skip background key-out (for the backdrop image)          */
+// Night backdrops recede by getting darker, not paler.
+const NIGHT_HAZE = { amount: 0.36, tint: [26, 34, 66], desat: 0.30 };
+
 const SPRITES = {
   hero:   { src: 'assets/hero.png',   h: 30, hitW: 0.55, hitH: 0.92, color: '#2b3a5e' },
   walker: { src: 'assets/walker.png', h: 19, hitW: 0.70, hitH: 0.90, color: '#4a7a2f' },
@@ -59,6 +62,21 @@ const SPRITES = {
   lady:   { src: 'assets/lady.png',   h: 29, hitW: 0.50, hitH: 0.90, color: '#c2456f' },
   powder: { src: 'assets/powder.png', h: 14, hitW: 1.00, hitH: 1.00, color: '#e8e8f4' },
   bg:     { src: 'assets/bg.png',     h: LEVEL_H_PX, raw: true, haze: 0.42 },
+
+  /* Level 2. NIGHT_HAZE darkens toward navy instead of lightening toward sky:
+     the level-1 pale preset flattens a night scene into daylight grey.
+     l2bomb needs the pocket pass off - his white vest and cream trousers are
+     large enclosed regions and the trousers sit only ~34 from the white
+     background, so the pass deleted his clothes. */
+  l2guard: { src: 'assets/l2_guard.png',     h: 28, hitW: 0.55, hitH: 0.90, color: '#4a4ab0' },
+  l2sleepy:{ src: 'assets/l2_sleepy.png',    h: 30, hitW: 0.60, hitH: 0.90, color: '#d8d8e0' },
+  l2svani: { src: 'assets/l2_svani.png',     h: 32, hitW: 0.62, hitH: 0.88, color: '#a03040' },
+  l2bomb:  { src: 'assets/l2_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
+             key: { minHolePct: Infinity } },
+  l2dard:  { src: 'assets/l2_dardubala.png', h: 34, hitW: 0.55, hitH: 0.90, color: '#c03030' },
+  l2bg:    { src: 'assets/l2_bg.png',    h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
+  l2bg2:   { src: 'assets/l2_bg2.png',   h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
+  l2arena: { src: 'assets/l2_arena.png', h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
 };
 
 /* ---------------------------------------------------------- utils */
@@ -513,8 +531,11 @@ addEventListener('keyup', e => Input.keys.delete(e.code));
 
 const T = { AIR: 0, GROUND: 1, BRICK: 2, QUESTION: 3, USED: 4, PLATFORM: 5, PIPE: 6, GATE: 7 };
 
-const LEVEL = {
+const LEVEL_1 = {
   w: 240, h: LEVEL_H,
+  backdrops: [{ art: 'bg', fromX: 0, par: 0.34, tile: true }],
+  subtitle: 'GAATAVISUPLE ACHARA',
+  winLines: [['ASLANI GAIQTSA', '#ffd85e'], ['ACHARA TAVISUPALIA!', '#7ae07a']],
   start: { x: 3, y: 11 },
   finishX: 231,
   /* Endgame runs in clean stages so nothing overlaps:
@@ -639,6 +660,134 @@ const LEVEL = {
   finalGate: 226,
 };
 
+
+/* ---------------------------------------------------------- level 2
+
+   Rustaveli Avenue, November 2003. Three backdrop zones: two stretches of the
+   avenue, then the Parliament for the final fight. Each intermediate boss
+   holds a gate, same contract as level 1.
+
+   Arena drift check (the untiled zone's hard constraint): camMax is
+   232*16-320 = 3392, the camera on arena entry is about 2816, so the far
+   layer drifts (3392-2816)*0.15 = 86px. The art must cover VIEW_W + drift =
+   406px and l2_arena is 525 wide. At level 1's 0.34 it would need 516 and
+   very nearly run off the right edge.                                     */
+const LEVEL_2 = {
+  w: 232, h: LEVEL_H,
+  start: { x: 3, y: 11 },
+  finishX: null,           // no flag: beating Dardubala is the finish
+  finalGate: null,
+  voidColor: '#0a0c16',
+  subtitle: 'GAATAVISUPLE PARLAMENTI',
+  winLines: [['VARDEBIS', '#ffd85e'], ['REVOLUTSIA!', '#7ae07a']],
+
+  backdrops: [
+    { art: 'l2bg',    fromX: 0,   par: 0.34, tile: true },
+    { art: 'l2bg2',   fromX: 84,  par: 0.34, tile: true },
+    { art: 'l2arena', fromX: 186, par: 0.15, tile: false, anchorX: 176 },
+  ],
+
+  ground: [[0, 58], [62, 104], [108, 152], [156, 232]],
+
+  blocks: [
+    { x: 12, y: 9,  w: 1, t: T.QUESTION },
+    { x: 18, y: 10, w: 3, t: T.PLATFORM },
+    { x: 26, y: 9,  w: 3, t: T.BRICK },
+    { x: 33, y: 10, w: 3, t: T.PLATFORM },
+    { x: 52, y: 9,  w: 2, t: T.QUESTION },
+
+    { x: 66, y: 10, w: 4, t: T.PLATFORM },
+    { x: 74, y: 9,  w: 3, t: T.BRICK },
+    { x: 88, y: 10, w: 3, t: T.PLATFORM },
+    { x: 96, y: 9,  w: 1, t: T.QUESTION },
+
+    { x: 114, y: 10, w: 4, t: T.PLATFORM },
+    { x: 122, y: 9,  w: 3, t: T.BRICK },
+    { x: 130, y: 10, w: 3, t: T.PLATFORM },
+    { x: 142, y: 9,  w: 2, t: T.QUESTION },
+
+    { x: 160, y: 10, w: 4, t: T.PLATFORM },
+    { x: 168, y: 9,  w: 3, t: T.BRICK },
+    { x: 176, y: 10, w: 3, t: T.PLATFORM },
+    // the Parliament steps: three tiers the fight climbs
+    { x: 196, y: 11, w: 6, t: T.PLATFORM },
+    { x: 200, y: 9,  w: 14, t: T.PLATFORM },   // his stage: 8 tiles was too cramped to fight on
+    { x: 214, y: 11, w: 6, t: T.PLATFORM },
+  ],
+
+  pipes: [
+    { x: 44, y: 11, h: 2 },
+    { x: 110, y: 11, h: 2 },
+    { x: 164, y: 11, h: 2 },
+  ],
+
+  coinRuns: [
+    { x: 7,   y: 10, n: 4 }, { x: 19,  y: 8,  n: 3 },
+    { x: 34,  y: 8,  n: 3 }, { x: 58,  y: 9,  n: 4 },
+    { x: 67,  y: 8,  n: 4 }, { x: 78,  y: 7,  n: 3 },
+    { x: 104, y: 9,  n: 4 }, { x: 115, y: 8,  n: 4 },
+    { x: 131, y: 8,  n: 3 }, { x: 152, y: 9,  n: 4 },
+    { x: 161, y: 8,  n: 4 }, { x: 177, y: 8,  n: 3 },
+    { x: 197, y: 9,  n: 5 }, { x: 215, y: 9,  n: 5 },
+  ],
+
+  enemies: [
+    { t: 'l2guard', x: 16 }, { t: 'l2guard', x: 24 }, { t: 'l2guard', x: 31 },
+    { t: 'l2sleepy', x: 40, gate: 48 },
+    { t: 'l2guard', x: 54 }, { t: 'l2guard', x: 68 }, { t: 'l2guard', x: 76 },
+    { t: 'l2guard', x: 82 },
+    { t: 'l2svani', x: 92, gate: 98 },
+    { t: 'l2guard', x: 112 }, { t: 'l2guard', x: 120 }, { t: 'l2guard', x: 128 },
+    { t: 'l2guard', x: 134 },
+    { t: 'l2bomber', x: 140, gate: 146 },
+    { t: 'l2guard', x: 158 }, { t: 'l2guard', x: 170 }, { t: 'l2guard', x: 180 },
+    { t: 'l2dard', x: 207 },
+  ],
+
+  items: [
+    { x: 22,  y: 8,  t: 'rose' },
+    { x: 36,  y: 10, t: 'powder' },
+    { x: 38,  y: 8,  t: 'khachapuri' },
+    { x: 70,  y: 8,  t: 'rose' },
+    { x: 89,  y: 8,  t: 'powder' },
+    { x: 91,  y: 6,  t: 'khachapuri' },
+    { x: 118, y: 8,  t: 'rose' },
+    { x: 136, y: 10, t: 'powder' },
+    { x: 138, y: 8,  t: 'khachapuri' },
+    { x: 172, y: 8,  t: 'rose' },
+    { x: 190, y: 10, t: 'powder' },
+    { x: 193, y: 10, t: 'khachapuri' },
+  ],
+
+  flags: [10, 50, 80, 126, 175, 200],
+  charmers: [28, 72, 124, 178],
+};
+
+/* `LEVEL` is read from ~40 places and written from none, so two levels costs
+   one keyword: a `let` plus a selector. Everything downstream keeps reading
+   LEVEL.* and does not care which act it is in. */
+const LEVELS = [LEVEL_1, LEVEL_2];
+let LEVEL = LEVEL_1;
+
+/* Which class each `t` in LEVEL.enemies builds. Was a hardcoded ternary on
+   'mid'; level 2 has a different roster and no MidBoss at all.
+
+   A function, not a const object: the classes are declared several hundred
+   lines below this point, and a module-level object literal would evaluate
+   here and hit the temporal dead zone. The body only runs at spawn time. */
+function enemyKind(t) {
+  return ({
+    walker: Walker, mid: MidBoss,
+    l2guard: Guard, l2sleepy: Sleepy, l2svani: Svani,
+    l2bomber: Bomber, l2dard: Dardubala,
+  })[t] || Walker;
+}
+
+function loadLevel(i) {
+  game.levelIndex = clamp(i, 0, LEVELS.length - 1);
+  LEVEL = LEVELS[game.levelIndex];
+}
+
 let grid;
 
 function buildGrid() {
@@ -655,7 +804,7 @@ function buildGrid() {
     for (let i = 0; i < p.h; i++) { set(p.x, p.y + i, T.PIPE); set(p.x + 1, p.y + i, T.PIPE); }
 
   for (const e of LEVEL.enemies) if (e.gate != null) raiseGate(e.gate);
-  raiseGate(LEVEL.finalGate);
+  if (LEVEL.finalGate != null) raiseGate(LEVEL.finalGate);
 }
 
 // Full-height barrier: rows 0..12, floor is 13.
@@ -700,7 +849,8 @@ function validateLevel() {
     if (nearPit(it.x, 2)) warn.push(`item '${it.t}' at ${it.x} is within 2 tiles of a pit`);
   for (const e of LEVEL.enemies)
     if (e.gate != null && nearPit(e.gate, 1)) warn.push(`gate at ${e.gate} is on a pit edge`);
-  if (nearPit(LEVEL.finalGate, 1)) warn.push(`final gate at ${LEVEL.finalGate} is on a pit edge`);
+  if (LEVEL.finalGate != null && nearPit(LEVEL.finalGate, 1))
+    warn.push(`final gate at ${LEVEL.finalGate} is on a pit edge`);
 
   if (warn.length) console.warn('level placement:\n  ' + warn.join('\n  '));
   return warn;
@@ -1237,6 +1387,553 @@ class MidBoss extends Entity {
   onBumped() { this.damage(null); }
 }
 
+
+/* ============================================================ level 2 cast
+
+   Every one of these obeys the same contracts the level-1 enemies do, and the
+   ones that matter are easy to get wrong:
+     - `harmless` is not decoration. resolveEnemies ends an overlap with
+       `else if (!e.harmless) p.hurt(e.cx)`, so anything without it damages on
+       contact in every phase. It ALSO switches the stomp test to the lenient
+       band, which is what makes a boss standing on the floor stompable at all.
+     - anything holding a gate must expose `.gate`, or reconcileGates cannot
+       find its guard and the gate never opens.
+     - falling out of the world must kill, or a gate softlocks.            */
+
+/* A boss that holds a gate must never be able to walk into a pit: the
+   fall-out-of-world rule marks it dead and opens the gate, so the fight is
+   "won" by watching it commit suicide. The ledge check alone is not enough -
+   it looks 2px ahead and then refuses to turn again for TURN_CD, which a
+   hunting boss at 160px/s clears easily. This is a hard clamp to the ground
+   span the boss spawned in. */
+function spanAround(tx) {
+  const sp = LEVEL.ground.find(([a, b]) => tx >= a && tx < b);
+  return sp ? { lo: sp[0] * TILE + 2, hi: sp[1] * TILE - 2 } : null;
+}
+
+function leash(e) {
+  if (!e.home) return;
+  if (e.x < e.home.lo) { e.x = e.home.lo; if (e.dir < 0) e.dir = 1; e.vx = Math.abs(e.vx); }
+  else if (e.x + e.w > e.home.hi) { e.x = e.home.hi - e.w; if (e.dir > 0) e.dir = -1; e.vx = -Math.abs(e.vx); }
+}
+
+const GUARD = { speed: 26, surgeMul: 2.4, surgeT: 1.0, surgeCd: 2.4, alert: 58, link: 46 };
+
+/* A cordon, not a Goomba. Walking into one guard's eyeline breaks the whole
+   nearby line into a short charge, so a row of them has to be broken up
+   rather than walked into. Still one stomp each. */
+class Guard extends Entity {
+  constructor(tx) {
+    const hb = hitboxFor('l2guard');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.y = groundYAt(tx) - this.h;
+    this.dir = -1; this.turnCd = 0; this.surge = 0; this.cd = 0; this.t = rand(0, 4);
+  }
+  alert() {
+    if (this.cd > 0 || this.dead) return;
+    this.surge = GUARD.surgeT; this.cd = GUARD.surgeCd;
+  }
+  update(dt) {
+    this.t += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.cd = Math.max(0, this.cd - dt);
+    this.surge = Math.max(0, this.surge - dt);
+    this.hitWall = false;
+
+    const p = game.player;
+    const d = p.cx - this.cx;
+    if (this.cd <= 0 && Math.abs(d) < GUARD.alert && Math.abs(p.bottom - this.bottom) < 40) {
+      this.alert();
+      for (const o of game.enemies)
+        if (o !== this && o instanceof Guard && Math.abs(o.cx - this.cx) < GUARD.link) o.alert();
+    }
+    // deadzone: without it the sign flips every frame when he reaches you
+    if (this.surge > 0 && Math.abs(d) > 8) this.dir = Math.sign(d);
+
+    this.vx = this.dir * GUARD.speed * (this.surge > 0 ? GUARD.surgeMul : 1);
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    this.face = this.dir;
+  }
+  die(p) {
+    this.dead = true;
+    if (p) game.addCombo(p, this.cx, this.y, 200);
+    else { game.score += 200; floatText(this.cx, this.y, '+200', '#ffd85e'); }
+    burst(this.cx, this.y + this.h / 2, 12, { colors: ['#6a6ad0', '#2a2a70', '#fff'], speed: 100 });
+    shake = 2; Sfx.stomp();
+  }
+  onStomp(p) { freeze = 0.05; this.die(p); }
+  onBumped() { this.die(null); }
+}
+
+/* `range` must sit well inside the jump reach (98px at run speed) or the
+   mechanic is impossible: at 96 you could not clear his hearing airborne AND
+   still land on him, and any ground step inside it woke him in 0.67s. A
+   scripted player using the intended approach landed zero hits in a minute.
+   At 58 a single jump covers the whole range, and the slower noise gain also
+   leaves a careful walk-in viable as a second answer. */
+const SLEEP = { range: 58, wake: 1.0, gain: 1.0, decay: 0.9, awake: 2.2, chase: 70, hp: 3 };
+
+/* Asleep on his feet until you make noise. Noise only accrues while you are
+   ON THE GROUND and actually moving near him - walking him down slowly, or
+   coming in off a jump, keeps him under. Asleep he is harmless and freely
+   stompable; awake he is faster than you and cannot be touched. */
+class Sleepy extends Entity {
+  constructor(tx, gate = null) {
+    const hb = hitboxFor('l2sleepy');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.y = groundYAt(tx) - this.h;
+    this.gate = gate;
+    this.hp = SLEEP.hp; this.dir = -1; this.turnCd = 0;
+    this.noise = 0; this.phase = 'doze'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
+    this.home = spanAround(tx);
+  }
+  get bossGrade() { return true; }
+  get harmless() { return this.phase === 'doze' || this.phase === 'reel'; }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.hitWall = false;
+
+    const p = game.player;
+    const near = Math.abs(p.cx - this.cx) < SLEEP.range;
+    const loud = near && p.onGround && Math.abs(p.vx) > 40;
+    this.noise = clamp(this.noise + (loud ? SLEEP.gain : -SLEEP.decay) * dt, 0, 1.4);
+
+    if (this.phase === 'reel') {
+      // brief stagger after a hit: still harmless, so the stomp bounce has
+      // time to carry you clear before he comes up swinging
+      this.vx *= Math.pow(0.02, dt);
+      if (this.phaseT > 0.55) { this.phase = 'awake'; this.phaseT = 0; }
+    } else if (this.phase === 'doze') {
+      this.vx = 0;
+      if (this.noise >= SLEEP.wake) {
+        this.phase = 'awake'; this.phaseT = 0; this.noise = 0;
+        floatText(this.cx, this.y - 12, 'WHO IS THERE', '#ffd85e');
+        shake = 3; Sfx.deny();
+      }
+    } else {
+      const d = p.cx - this.cx;
+      if (Math.abs(d) > 8) this.dir = Math.sign(d);
+      this.vx = this.dir * SLEEP.chase;
+      if (this.phaseT > SLEEP.awake) {
+        this.phase = 'doze'; this.phaseT = 0; this.noise = 0;
+        floatText(this.cx, this.y - 12, 'ZZZ', '#9ee8ff');
+      }
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    this.face = this.dir;
+
+    if (this.phase === 'doze' && Math.random() < dt * 2.2)
+      burst(this.cx + this.face * 5, this.y + 6, 1,
+            { colors: ['#9ee8ff', '#fff'], speed: 8, grav: -14, life: 1.2, size: 1 });
+  }
+  damage(p) {
+    this.hp--; this.hitFlash = 0.35;
+    /* Wakes up. Sending him back to 'doze' let you stand on his head and
+       stomp three times in a row with no risk - the whole sleep mechanic
+       never engaged and the fight was over in two seconds. */
+    this.phase = 'reel'; this.phaseT = 0; this.noise = 0;
+    if (p) this.vx = Math.sign(this.cx - p.cx) * 50;
+    shake = 3; freeze = 0.07; Sfx.stomp();
+    if (this.hp <= 0) {
+      this.dead = true;
+      if (p) game.addCombo(p, this.cx, this.y, 700);
+      else { game.score += 700; floatText(this.cx, this.y - 4, '+700', '#ffd85e'); }
+      burst(this.cx, this.y + this.h / 2, 26, { colors: ['#e8e8f0', '#9ee8ff', '#fff'], speed: 150, size: 3 });
+      shake = 6; flash = 0.4;
+      if (this.gate != null) openGate(this.gate);
+      return;
+    }
+    burst(this.cx, this.y + 4, 10, { colors: ['#fff', '#9ee8ff'], speed: 90 });
+    floatText(this.cx, this.y - 4, `${this.hp} LEFT`, '#ffd85e');
+  }
+  onStomp(p) {
+    // 'reel' is harmless but NOT open, or you chain all three hits inside a
+    // single stagger and the sleep mechanic never matters
+    if (this.phase === 'reel') { p.vy = CFG.stompBounce * 0.8; return; }
+    if (this.harmless) { this.damage(p); return; }
+    p.vy = CFG.stompBounce * 0.8;                 // awake: bounces off
+    floatText(this.cx, this.y - 8, 'WIDE AWAKE', '#ff8f9c');
+    shake = 4; Sfx.deny();
+  }
+  onBumped() { this.damage(null); }
+}
+
+const SVANI = { hp: 5, walk: 24, charge: 96, windup: 0.55, chargeT: 0.9, stun: 1.6, range: 132, hunt: 240 };
+
+/* Big health that does not mean a damage sponge: three stages that play
+   differently. Stage 2 adds a ground slam whose wave you must jump; stage 3
+   chains straight from stun back into windup with no patrol in between. */
+class Svani extends Entity {
+  constructor(tx, gate = null) {
+    const hb = hitboxFor('l2svani');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.y = groundYAt(tx) - this.h;
+    this.gate = gate;
+    this.hp = SVANI.hp; this.dir = -1; this.turnCd = 0;
+    this.phase = 'patrol'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
+    this.home = spanAround(tx);
+  }
+  get bossGrade() { return true; }
+  get stage() { return this.hp > 3 ? 1 : this.hp > 1 ? 2 : 3; }
+  get harmless() { return this.phase === 'stun'; }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.hitWall = false;
+
+    const p = game.player;
+    const d = p.cx - this.cx;
+    const st = this.stage;
+    const rage = 1 + (st - 1) * 0.35;
+
+    switch (this.phase) {
+      case 'patrol':
+        /* He closes. Patrolling blind meant a player who simply walked
+           backwards was never charged at, never produced a stun, and the
+           fight stalled out indefinitely - 90s with no hit landed. */
+        if (Math.abs(d) < SVANI.hunt && Math.abs(d) > 12) this.dir = Math.sign(d);
+        this.vx = this.dir * SVANI.walk * (Math.abs(d) < SVANI.hunt ? 1.7 : 1);
+        if (Math.abs(d) < SVANI.range && Math.abs(d) > 10 && this.phaseT > 0.5) {
+          this.phase = 'windup'; this.phaseT = 0; this.dir = Math.sign(d); Sfx.bump();
+        }
+        break;
+      case 'windup':
+        this.vx = -this.dir * 12;
+        if (this.phaseT > SVANI.windup / rage) { this.phase = 'charge'; this.phaseT = 0; shake = 2; }
+        break;
+      case 'charge':
+        this.vx = this.dir * SVANI.charge * rage;
+        if (this.phaseT > SVANI.chargeT || this.hitWall) {
+          if (st >= 2) { this.slam(); }
+          this.phase = 'stun'; this.phaseT = 0;
+        }
+        break;
+      case 'stun':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > SVANI.stun / rage) {
+          // stage 3 never rests: straight back into the next windup
+          if (st >= 3 && Math.abs(d) < SVANI.range) { this.phase = 'windup'; this.dir = Math.sign(d) || this.dir; }
+          else this.phase = 'patrol';
+          this.phaseT = 0;
+        }
+        break;
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    this.face = this.dir;
+  }
+  slam() {
+    if (!this.onGround) return;
+    shake = 6; Sfx.brick();
+    burst(this.cx, this.bottom, 16,
+          { colors: ['#c9a06a', '#fff'], speed: 100, grav: 320, life: .5, size: 2, spread: Math.PI });
+    for (const dir of [-1, 1]) game.hazards.push(new Shockwave(this.cx, this.bottom, dir, '#e8a020'));
+  }
+  damage(p) {
+    const before = this.stage;
+    this.hp--; this.hitFlash = 0.35;
+    this.phase = 'stun'; this.phaseT = 0;
+    if (p) this.vx = Math.sign(this.cx - p.cx) * 60;
+    shake = 3; freeze = 0.07; Sfx.stomp();
+    if (this.hp <= 0) {
+      this.dead = true;
+      if (p) game.addCombo(p, this.cx, this.y, 1200);
+      else { game.score += 1200; floatText(this.cx, this.y - 4, '+1200', '#ffd85e'); }
+      burst(this.cx, this.y + this.h / 2, 32, { colors: ['#e8434f', '#ffd85e', '#fff'], speed: 180, size: 3 });
+      shake = 8; flash = 0.5;
+      if (this.gate != null) openGate(this.gate);
+      return;
+    }
+    burst(this.cx, this.y + 4, 12, { colors: ['#e8434f', '#fff'], speed: 100 });
+    if (this.stage !== before) {
+      floatText(this.cx, this.y - 12, this.stage === 2 ? 'ANGRY' : 'FURIOUS',
+                this.stage === 2 ? '#ff8a5c' : '#ff2d55');
+      shake = 7; flash = 0.35;
+    } else floatText(this.cx, this.y - 4, `${this.hp} LEFT`, '#ffd85e');
+  }
+  onStomp(p) { this.damage(p); }
+  onBumped() { this.damage(null); }
+}
+
+/* Travels along the floor and must be jumped. Kept out of game.enemies on
+   purpose: it is not stompable, and every entity in that array has to satisfy
+   the stomp contract. */
+class Shockwave {
+  constructor(x, y, dir, color) {
+    this.x = x; this.y = y - 10; this.w = 8; this.h = 10;
+    this.dir = dir; this.color = color; this.life = 2.2; this.dead = false; this.t = 0;
+  }
+  get cx() { return this.x + this.w / 2; }
+  get bottom() { return this.y + this.h; }
+  update(dt) {
+    this.t += dt;
+    this.life -= dt;
+    this.x += this.dir * 132 * dt;
+    const tx = Math.floor(this.cx / TILE), ty = Math.floor((this.bottom + 3) / TILE);
+    // dies at a wall or a ledge; it is a wave along the ground, not a projectile
+    if (this.life <= 0 || isSolid(tileAt(tx, ty - 1)) ||
+        (!isSolid(tileAt(tx, ty)) && !isOneWay(tileAt(tx, ty)))) this.dead = true;
+    if (Math.random() < dt * 22)
+      burst(this.cx, this.bottom - 2, 1, { colors: [this.color, '#fff'], speed: 30, grav: 120, life: .4, size: 1 });
+  }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const k = Math.floor(this.t * 14) % 2;
+    g.fillStyle = this.color;
+    g.fillRect(x, y + 4 + k, this.w, 6 - k);
+    g.fillStyle = '#fff';
+    g.fillRect(x + 1, y + 5 + k, this.w - 2, 1);
+  }
+}
+
+const BOMBER = { hp: 3, walk: 30, throwEvery: 2.3, range: 150, blast: 30, fuse: 2.1, puntFuse: 0.75 };
+
+/* Armoured: stomping him does nothing. The only thing that hurts him is his
+   own ordnance, so the fight is about the bombs, not about him. Stomp a live
+   bomb to punt it back the way you are facing and cut its fuse. */
+class Bomber extends Entity {
+  constructor(tx, gate = null) {
+    const hb = hitboxFor('l2bomb');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.y = groundYAt(tx) - this.h;
+    this.gate = gate;
+    this.hp = BOMBER.hp; this.dir = -1; this.turnCd = 0;
+    this.cool = 1.2; this.hitFlash = 0; this.t = 0; this.taunt = 0;
+    this.home = spanAround(tx);
+  }
+  update(dt) {
+    this.t += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.taunt = Math.max(0, this.taunt - dt);
+    this.cool -= dt;
+    this.hitWall = false;
+
+    const p = game.player;
+    const d = p.cx - this.cx;
+    if (Math.abs(d) > 10) this.face = Math.sign(d);
+
+    // backs away from you so you cannot simply corner him
+    const flee = Math.abs(d) < 56 ? -Math.sign(d) : this.dir;
+    this.dir = Math.abs(d) < 56 ? flee : this.dir;
+    this.vx = this.dir * BOMBER.walk;
+
+    if (this.cool <= 0 && Math.abs(d) < BOMBER.range) {
+      this.cool = BOMBER.throwEvery;
+      game.enemies.push(new Bomb(this.cx, this.y + 6, Math.sign(d) || 1, this));
+      Sfx.bump();
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+  }
+  get bossGrade() { return true; }
+  blastHit(p) {
+    this.hp--; this.hitFlash = 0.4;
+    shake = 7; freeze = 0.09; flash = 0.3;
+    burst(this.cx, this.y + this.h / 2, 24, { colors: ['#ff8a5c', '#ffd85e', '#fff'], speed: 160, size: 3 });
+    if (this.hp <= 0) {
+      this.dead = true;
+      game.score += 1000;
+      floatText(this.cx, this.y - 4, '+1000', '#ffd85e');
+      burst(this.cx, this.y + this.h / 2, 34, { colors: ['#ff8a5c', '#e8434f', '#fff'], speed: 200, size: 3 });
+      shake = 10; flash = 0.55;
+      if (this.gate != null) openGate(this.gate);
+    } else floatText(this.cx, this.y - 8, `${this.hp} LEFT`, '#ffd85e');
+  }
+  onStomp(p) {
+    p.vy = CFG.stompBounce * 0.8;
+    this.taunt = 0.7;
+    floatText(this.cx, this.y - 8, 'USE HIS BOMBS', '#ff8a5c');
+    Sfx.deny();
+  }
+}
+
+/* Lives in game.enemies so the existing stomp path can punt it. `harmless`
+   so touching it costs nothing - the blast is the danger, not the casing. */
+class Bomb extends Entity {
+  constructor(x, y, dir, owner) {
+    super(x - 4, y, 8, 8);
+    this.vx = dir * 74; this.vy = -150;
+    this.owner = owner; this.fuse = BOMBER.fuse; this.t = 0;
+  }
+  get bossGrade() { return true; }   // never vaporised: punting is the mechanic
+  get harmless() { return true; }
+  update(dt) {
+    this.t += dt;
+    this.fuse -= dt;
+    this.hitWall = false;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    if (this.onGround) this.vx *= Math.pow(0.15, dt);   // rolls to a stop
+    if (this.fuse <= 0) this.explode();
+    if (Math.random() < dt * 26)
+      burst(this.cx, this.y, 1, { colors: ['#ffd85e', '#ff8a5c'], speed: 14, grav: -40, life: .4, size: 1 });
+  }
+  explode() {
+    if (this.dead) return;
+    this.dead = true;
+    shake = 6; Sfx.brick();
+    burst(this.cx, this.cy2, 26, { colors: ['#ffd85e', '#ff8a5c', '#e8434f', '#fff'], speed: 190, size: 3, life: .7 });
+    const box = { x: this.cx - BOMBER.blast, y: this.y + 4 - BOMBER.blast, w: BOMBER.blast * 2, h: BOMBER.blast * 2 };
+    const p = game.player;
+    if (aabb(box, p) && p.invincible <= 0) p.hurt(this.cx);
+    for (const e of game.enemies) {
+      if (e.dead || e === this) continue;
+      if (!aabb(box, e)) continue;
+      if (e instanceof Bomber) e.blastHit(p);
+      else if (e instanceof Bomb) e.fuse = Math.min(e.fuse, 0.2);   // chains
+      else if (e.onBumped) e.onBumped();
+    }
+  }
+  get cy2() { return this.y + this.h / 2; }
+  onStomp(p) {
+    // punted: goes where you are facing, with a short fuse
+    this.vx = (p.face || 1) * 150;
+    this.vy = -120;
+    this.fuse = Math.min(this.fuse, BOMBER.puntFuse);
+    p.vy = CFG.stompBounce * 0.85;
+    floatText(this.cx, this.y - 8, 'KICK!', '#ffd85e');
+    shake = 3; Sfx.stomp();
+  }
+}
+
+const DARD = { hp: 4, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1 };
+
+/* He never actually says anything. The stage direction IS the joke. */
+const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
+
+/* The final fight, and deliberately not the level-1 boss reskinned: he never
+   chases and never dives. He holds the top step and slams, and the waves run
+   along the floor - so the fight is about climbing to him during the window
+   after a slam, not about dodging him in the open. */
+class Dardubala extends Entity {
+  constructor(tx) {
+    const hb = hitboxFor('l2dard');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.y = groundYAt(tx) - this.h;
+    this.hp = DARD.hp; this.dir = -1; this.turnCd = 0;
+    this.phase = 'pace'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
+    this.home = spanAround(tx);
+    this.quip = 1.4; this.quipN = 0;
+  }
+  get bossGrade() { return true; }
+  /* Safe to touch while rearing back, as well as while winded. He shares his
+     step with you and damages on contact, so with only the 2.5s window safe a
+     handful of unavoidable brushes ended the run before a stomp ever landed.
+     Telegraphing and striking should not both be lethal. Note onStomp still
+     only accepts a hit during 'winded' - windup is safe, not open. */
+  get harmless() { return this.phase === 'winded' || this.phase === 'windup'; }
+  /* Latches. Without it, retreating back past the arena line switched his
+     slams off, so he never opened a window and the fight deadlocked - a bot
+     playing it correctly landed zero hits in two minutes. */
+  get engaged() {
+    if (game.player.cx > (LEVEL.arenaX ?? 186) * TILE) this.woke = true;
+    return this.woke === true;
+  }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.hitWall = false;
+    if (this.scriptedOut) { this.vx = 0; return; }
+
+    this.quip -= dt;
+    if (this.quip <= 0 && this.engaged) {
+      this.quip = DARD.quipEvery + (this.quipN % 2) * 0.9;
+      floatText(this.cx, this.y - 14, `*${DARD_QUIPS[this.quipN++ % DARD_QUIPS.length]}*`, '#c9a0ff');
+      Sfx.bump();
+    }
+
+    switch (this.phase) {
+      case 'pace':
+        this.vx = this.dir * DARD.pace;
+        if (this.engaged && this.phaseT > DARD.slamEvery) { this.phase = 'windup'; this.phaseT = 0; Sfx.deny(); }
+        break;
+      case 'windup':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > DARD.windup) {
+          this.phase = 'winded'; this.phaseT = 0;
+          shake = 8; Sfx.brick();
+          burst(this.cx, this.bottom, 20,
+                { colors: ['#c9a06a', '#fff'], speed: 120, grav: 340, life: .6, size: 2, spread: Math.PI });
+          /* The waves run along the FLOOR, not along his own step. Spawning
+             them at his feet swept the one surface you have to stand on to
+             reach him, so the fight punished exactly the thing it was asking
+             for - a player parked on his platform lost a heart to a wave he
+             could not have avoided. On the floor they threaten the approach
+             instead, which is what makes the climb the point. */
+          // + TILE, not + 4: groundBelow starts scanning at the row his feet
+          // are already in, so a smaller offset just finds his own platform
+          const floorY = groundBelow(this.cx, this.bottom + TILE) ?? (13 * TILE);
+          for (const dir of [-1, 1]) game.hazards.push(new Shockwave(this.cx, floorY, dir, '#c9a0ff'));
+        }
+        break;
+      case 'winded':
+        this.vx *= Math.pow(0.05, dt);
+        if (this.phaseT > DARD.winded) { this.phase = 'pace'; this.phaseT = 0; }
+        break;
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    this.face = this.dir;
+  }
+  onStomp(p) {
+    p.vy = CFG.stompBounce * 0.85;
+    if (this.phase !== 'winded') {
+      floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff');
+      shake = 4; Sfx.deny();
+      return;
+    }
+    this.hp--; this.hitFlash = 0.4;
+    this.phase = 'pace'; this.phaseT = 0;
+    shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
+    burst(this.cx, this.y + this.h / 2, 24, { colors: ['#c9a0ff', '#ffd85e', '#fff'], speed: 170, size: 3 });
+    if (this.hp <= 0) {
+      game.addCombo(p, this.cx, this.y, 3000);
+      floatText(this.cx, this.y - 18, 'HE IS FINISHED', '#7ae07a');
+      shake = 14; flash = 0.8; freeze = 0.2;
+      game.teaOutro();
+    } else {
+      game.addCombo(p, this.cx, this.y, 600);
+      floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
+    }
+  }
+}
+
 /* Flies, stalks the player forever, cannot be killed. At the flag he leaves by
    helicopter rather than being fought — see game.escape().
 
@@ -1586,19 +2283,23 @@ const Scores = {
 
 const game = {
   player: null, enemies: [], coins: [], items: [], boss: null, heli: null,
+  hazards: [], script: null, tea: null, levelIndex: 0, advance: false,
   score: 0, state: 'title', endT: 0, time: 0, best: 0,
 };
 
 const KHACHAPURI_TIME = 9;   // seconds of invincibility
 const POWDER_TIME = 18;      // seconds of double jump
 
-function reset(toTitle = false) {
+function reset(toTitle = false, opts = {}) {
+  if (opts.levelIndex != null) loadLevel(opts.levelIndex);
+  else if (toTitle) loadLevel(0);          // the title screen is always act one
+  const carried = opts.keepScore ? game.score : 0;
   buildGrid();
   particles = []; floats = []; bumps = [];
   shake = 0; freeze = 0; flash = 0;
 
   game.player = new Player(LEVEL.start.x * TILE, LEVEL.start.y * TILE);
-  game.enemies = LEVEL.enemies.map(e => e.t === 'mid' ? new MidBoss(e.x, e.gate) : new Walker(e.x));
+  game.enemies = LEVEL.enemies.map(e => new (enemyKind(e.t))(e.x, e.gate));
   game.coins = [];
   for (const r of LEVEL.coinRuns)
     for (let i = 0; i < r.n; i++) game.coins.push(new Coin(r.x + i, r.y));
@@ -1608,14 +2309,16 @@ function reset(toTitle = false) {
   game.gates = [
     ...LEVEL.enemies.filter(e => e.gate != null).map(e => ({
       x: e.gate, kind: 'mid',
-      guard: game.enemies.find(g => g instanceof MidBoss && g.gate === e.gate) || null,
+      guard: game.enemies.find(g => g.gate === e.gate) || null,
     })),
-    { x: LEVEL.finalGate, kind: 'final', guard: null },
+    ...(LEVEL.finalGate != null ? [{ x: LEVEL.finalGate, kind: 'final', guard: null }] : []),
   ];
   game.flagsConverted = 0;
   game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
+  game.hazards = []; game.script = null; game.tea = null;
   game.entry = null;
-  game.score = 0; game.endT = 0; game.time = 0;
+  game.score = carried; game.endT = 0; game.time = 0;
+  game.advance = false;
   game.state = toTitle ? 'title' : 'play';
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
 }
@@ -1656,11 +2359,61 @@ game.escape = function () {
 game.win = function () {
   this.state = 'won'; this.endT = 0;
   this.best = Math.max(this.best, this.score);
-  Sfx.win(); Stinger.laugh();
+  // more acts to come? then this is an interlude, not the end of the run
+  this.advance = this.levelIndex < LEVELS.length - 1;
+  Sfx.win();
+  if (!this.advance) Stinger.laugh();
   for (let i = 0; i < 70; i++)
     burst(this.player.cx + rand(-70, 70), this.player.y - rand(0, 90), 1,
           { colors: ['#ffd85e', '#e8434f', '#3ad47a', '#41a6f0', '#fff'], speed: 80, life: 1.8, size: 2, grav: 170 });
 };
+
+/* ---------------------------------------------------------- act card
+
+   Loads the next level first so the card sits over that level's own backdrop,
+   then types its lines out. Uppercase-only 5x7 font and a 320px screen, so
+   the first line has to break in two: "BUT EVERYTHING STARTED WITH ROSES...."
+   is 234px at scale 2 on one line, which does not fit with any margin. */
+const CARD_LINES = [
+  { t: 0.0, s: 'BUT EVERYTHING STARTED', c: '#e8e0d0', sc: 1 },
+  { t: 0.5, s: 'WITH ROSES....',         c: '#e8e0d0', sc: 1 },
+  { t: 1.8, s: '2003 NOVEMBER:',         c: '#ffd85e', sc: 2 },
+];
+
+function startCard(i) {
+  reset(false, { levelIndex: i, keepScore: true });
+  game.state = 'card';
+  game.card = { t: 0 };
+}
+
+function updateCard(dt) {
+  game.card.t += dt;
+  game.time += dt;
+  const done = game.card.t > CARD_LINES[CARD_LINES.length - 1].t + 1.2;
+  if (done && (Input.jumpTap() || Input.justDown('Enter'))) {
+    game.card = null;
+    game.state = 'play';
+    Sfx.start();
+  }
+}
+
+function drawCard() {
+  const t = game.card.t;
+  g.fillStyle = 'rgba(6,8,16,.78)';
+  g.fillRect(0, 0, VIEW_W, VIEW_H);
+  let y = 52;
+  for (const L of CARD_LINES) {
+    if (t < L.t) { y += L.sc === 2 ? 30 : 14; continue; }
+    // typewriter: one character every 45ms
+    const n = Math.min(L.s.length, Math.floor((t - L.t) / 0.045));
+    drawTextCentered(g, L.s.slice(0, n), VIEW_W / 2, y, L.c, L.sc);
+    y += L.sc === 2 ? 30 : 14;
+  }
+  const done = t > CARD_LINES[CARD_LINES.length - 1].t + 1.2;
+  if (t > 2.6) drawTextCentered(g, `ACT 2 - ${LEVEL.subtitle}`, VIEW_W / 2, 124, '#7ec8f0', 1);
+  if (done && Math.floor(t * 2) % 2 === 0)
+    drawTextCentered(g, 'PRESS SPACE', VIEW_W / 2, 150, '#8890a4', 1);
+}
 
 /* Arcade-style three-letter entry: no HTML input, so it stays inside the
    320x180 buffer and the pixel font. */
@@ -1687,6 +2440,122 @@ function updateEntry(dt) {
   }
 }
 
+
+/* ---------------------------------------------------------- the tea
+
+   He storms the chamber, the old man leaves by air, and he sits down and
+   drinks the tea that was left on the podium. Same rule as level 1's
+   helicopter: the fleeing figure is never drawn hanging from anything - he
+   rises under his own power and is simply gone. */
+
+/* The Silver Fox, which is what he was always called. Drawn from rects like
+   the helicopter and the teacup - at this size a downscaled photo would be
+   mush, and there is no fox asset anyway. */
+function drawFox(x, y, face, t) {
+  x = Math.round(x); y = Math.round(y);
+  const o = '#e07a2a', d = '#a8501a', w = '#f4ece0', k = '#241a14';
+  const step = Math.floor(t * 9) % 2;
+  g.save();
+  if (face < 0) { g.translate(x + 22, y); g.scale(-1, 1); g.translate(-x, -y); }
+  g.fillStyle = o; g.fillRect(x, y + 3, 6, 5);            // tail
+  g.fillStyle = w; g.fillRect(x, y + 3, 3, 3);
+  g.fillStyle = o; g.fillRect(x + 5, y + 4, 11, 6);       // body
+  g.fillStyle = d; g.fillRect(x + 5, y + 9, 11, 1);
+  g.fillStyle = w; g.fillRect(x + 12, y + 7, 5, 3);       // chest
+  g.fillStyle = o; g.fillRect(x + 14, y, 7, 6);           // head
+  g.fillStyle = d; g.fillRect(x + 14, y - 2, 2, 2); g.fillRect(x + 19, y - 2, 2, 2);
+  g.fillStyle = w; g.fillRect(x + 19, y + 3, 3, 2);       // snout
+  g.fillStyle = k; g.fillRect(x + 21, y + 3, 1, 1);
+  g.fillStyle = k; g.fillRect(x + 17, y + 2, 1, 1);       // eye
+  g.fillStyle = k;                                         // legs
+  g.fillRect(x + 6, y + 10, 2, 3 - step);
+  g.fillRect(x + 13, y + 10, 2, 2 + step);
+  g.restore();
+}
+
+function drawCup(x, y, steamT) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = '#e8e4dc'; g.fillRect(x, y, 9, 6);          // cup
+  g.fillStyle = '#c8c2b6'; g.fillRect(x, y + 5, 9, 1);
+  g.fillStyle = '#8a5a2a'; g.fillRect(x + 1, y + 1, 7, 2);  // tea
+  g.fillStyle = '#e8e4dc'; g.fillRect(x + 9, y + 1, 2, 1);  // handle
+  g.fillRect(x + 10, y + 2, 1, 2); g.fillRect(x + 9, y + 4, 2, 1);
+  g.fillStyle = '#d8d2c6'; g.fillRect(x - 2, y + 6, 13, 2); // saucer
+  for (let i = 0; i < 3; i++) {                              // steam
+    const t = steamT * 1.6 + i * 0.9;
+    const sy = y - 3 - ((t * 7) % 12);
+    const sx = x + 3 + Math.round(Math.sin(t * 2.4) * 2);
+    g.globalAlpha = 0.5;
+    g.fillStyle = '#fff'; g.fillRect(sx, Math.round(sy), 1, 2);
+    g.globalAlpha = 1;
+  }
+}
+
+function drawTeaScene() {
+  const t = game.tea;
+  g.fillStyle = '#6a5a3a'; g.fillRect(Math.round(t.podX), Math.round(t.podY), 14, 10);
+  g.fillStyle = '#8a7a52'; g.fillRect(Math.round(t.podX), Math.round(t.podY), 14, 2);
+  if (!t.drunk) drawCup(t.podX + 2, t.podY - 8, game.time);
+}
+
+game.teaOutro = function () {
+  if (this.state !== 'play') return;
+  const p = this.player;
+  const d = this.enemies.find(e => e instanceof Dardubala);
+  if (d) d.scriptedOut = true;
+  this.state = 'escape';
+  this.endT = 0;
+  this.script = updateTea;
+  this.hazards = [];
+  // podium on the step he was standing on, just ahead of the player
+  const gy = groundBelow(p.cx + 30, p.bottom - 2) ?? (13 * TILE);
+  this.tea = { podX: p.cx + 24, podY: gy - 10, drunk: false, boss: d || null };
+  Sfx.win();
+};
+
+function updateTea(dt) {
+  const t = game.tea, p = game.player, b = t.boss, T0 = game.endT;
+
+  // the old man goes up and out under his own power - no rope, no dangling
+  if (b) {
+    if (T0 > 0.6) {
+      b.y -= (26 + Math.min(70, (T0 - 0.6) * 55)) * dt;
+      b.x += 34 * dt;
+      if (Math.random() < dt * 16)
+        burst(b.cx + rand(-6, 6), b.bottom, 1,
+              { colors: ['#c9a0ff', '#fff'], speed: 22, grav: 40, life: .6, size: 1 });
+    }
+    /* Transform while he is still ON SCREEN. The camera sits at y=60 with a
+       180px view, so anything above y=60 is already out of frame - at the
+       literal halfway point of his exit (y~25) the whole gag happened where
+       nobody could see it. */
+    if (!b.foxed && b.y < 96) {
+      b.foxed = true;
+      burst(b.cx, b.y + 8, 22,
+            { colors: ['#e07a2a', '#f4ece0', '#ffd85e'], speed: 90, grav: -20, life: .9, size: 2 });
+      floatText(b.cx, b.y - 10, '*SILVER FOX*', '#e07a2a');
+      Sfx.deny();
+    }
+    if (b.y < -60) t.boss = null;
+  }
+
+  // he walks to the podium at a real walking speed, then drinks
+  const target = t.podX - p.w - 2;
+  if (T0 < 3.4) {
+    const dx = target - p.x;
+    if (Math.abs(dx) > 1.5) { p.x += Math.sign(dx) * Math.min(Math.abs(dx), CFG.runMax * 0.62 * dt); p.face = Math.sign(dx); }
+    else p.face = 1;
+  }
+  if (!t.drunk && T0 > 3.4) {
+    t.drunk = true;
+    floatText(p.cx, p.y - 16, 'AH.', '#ffd85e');
+    burst(t.podX + 6, t.podY - 6, 12, { colors: ['#e8e4dc', '#8a5a2a', '#fff'], speed: 40, grav: -30, life: 1, size: 1 });
+    Sfx.coin();
+  }
+  if (T0 > 3.6 && T0 < 3.6 + dt) floatText(p.cx, p.y - 28, 'HE GOT AWAY', '#c9a0ff');
+  if (T0 > 5.6) game.win();
+}
+
 /* ---------------------------------------------------------- camera */
 
 const cam = { x: 0, y: 0 };
@@ -1707,10 +2576,17 @@ function resolveEnemies(dt) {
   const all = game.boss ? [...game.enemies, game.boss] : game.enemies;
   for (const e of all) {
     if (e.dead || !aabb(p, e)) continue;
-    const isBoss = e instanceof FlyingBoss;
+    /* `bossGrade` marks anything that must not be deleted by a khachapuri.
+       The exemption used to be `instanceof FlyingBoss`, which was the only
+       boss when it was written — every level-2 boss fell through to the
+       one-shot branch instead, so walking into Sleepy with 9 seconds of
+       invincibility erased a 3-hit fight in a single frame. Bombs are marked
+       too: vaporising them would silently remove the only way to hurt the
+       Bomber. */
+    const isBoss = e instanceof FlyingBoss || e.bossGrade === true;
 
-    // Khachapuri: touching anything destroys it. The boss is exempt — he is
-    // only ever damaged by a stomp in his vulnerable window.
+    // Khachapuri: touching anything destroys it. Bosses are exempt — they are
+    // only ever damaged by a stomp in their own vulnerable window.
     if (p.invincible > 0 && !isBoss) {
       e.hp = 0; e.dead = true;
       game.addCombo(p, e.cx, e.y, 400);
@@ -1718,12 +2594,14 @@ function resolveEnemies(dt) {
       shake = 3; freeze = 0.04; Sfx.stomp();
       continue;
     }
-    // Invincible: the boss can't touch you, but you can still cash in his
-    // vulnerable window with a stomp.
+    // Invincible: a boss can't touch you, but you can still cash in his
+    // vulnerable window with a stomp. Same lenient band as the normal path,
+    // or a grounded boss is effectively unhittable here.
     if (p.invincible > 0 && isBoss) {
-      const falling = p.vy > 15;
-      const feetAbove = p.bottom - p.vy * dt <= e.y + e.h * 0.5;
-      if (falling && feetAbove && e.vulnerable) e.onStomp(p);
+      const open = e.vulnerable ?? e.harmless ?? false;
+      const falling = open ? p.vy >= 0 : p.vy > 15;
+      const band = open ? e.h * 0.9 : e.h * 0.5;
+      if (falling && p.bottom - p.vy * dt <= e.y + band && open) e.onStomp(p);
       continue;
     }
 
@@ -1781,6 +2659,19 @@ function resolveItems() {
     }
   }
   game.items = game.items.filter(i => !i.dead);
+}
+
+/* Shockwaves only ever hurt - they are jumped, not stomped, so they are kept
+   out of game.enemies where everything must satisfy the stomp contract. */
+function resolveHazards() {
+  const p = game.player;
+  if (p.invincible > 0 || p.invuln > 0) return;
+  for (const h of game.hazards) {
+    if (h.dead || !aabb(p, h)) continue;
+    p.hurt(h.cx);
+    h.dead = true;
+    return;
+  }
 }
 
 function resolveCoins() {
@@ -1864,7 +2755,7 @@ function updateEscape(dt) {
     game.heli = null;
     game.boss = null;
     game.bossBeaten = true;
-    openGate(LEVEL.finalGate, 'RUN FOR THE FLAG');
+    if (LEVEL.finalGate != null) openGate(LEVEL.finalGate, 'RUN FOR THE FLAG');
   }
 }
 
@@ -1880,18 +2771,32 @@ function update(dt) {
     return;
   }
 
+  if (game.state === 'card')  { updateCard(dt); return; }
   if (game.state === 'entry') { game.time += dt; updateEntry(dt); return; }
 
   if (freeze > 0) { freeze -= dt; updateEffects(dt * 0.25); return; }
 
   if (game.state === 'escape') {
     game.endT += dt; game.time += dt;
-    game.player.vx = 0;
-    game.player.vy = Math.min(game.player.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(game.player, dt);
+    /* Player.update does not run here, so anything it ticks has to be ticked
+       by hand. invuln matters most: drawEntities blinks the whole player off
+       while it is non-zero, so entering an outro still invulnerable left the
+       hero flickering — or absent — through his own ending. */
+    const po = game.player;
+    po.vx = 0;
+    po.invuln = Math.max(0, po.invuln - dt);
+    po.invincible = Math.max(0, po.invincible - dt);
+    po.squashT = Math.max(0, po.squashT - dt);
+    po.stretchT = Math.max(0, po.stretchT - dt);
+    po.charmed = 0; po.charmImmune = 0; po.charmSlow = false;
+    po.vy = Math.min(po.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(po, dt);
     for (const e of game.enemies) e.update(dt);
-    game.boss.update(dt);
-    updateEscape(dt);
+    if (game.boss) game.boss.update(dt);
+    // 'escape' is the generic scripted-outro state; the level supplies the script
+    (game.script || updateEscape)(dt);
+    for (const h of game.hazards) h.update(dt);
+    game.hazards = game.hazards.filter(h => !h.dead);
     updateEffects(dt);
     updateCamera(dt);
     return;
@@ -1907,7 +2812,8 @@ function update(dt) {
     updateEffects(dt);
     updateCamera(dt);
     if (Input.justDown('KeyR') || (game.endT > 1.4 && Input.jumpTap())) {
-      if (Scores.qualifies(game.score)) startEntry(game.score);
+      if (game.state === 'won' && game.advance) startCard(game.levelIndex + 1);
+      else if (Scores.qualifies(game.score)) startEntry(game.score);
       else reset(true);            // back to the title so the board is visible
     }
     return;
@@ -1933,14 +2839,17 @@ function update(dt) {
     // never be opened — an unrecoverable softlock.
     if (!e.dead && e.y > LEVEL_H_PX + 60) {
       e.dead = true;
-      if (e instanceof MidBoss && e.gate != null) openGate(e.gate);
+      if (e.gate != null) openGate(e.gate);
     }
   }
   if (game.boss) game.boss.update(dt);
+  for (const h of game.hazards) h.update(dt);
+  game.hazards = game.hazards.filter(h => !h.dead);
   for (const c of game.coins) c.update(dt);
   for (const it of game.items) it.update(dt);
 
   resolveEnemies(dt);
+  resolveHazards();
   resolveCoins();
   resolveFlags(dt);
   resolveCharmers(dt);
@@ -1952,7 +2861,7 @@ function update(dt) {
 
   // The flag is only reachable once the final gate is down, which only happens
   // after Aslan is beaten — so no path to the win screen skips the fight.
-  if (game.player.cx > LEVEL.finishX * TILE) game.win();
+  if (LEVEL.finishX != null && game.player.cx > LEVEL.finishX * TILE) game.win();
 
   updateEffects(dt);
   updateCamera(dt);
@@ -1993,24 +2902,61 @@ function ditherBand(y0, y1, cA, cB) {
   }
 }
 
-function drawBackdrop() {
-  const art = ART.bg;
-  if (art && !art.isPlaceholder) {
+/* Backdrop zones.
+
+   A level declares one or more zones, each owning the world from its `fromX`
+   tile onward. Each is clipped to its own span projected into screen space, so
+   the change happens at a fixed world column rather than snapping across the
+   whole screen on some frame. Zone boundaries are placed just past a gate, so
+   in practice the join is off-camera by the time the gate opens.
+
+   `tile: true` mirror-tiles the art (a street repeats fine). The arena does
+   not tile - the Parliament is a building, not wallpaper - so it is anchored
+   to its own world column and drawn once. An untiled zone needs
+   artW >= VIEW_W + drift, where drift is (camMax - camAtEntry) * par; a low
+   par is what keeps that satisfiable, and it also reads as planted. */
+function drawZone(art, z, clipL, clipR) {
+  const oy = -Math.round(cam.y * 0.55);
+  g.save();
+  g.beginPath();
+  g.rect(clipL, 0, clipR - clipL, VIEW_H);
+  g.clip();
+
+  if (z.tile) {
     const bw = art.w;
-    const off = Math.round(cam.x * 0.34);
-    const oy = -Math.round(cam.y * 0.55);
+    const off = Math.round(cam.x * z.par);
     let i = Math.floor(off / bw);
     for (let n = 0; n <= Math.ceil(VIEW_W / bw) + 1; n++, i++) {
       const x = i * bw - off;
-      if (i % 2 === 0) {
-        g.drawImage(art.canvas, x, oy);
-      } else {                                  // mirror alternates: no hard seam
-        g.save();
-        g.translate(x + bw, oy);
-        g.scale(-1, 1);
-        g.drawImage(art.canvas, 0, 0);
-        g.restore();
+      if (i % 2 === 0) g.drawImage(art.canvas, x, oy);
+      else {                                    // mirror alternates: no hard seam
+        g.save(); g.translate(x + bw, oy); g.scale(-1, 1);
+        g.drawImage(art.canvas, 0, 0); g.restore();
       }
+    }
+  } else {
+    /* (anchor - cam.x) * par, NOT anchor - cam.x * par. The anchor is a world
+       coordinate; it has to be mapped into the parallax layer's own space
+       before the camera is subtracted, or the art lands hundreds of pixels
+       off screen and the zone renders as flat void. */
+    const anchor = (z.anchorX ?? z.fromX) * TILE;
+    g.drawImage(art.canvas, Math.round((anchor - cam.x) * z.par), oy);
+  }
+  g.restore();
+}
+
+function drawBackdrop() {
+  const zones = (LEVEL.backdrops || []).filter(z => ART[z.art] && !ART[z.art].isPlaceholder);
+  if (zones.length) {
+    // fill first: an untiled zone may not cover the full height on every frame
+    g.fillStyle = LEVEL.voidColor || '#0a0c16';
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    for (let k = 0; k < zones.length; k++) {
+      const z = zones[k], next = zones[k + 1];
+      const l = k === 0 ? 0 : Math.round(z.fromX * TILE - cam.x);
+      const r = next ? Math.round(next.fromX * TILE - cam.x) : VIEW_W;
+      if (r <= 0 || l >= VIEW_W) continue;      // wholly off-camera
+      drawZone(ART[z.art], z, Math.max(0, l), Math.min(VIEW_W, r));
     }
     return;
   }
@@ -2381,6 +3327,55 @@ function drawEntities() {
     shadowUnder(e);
     if (e instanceof Dog) {
       drawDog(e.x, e.y, e.face, e.t);
+    } else if (e instanceof Bomb) {
+      const flashing = e.fuse < 0.6 && Math.floor(e.t * 16) % 2 === 0;
+      const x = Math.round(e.x), y = Math.round(e.y);
+      g.fillStyle = flashing ? '#ff5a4a' : '#1c1c22'; g.fillRect(x, y + 1, 8, 7);
+      g.fillStyle = '#3a3a46'; g.fillRect(x + 1, y + 2, 2, 2);
+      g.fillStyle = '#8a6a3a'; g.fillRect(x + 5, y - 2, 1, 3);
+      g.fillStyle = Math.floor(e.t * 20) % 2 ? '#ffd85e' : '#ff8a5c'; g.fillRect(x + 5, y - 3, 1, 1);
+    } else if (e instanceof Guard) {
+      drawSprite(ART.l2guard, e, { tint: e.surge > 0 && Math.floor(game.time * 12) % 2 === 0 ? 'rgba(255,90,90,.45)' : null });
+    } else if (e instanceof Sleepy) {
+      const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+      drawSprite(ART.l2sleepy, e, {
+        tint: flashing ? 'rgba(255,255,255,.85)'
+            : e.harmless ? 'rgba(90,120,200,.35)' : null,
+      });
+      if (e.harmless && Math.floor(game.time * 2) % 2 === 0)
+        drawTextCentered(g, 'ZZZ', e.cx, e.y - 11, '#9ee8ff', 1);
+      else if (!e.harmless)
+        drawTextCentered(g, '!', e.cx, e.y - 11, '#ff8f9c', 2);
+      // noise meter: the thing the player is actually managing
+      if (e.noise > 0.05 && e.harmless) {
+        const w = 20, bx = Math.round(e.cx - w / 2), by = Math.round(e.y - 4);
+        g.fillStyle = '#2a2f3a'; g.fillRect(bx, by, w, 2);
+        g.fillStyle = e.noise > 0.7 ? '#ff5a4a' : '#ffd85e';
+        g.fillRect(bx, by, Math.round(w * clamp(e.noise, 0, 1)), 2);
+      }
+    } else if (e instanceof Svani) {
+      const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+      const rage = e.stage === 3 ? 'rgba(255,45,85,.35)' : e.stage === 2 ? 'rgba(255,138,92,.25)' : null;
+      drawSprite(ART.l2svani, e, { tint: flashing ? 'rgba(255,255,255,.85)' : rage });
+      if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)
+        drawTextCentered(g, '!', e.cx, e.y - 11, '#ff8a5c', 2);
+      if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
+        drawTextCentered(g, 'HIT HIM', e.cx, e.y - 10, '#7ae07a', 1);
+    } else if (e instanceof Bomber) {
+      const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+      drawSprite(ART.l2bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
+      if (e.taunt > 0) drawTextCentered(g, 'ARMOURED', e.cx, e.y - 11, '#ff8a5c', 1);
+    } else if (e instanceof Dardubala) {
+      if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
+      const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+      const open = e.harmless && Math.floor(game.time * 10) % 2 === 0;
+      drawSprite(ART.l2dard, e, {
+        tint: flashing ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.5)' : null,
+      });
+      if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)
+        drawTextCentered(g, '!', e.cx, e.y - 12, '#c9a0ff', 2);
+      if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
+        drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 11, '#7ae07a', 1);
     } else if (e instanceof MidBoss) {
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
       drawSprite(ART.mid, e, { tint: flashing ? 'rgba(255,255,255,.85)' : null });
@@ -2425,6 +3420,8 @@ function drawEntities() {
     });
   }
 
+  for (const h of game.hazards) h.draw();
+  if (game.tea) drawTeaScene();
   if (game.heli) drawHeli(game.heli.x, game.heli.y, game.heli.t);
 
   const p = game.player;
@@ -2458,6 +3455,7 @@ function drawEntities() {
   }
 
   // finish line: Georgian flag on the pole
+  if (LEVEL.finishX == null) return;
   const fx = LEVEL.finishX * TILE, fy = groundYAt(LEVEL.finishX);
   g.fillStyle = '#d8d8d8'; g.fillRect(fx, fy - 96, 2, 96);
   g.fillStyle = '#ffd85e'; g.fillRect(fx - 1, fy - 99, 4, 3);
@@ -2613,11 +3611,13 @@ function drawScoreboard(cx, y) {
 function drawTitle() {
   g.fillStyle = 'rgba(8,10,20,.62)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
   const bounce = Math.round(Math.sin(game.time * 2.4) * 2);
-  drawTextCentered(g, 'MISHA MODE', VIEW_W / 2, 22 + bounce, '#ffd85e', 3);
-  drawTextCentered(g, 'GAATAVISUPLE ACHARA', VIEW_W / 2, 50, '#7ec8f0', 1);
-  drawScoreboard(VIEW_W / 2, 68);
+  // two lines at scale 3: the whole name on one line is 411px against a 320 buffer
+  drawTextCentered(g, 'GAATAVISUPLE', VIEW_W / 2, 14 + bounce, '#ffd85e', 3);
+  drawTextCentered(g, 'SAKARTVELO', VIEW_W / 2, 38 + bounce, '#ffd85e', 3);
+  drawTextCentered(g, `ACT 1 - ${LEVELS[0].subtitle}`, VIEW_W / 2, 62, '#7ec8f0', 1);
+  drawScoreboard(VIEW_W / 2, 76);
   if (Math.floor(game.time * 2) % 2 === 0)
-    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 128, '#fff', 1);
+    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 132, '#fff', 1);
   drawTextCentered(g, 'ARROWS MOVE   SHIFT RUN   H HUD   C CRT', VIEW_W / 2, 150, '#8890a4', 1);
   drawTextCentered(g, 'M MUSIC   N SOUND   R RESTART', VIEW_W / 2, 162, '#8890a4', 1);
 }
@@ -2650,11 +3650,12 @@ function drawOverlay() {
     g.fillRect(0, 0, VIEW_W, VIEW_H);
     // Split across two lines: at scale 2 the full sentence is 408px wide and
     // the buffer is only 320.
-    drawTextCentered(g, 'ASLANI GAIQTSA', VIEW_W / 2, 44, '#ffd85e', 2);
-    drawTextCentered(g, 'ACHARA TAVISUPALIA!', VIEW_W / 2, 68, '#7ae07a', 2);
+    const lines = LEVEL.winLines || [['LEVEL CLEAR', '#7ae07a']];
+    lines.forEach(([txt, col], i) => drawTextCentered(g, txt, VIEW_W / 2, 44 + i * 24, col, 2));
     drawTextCentered(g, `SCORE ${game.score}`, VIEW_W / 2, 104, '#fff', 1);
     if (game.endT > 1.4 && Math.floor(game.endT * 2) % 2 === 0)
-      drawTextCentered(g, 'PRESS R TO RESTART', VIEW_W / 2, 128, '#8890a4', 1);
+      drawTextCentered(g, game.advance ? 'PRESS SPACE TO CONTINUE' : 'PRESS R TO RESTART',
+                       VIEW_W / 2, 128, '#8890a4', 1);
   }
 
   if (game.state === 'lost') {
@@ -2710,6 +3711,7 @@ function render() {
   }
 
   if (game.state === 'title') drawTitle();
+  else if (game.state === 'card') drawCard();
   else if (game.state === 'entry') drawEntry();
   else { drawHud(); drawOverlay(); }
 
@@ -2737,7 +3739,8 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000 || 0, 1 / 30);
   last = now;
 
-  if (Input.justDown('KeyR') && game.state !== 'title') reset();
+  if (Input.justDown('KeyR') && game.state !== 'title' && game.state !== 'card')
+    reset(false, { levelIndex: game.levelIndex });
   if (Input.justDown('KeyH')) showHud = !showHud;
   if (Input.justDown('KeyM')) Music.toggle();
   if (Input.justDown('KeyN')) Sfx.toggle();
