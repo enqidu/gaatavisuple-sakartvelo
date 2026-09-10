@@ -433,13 +433,14 @@ it is happening.
 it — <http://localhost:8123/?act=2>. Clamped, so a junk value is harmless.
 
 
-## Dardubala's forelock is drawn, not keyed
+## Edika has no drawn forelock, on purpose
 
 The white tuft in his art is about 20px inside a 223px image, so downscaling to
-a 21px sprite averages it against its own black outline and it disappears
-entirely — measured at **zero** white pixels in the rendered sprite, and still
-only 19 at a 64px render height. `drawTuft` hand-places it instead, the same
-way the rose, teacup, helicopter and fox are drawn.
+a 21px sprite averages it against its own black outline and it disappears —
+zero white pixels survive at render size, and only 19 even at a 64px height.
+Hand-placing one was tried and removed: at this scale it read as a paper hat
+sitting on his skull rather than as hair. If the forelock is wanted back, the
+fix is a sprite edit that thickens it in the source, not pixels drawn on top.
 
 
 ## Throwing roses
@@ -448,6 +449,9 @@ Roughly every third `?` block holds three roses instead of a coin — keyed off
 the tile rather than randomly, so a block that paid out ammo last run still
 does. `X` throws one; it arcs about 140px and **staggers** whatever it hits for
 1.7s (1.2s on a boss).
+
+The HUD shows `ROSES Xn`, and `PRESS X TO THROW` blinks under it until you
+actually throw your first one, then never again.
 
 It does not kill. That is the point: every fight in the game resolved as *wait
 for the opening and land on his head*, and one ranged verb lets you **open** a

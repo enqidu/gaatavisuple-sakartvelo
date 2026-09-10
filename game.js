@@ -1029,7 +1029,7 @@ class Player extends Entity {
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
     this.doubleJumpT = 0; this.airJumps = 0;
     this.extra = 0; this.extraT = 0;
-    this.roses = 0; this.throwCd = 0;
+    this.roses = 0; this.throwCd = 0; this.throwHint = 0; this.hasThrown = false;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
     // rescales the sprite every frame, and at 4x upscale each 1px change in
     // the rounded draw size is a visible 4px jolt — it reads as vibration.
@@ -1115,6 +1115,7 @@ class Player extends Entity {
          one - a block that paid out ammo last run still does. */
       if ((tx * 7 + ty * 13) % 3 === 0) {
         this.roses = Math.min(this.roses + 3, 9);
+        if (!this.hasThrown) this.throwHint = 6;   // prompt until they use one
         bumps.push({ tx, ty, t: 0 });
         floatText(tx * TILE + 8, ty * TILE - 6, 'ROSES +3', '#ff8fd0');
         burst(tx * TILE + 8, ty * TILE, 14,
@@ -1203,8 +1204,10 @@ class Player extends Entity {
       burst(this.cx, this.bottom, 6, { colors: ['#fff', '#cfd8e8'], speed: 58, grav: 240, life: 0.3, size: 1, spread: Math.PI });
     }
     this.throwCd = Math.max(0, this.throwCd - dt);
+    this.throwHint = Math.max(0, this.throwHint - dt);
     if (!stuck && this.roses > 0 && this.throwCd <= 0 && Input.throwTap()) {
       this.roses--;
+      this.hasThrown = true; this.throwHint = 0;
       this.throwCd = 0.28;
       game.shots.push(new ThrownRose(this.cx, this.y + this.h * 0.42, this.face || 1));
       Sfx.jump();
@@ -2540,6 +2543,55 @@ const Scores = {
   },
 };
 
+/* One of the crowd. Small, but built like a person: head, hair, shoulders,
+   torso, two legs and an arm - the first version was a 5x9 block with a 3x4
+   block on top, which at this scale reads as a bollard, not a human. */
+const CROWD_SKIN = ['#e8c9a0', '#d8a878', '#f0d8b8'];
+const CROWD_TOP  = ['#8a3b46', '#3d5a8a', '#5a4a7a', '#7a6a3a', '#4a6a52'];
+const CROWD_LEG  = ['#2c3242', '#3a3142', '#242a38'];
+
+function drawPerson(cx, groundY, seed, back, step, rose) {
+  const h = back ? 17 : 20;
+  const x = Math.round(cx) - 3, y = Math.round(groundY) - h;
+  const skin = CROWD_SKIN[seed % CROWD_SKIN.length];
+  const top  = CROWD_TOP[seed % CROWD_TOP.length];
+  const leg  = CROWD_LEG[seed % CROWD_LEG.length];
+  const dim  = back ? 0.62 : 1;                    // the back row sits deeper
+  const mix = (hex) => {
+    if (dim === 1) return hex;
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.round(((n >> 16) & 255) * dim + 18 * (1 - dim));
+    const gg = Math.round(((n >> 8) & 255) * dim + 22 * (1 - dim));
+    const b = Math.round((n & 255) * dim + 38 * (1 - dim));
+    return `rgb(${r},${gg},${b})`;
+  };
+
+  const legH = back ? 5 : 6;
+  g.fillStyle = mix(leg);                          // legs, one striding
+  g.fillRect(x + 1, y + h - legH, 2, legH - step);
+  g.fillRect(x + 4, y + h - legH, 2, legH - (1 - step));
+  g.fillStyle = mix(top);                          // torso
+  g.fillRect(x + 1, y + 6, 5, h - legH - 6);
+  g.fillRect(x, y + 7, 7, 3);                      // shoulders
+  g.fillStyle = mix(skin);                         // head
+  g.fillRect(x + 2, y + 1, 4, 4);
+  g.fillRect(x + 2, y + 5, 3, 1);                  // neck
+  g.fillStyle = mix('#2a2028');                    // hair
+  g.fillRect(x + 2, y, 4, 2);
+  g.fillRect(seed % 2 ? x + 1 : x + 5, y + 1, 1, 2);
+
+  if (rose) {                                      // an arm up, holding one
+    g.fillStyle = mix(skin);
+    g.fillRect(x + 6, y + 3, 1, 5);
+    g.fillStyle = mix('#8f1526'); g.fillRect(x + 6, y + 1, 2, 2);
+    g.fillStyle = mix('#2f8a3a'); g.fillRect(x + 6, y + 3, 1, 1);
+  } else {
+    g.fillStyle = mix(top);
+    g.fillRect(x, y + 8, 1, 4);
+    g.fillRect(x + 6, y + 8, 1, 4);
+  }
+}
+
 /* ---------------------------------------------------------- the crowd
 
    It is a revolution and he was walking it alone. Every flag he converts
@@ -2586,23 +2638,14 @@ const crowd = {
     const gy = groundBelow(this.x, game.player.bottom - 2) ?? (13 * TILE);
     const shown = Math.min(this.n, 8);
     for (let i = 0; i < shown; i++) {
-      // deterministic scatter: no jitter frame to frame
-      const ox = ((i * 37) % 11) - 5 - i * 5;
-      const bob = Math.floor(this.t * 5 + i) % 2;
-      const x = Math.round(this.x + ox), y = Math.round(gy - 13 - bob);
-      // lighter than a true silhouette: against a night street a dark one
-      // just disappears into the backdrop
-      g.fillStyle = i % 3 === 0 ? '#57648c' : '#46527a';
-      g.fillRect(x, y + 3, 5, 10);
-      g.fillStyle = '#7a86ac'; g.fillRect(x, y + 3, 5, 1);
-      g.fillStyle = '#e8c9a0'; g.fillRect(x + 1, y, 3, 4);      // head
-      if (i % 2 === 0) {                                         // a raised rose
-        g.fillStyle = '#8f1526'; g.fillRect(x + 4, y - 3, 2, 2);
-        g.fillStyle = '#2f8a3a'; g.fillRect(x + 4, y - 1, 1, 3);
-      }
+      // deterministic scatter and depth: no jitter frame to frame
+      const ox = ((i * 37) % 13) - 6 - i * 6;
+      const back = i % 3 === 2;                       // a row standing further off
+      const step = Math.floor(this.t * 5 + i * 1.7) % 2;
+      drawPerson(this.x + ox, gy, i, back, step, i % 2 === 0);
     }
     if (this.flash > 0 && Math.floor(game.time * 10) % 2 === 0)
-      drawTextCentered(g, `${this.n} WITH YOU`, this.x, gy - 30, '#ffd85e', 1);
+      drawTextCentered(g, `${this.n} WITH YOU`, this.x, gy - 34, '#ffd85e', 1);
   },
 };
 
@@ -3750,24 +3793,6 @@ function drawHeli(x, y, t) {
 const INV_TINTS = ['rgba(255,214,60,.42)', 'rgba(255,94,196,.42)',
                    'rgba(126,200,240,.42)', 'rgba(122,224,122,.42)'];
 
-/* His white forelock, drawn on rather than keyed from the art.
-
-   The source tuft is ~20px inside a 223px image, so downscaling to a 21px
-   sprite averages it against its own black outline and it vanishes - measured
-   at zero white pixels in the rendered sprite, and still only 19 even at a
-   64px render height. Hand-placing it is the only thing that survives. */
-function drawTuft(e, art) {
-  const dw = art.w, dh = art.h;
-  const x = Math.round(e.cx - dw / 2), y = Math.round(e.bottom - dh);
-  const f = e.face < 0 ? -1 : 1;
-  const bx = f > 0 ? x + Math.round(dw * 0.46) : x + dw - Math.round(dw * 0.46) - 4;
-  g.fillStyle = '#ffffff';
-  g.fillRect(bx, y + 1, 4, 2);
-  g.fillRect(bx + (f > 0 ? 2 : 0), y - 2, 2, 3);
-  g.fillStyle = '#c8d0dc';
-  g.fillRect(bx, y + 3, 4, 1);
-}
-
 function drawEntities() {
   for (const c of game.coins) drawCoin(c);
   for (const it of game.items) {
@@ -3858,7 +3883,6 @@ function drawEntities() {
       drawSprite(ART.l2dard, e, {
         tint: flashing ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.5)' : null,
       });
-      drawTuft(e, ART.l2dard);
       if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)
         drawTextCentered(g, '!', e.cx, e.y - 12, '#c9a0ff', 2);
       if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
@@ -4069,7 +4093,10 @@ function drawHud() {
   if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
   if (game.player.roses > 0) {
     drawMiniRose(8, 29);
-    drawText(g, `X${game.player.roses}`, 15, 30, '#ff8fd0', 1);
+    drawText(g, `ROSES X${game.player.roses}`, 15, 30, '#ff8fd0', 1);
+    // shown until they actually throw one, then never again
+    if (game.player.throwHint > 0 && Math.floor(game.time * 3) % 2 === 0)
+      drawText(g, 'PRESS X TO THROW', 15, 40, '#ffd85e', 1);
   }
 
   /* One bar for whichever boss you are currently up against. Previously only
@@ -4096,7 +4123,8 @@ function drawHud() {
   }
   /* Stacked, not overlaid. Both timers used to draw a label at y=40/41, so
      holding powder and khachapuri at once printed them on top of each other. */
-  let ty = 40;
+  // the throw prompt occupies y=40, so the timers start below it while it shows
+  let ty = (game.player.roses > 0 && game.player.throwHint > 0) ? 50 : 40;
   const timerBar = (label, frac, col, hi, dim) => {
     drawText(g, label, 8, ty, frac > 0.28 || Math.floor(game.time * 6) % 2 === 0 ? col : dim, 1);
     g.fillStyle = '#2a2f3a'; g.fillRect(8, ty + 9, 62, 4);
