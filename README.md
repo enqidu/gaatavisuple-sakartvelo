@@ -327,7 +327,7 @@ Two things here were deliberate corrections and should not be undone:
 aligned. 240 tiles wide, 15 tall, ground on rows 13–14.
 
 - `ground` — `[from, to)` spans of solid floor. The holes between spans are the
-  pits. Verified: jump apex is 62px, walking reach 87px, and the level's
+  pits. Verified: jump apex is 69.5px, walking reach 87px, and the level's
   4-tile (64px) gaps and 3-tile (48px) pipes both clear with margin.
 - `blocks` — `{x, y, w, t}` runs, where `t` is `T.BRICK`, `T.QUESTION`, or
   `T.PLATFORM` (one-way: jump up through it, land on top).
@@ -342,7 +342,11 @@ that make a platformer feel fair rather than precise: `coyote` (you can still
 jump for 0.1s after walking off a ledge) and `jumpBuffer` (a jump pressed 0.12s
 before landing still fires).
 
-Jump apex is `jumpVel² / (2 × gravity)`. If you raise pipe or platform heights,
+Jump apex is **69.5px measured**, not the 72.4px that `jumpVel² / (2 × gravity)`
+predicts — the integrator is semi-implicit Euler, so the closed form overshoots.
+On a stuttering frame (dt clamped to 1/30) it drops to 66.6px, leaving only
+2.6px over a 4-tile 64px rise. Measure, don't compute. If you raise pipe or
+platform heights,
 re-check that number against `(13 - pipe.y) × 16` — the ground surface is row
 13, so a pipe at `y: 10` stands 48px proud, not 64.
 

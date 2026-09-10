@@ -169,7 +169,7 @@ function bgColorOf(d, w, h) {
    Kept deliberately tight: silver hair sits only ~54 away from white, so a
    looser threshold eats it wherever the character outline has a gap. The
    halo pass below is what cleans up anti-aliased edges instead. */
-function keyOutAndTrim(img, { tol = 44 } = {}) {
+function keyOutAndTrim(img, { tol = 44, minHolePct = 0.0022 } = {}) {
   const w = img.naturalWidth, h = img.naturalHeight;
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
@@ -222,7 +222,12 @@ function keyOutAndTrim(img, { tol = 44 } = {}) {
      something worse: a white shirt on a white background, or eye whites, would
      be punched out. So the rule is by size. A large enclosed pocket is
      background the fill couldn't reach; a small one is intentional detail. */
-  const minHole = Math.max(24, Math.round(w * h * 0.0022));
+  /* minHolePct = Infinity disables the enclosed-pocket pass entirely, for art
+     whose own colours sit inside `tol` of the background. bomb.png is the case:
+     a white vest and cream trousers on a white field, the trousers only ~34
+     away. Both are large enclosed regions, so the pass deleted his clothes. */
+  const minHole = minHolePct === Infinity ? Infinity
+                : Math.max(24, Math.round(w * h * minHolePct));
   const visited = new Uint8Array(w * h);
   for (let s = 0; s < w * h; s++) {
     if (seen[s] || visited[s]) continue;
@@ -352,9 +357,15 @@ function loadSprite(key) {
               c.getContext('2d').drawImage(img, 0, 0);
               return c;
             })(), w: img.naturalWidth, h: img.naturalHeight }
-        : keyOutAndTrim(img);
+        : keyOutAndTrim(img, def.key || {});
       const sized = resizeTo(processed, def.h);
-      resolve(def.haze ? haze(sized, def.haze) : sized);
+      /* def.haze is either a number (amount, level-1 pale-sky default) or
+         {amount, tint, desat}. Level 2's backdrops are night scenes: pushing
+         them back means darkening toward navy, not lightening toward sky —
+         the pale preset flattens them into daylight grey. */
+      if (!def.haze) return resolve(sized);
+      const hz = typeof def.haze === 'number' ? { amount: def.haze } : def.haze;
+      resolve(haze(sized, hz.amount, hz.tint, hz.desat));
     };
     img.onerror = () => {
       const s = placeholder(def.color || '#444', def.h);
@@ -2119,6 +2130,15 @@ function drawTiles() {
 
 /* No rotation anywhere: 8-bit hardware couldn't rotate sprites, and at this
    resolution a rotated blit just looks like mud. Motion is bob + squash. */
+/* Scratch canvas for tinting. A tint has to be composited against the SPRITE
+   alone, never against the frame: 'source-atop' paints every opaque pixel it
+   covers, and the backdrop is opaque, so filling the sprite's rect directly on
+   the buffer tinted the scenery behind it too. That shipped in level 1 — the
+   boss's vulnerable pulse and the mid-boss hit flash were drawing coloured
+   rectangles over the street, not flashing the character. */
+const tintCv = document.createElement('canvas');
+const tintCx = tintCv.getContext('2d');
+
 function drawSprite(art, e, { bob = 0, squash = 1, tint = null } = {}) {
   // squash > 1 is taller and correspondingly narrower — volume preserving,
   // so the character doesn't appear to gain mass mid-animation.
@@ -2126,17 +2146,28 @@ function drawSprite(art, e, { bob = 0, squash = 1, tint = null } = {}) {
   const dh = Math.max(1, Math.round(art.h * squash));
   const x = Math.round(e.cx - dw / 2);
   const y = Math.round(e.bottom + bob - dh);
-  g.save();
-  if (e.face < 0) { g.translate(x + dw, y); g.scale(-1, 1); g.drawImage(art.canvas, 0, 0, dw, dh); }
-  else g.drawImage(art.canvas, x, y, dw, dh);
-  g.restore();
+
+  let src = art.canvas, sw = dw, sh = dh;
   if (tint) {
-    g.save();
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = tint;
-    g.fillRect(x, y, dw, dh);
-    g.restore();
+    if (tintCv.width < dw || tintCv.height < dh) {
+      tintCv.width = Math.max(dw, tintCv.width, 64);
+      tintCv.height = Math.max(dh, tintCv.height, 64);
+    }
+    tintCx.imageSmoothingEnabled = false;
+    tintCx.clearRect(0, 0, tintCv.width, tintCv.height);
+    tintCx.drawImage(art.canvas, 0, 0, dw, dh);
+    tintCx.save();
+    tintCx.globalCompositeOperation = 'source-atop';
+    tintCx.fillStyle = tint;
+    tintCx.fillRect(0, 0, dw, dh);
+    tintCx.restore();
+    src = tintCv;
   }
+
+  g.save();
+  if (e.face < 0) { g.translate(x + dw, y); g.scale(-1, 1); g.drawImage(src, 0, 0, sw, sh, 0, 0, dw, dh); }
+  else g.drawImage(src, 0, 0, sw, sh, x, y, dw, dh);
+  g.restore();
 }
 
 function shadowUnder(e) {
