@@ -29,6 +29,7 @@ background key-out reads canvas pixels, which browsers block on file origins.
 | `←` `→` / `A` `D` | Move |
 | `Space` / `W` / `↑` | Jump (hold longer = higher) |
 | `Shift` | Sprint |
+| `X` / `F` | Throw a rose |
 | `R` | Restart |
 | `H` | Toggle HUD — turn it off for clean footage |
 | `C` | Toggle CRT scanlines |
@@ -439,3 +440,28 @@ a 21px sprite averages it against its own black outline and it disappears
 entirely — measured at **zero** white pixels in the rendered sprite, and still
 only 19 at a 64px render height. `drawTuft` hand-places it instead, the same
 way the rose, teacup, helicopter and fox are drawn.
+
+
+## Throwing roses
+
+Roughly every third `?` block holds three roses instead of a coin — keyed off
+the tile rather than randomly, so a block that paid out ammo last run still
+does. `X` throws one; it arcs about 140px and **staggers** whatever it hits for
+1.7s (1.2s on a boss).
+
+It does not kill. That is the point: every fight in the game resolved as *wait
+for the opening and land on his head*, and one ranged verb lets you **open** a
+window instead of waiting for one — thin a guard cordon from range, interrupt a
+charge, or buy a safe approach. Stun is handled centrally in the update loop
+rather than per class, so a stunned enemy is frozen, harmless and stompable
+without any boss knowing the mechanic exists.
+
+## The crowd (Act 2)
+
+Every flagpole you convert brings two more people out. They trail a few tiles
+behind, and once four have joined they **surge** on their own every five
+seconds, flooring any guard near them. Bosses are immune — the street can shift
+a cordon, not a minister.
+
+They are pressure, not units: no controls, no collision, and they never block
+you. `LEVEL.crowd` gates them to Act 2.

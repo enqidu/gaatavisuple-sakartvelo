@@ -517,6 +517,7 @@ const Input = {
   sprint(){ return this.down('ShiftLeft')  || this.down('ShiftRight'); },
   jumpHeld() { return this.down('Space') || this.down('ArrowUp') || this.down('KeyW') || this.down('KeyZ'); },
   jumpTap()  { return this.justDown('Space') || this.justDown('ArrowUp') || this.justDown('KeyW') || this.justDown('KeyZ'); },
+  throwTap() { return this.justDown('KeyX') || this.justDown('KeyF'); },
   anyTap()   { return this.pressed.size > 0; },
 };
 
@@ -681,6 +682,7 @@ const LEVEL_2 = {
   voidColor: '#0a0c16',
   subtitle: 'GAATAVISUPLE PARLAMENTI',
   invincibleLabel: 'HOT TEA',
+  crowd: true,             // act 2 only: the street turns out behind you
   winLines: [['REVOLUTSIA!', '#7ae07a']],
 
   backdrops: [
@@ -1031,6 +1033,7 @@ class Player extends Entity {
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
     this.doubleJumpT = 0; this.airJumps = 0;
     this.extra = 0; this.extraT = 0;
+    this.roses = 0; this.throwCd = 0;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
     // rescales the sprite every frame, and at 4x upscale each 1px change in
     // the rounded draw size is a visible 4px jolt — it reads as vibration.
@@ -1100,6 +1103,18 @@ class Player extends Entity {
     bumpEnemiesOn(tx, ty);
     if (t === T.QUESTION) {
       grid[ty * LEVEL.w + tx] = T.USED;
+      /* Roughly every third block holds roses instead of a coin. Keyed off
+         the tile rather than Math.random so a given block is always the same
+         one - a block that paid out ammo last run still does. */
+      if ((tx * 7 + ty * 13) % 3 === 0) {
+        this.roses = Math.min(this.roses + 3, 9);
+        bumps.push({ tx, ty, t: 0 });
+        floatText(tx * TILE + 8, ty * TILE - 6, 'ROSES +3', '#ff8fd0');
+        burst(tx * TILE + 8, ty * TILE, 14,
+              { colors: ['#d6263c', '#f05a6a', '#3fae4a'], speed: 90, grav: 260, life: .8, size: 2 });
+        Sfx.coin();
+        return;
+      }
       this.coins++; game.score += 100;
       bumps.push({ tx, ty, t: 0 });
       burst(tx * TILE + 8, ty * TILE, 8, { colors: ['#ffd85e', '#fff'], speed: 70, grav: 300 });
@@ -1179,6 +1194,13 @@ class Player extends Entity {
       this.combo = 0;
       this.airJumps = this.doubleJump ? 1 : 0;   // recharge on landing
       burst(this.cx, this.bottom, 6, { colors: ['#fff', '#cfd8e8'], speed: 58, grav: 240, life: 0.3, size: 1, spread: Math.PI });
+    }
+    this.throwCd = Math.max(0, this.throwCd - dt);
+    if (!stuck && this.roses > 0 && this.throwCd <= 0 && Input.throwTap()) {
+      this.roses--;
+      this.throwCd = 0.28;
+      game.shots.push(new ThrownRose(this.cx, this.y + this.h * 0.42, this.face || 1));
+      Sfx.jump();
     }
     this.squashT  = Math.max(0, this.squashT - dt);
     this.stretchT = Math.max(0, this.stretchT - dt);
@@ -1936,7 +1958,7 @@ class Dardubala extends Entity {
     this.quip = 1.4; this.quipN = 0;
   }
   get bossGrade() { return true; }
-  get bossName() { return 'DARDUBALA'; }
+  get bossName() { return 'EDIKA'; }
   get maxHp() { return DARD.hp; }
   // man on even hp, fox on odd - he flips with every hit he takes
   get isFox() { return this.hp % 2 === 1; }
@@ -1949,8 +1971,14 @@ class Dardubala extends Entity {
   /* Latches. Without it, retreating back past the arena line switched his
      slams off, so he never opened a window and the fight deadlocked - a bot
      playing it correctly landed zero hits in two minutes. */
+  /* Engages when you are past the arena line AND close enough to actually
+     see him. The line alone is at tile 186 and he stands at 207, so the fight
+     used to start 336px away - the bar appeared and he began slamming while
+     still off screen, which is why it kicked off out of nowhere. Latched once
+     lit, so retreating cannot switch it back off. */
   get engaged() {
-    if (game.player.cx > (LEVEL.arenaX ?? 186) * TILE) this.woke = true;
+    if (game.player.cx > (LEVEL.arenaX ?? 186) * TILE &&
+        Math.abs(game.player.cx - this.cx) < 210) this.woke = true;
     return this.woke === true;
   }
   update(dt) {
@@ -2366,6 +2394,50 @@ function drawHeartIcon(x, y, color) {
   g.fillRect(x + 3, y + 5, 1, 1);
 }
 
+/* A thrown rose. Does not kill - it staggers, which is the point: it opens a
+   window instead of replacing one. Every fight in the game was "wait for the
+   opening and land on his head", and one ranged verb changes all of them at
+   once without touching a single boss. */
+const ROSE_STUN = 1.7;
+
+class ThrownRose extends Entity {
+  constructor(x, y, dir) {
+    super(x - 3, y, 6, 6);
+    this.vx = dir * 215; this.vy = -115; this.dir = dir; this.t = 0; this.life = 2.2;
+  }
+  update(dt) {
+    this.t += dt; this.life -= dt;
+    this.hitWall = false;
+    this.vy = Math.min(this.vy + CFG.gravity * 0.45 * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    if (this.hitWall || this.onGround || this.life <= 0) {
+      this.dead = true;
+      burst(this.cx, this.cy2, 6, { colors: ['#d6263c', '#3fae4a'], speed: 50, life: .4, size: 1 });
+    }
+    if (Math.random() < dt * 26)
+      burst(this.cx, this.cy2, 1, { colors: ['#f05a6a', '#d6263c'], speed: 12, grav: 40, life: .35, size: 1 });
+  }
+  get cy2() { return this.y + this.h / 2; }
+  draw() { drawMiniRose(Math.round(this.x - 1), Math.round(this.y - 2)); }
+}
+
+function resolveShots() {
+  for (const r of game.shots) {
+    if (r.dead) continue;
+    for (const e of game.enemies) {
+      if (e.dead || e instanceof Bomb || !aabb(r, e)) continue;
+      r.dead = true;
+      // bosses shrug it off faster than the rank and file, but it still opens them
+      e.stun = e.bossGrade ? ROSE_STUN * 0.7 : ROSE_STUN;
+      floatText(e.cx, e.y - 10, 'STUNNED', '#ff8fd0');
+      burst(e.cx, e.y + e.h / 2, 12, { colors: ['#d6263c', '#f05a6a', '#fff'], speed: 90 });
+      shake = 2; Sfx.coin();
+      break;
+    }
+  }
+  game.shots = game.shots.filter(r => !r.dead);
+}
+
 class Coin extends Entity {
   constructor(tx, ty) { super(tx * TILE + 4, ty * TILE + 4, 8, 10); this.t = rand(0, 6); }
   update(dt) { this.t += dt * 7; }
@@ -2442,11 +2514,77 @@ const Scores = {
   },
 };
 
+/* ---------------------------------------------------------- the crowd
+
+   It is a revolution and he was walking it alone. Every flag he converts
+   brings people out; they trail a few tiles back, and once there are enough
+   of them they surge forward on their own and put the nearest cordon on the
+   floor. Deliberately not a party of controllable units - they are pressure,
+   not pawns, and they never collide with the player. */
+const CROWD = { joinPerFlag: 2, max: 12, gap: 34, surgeEvery: 5.0, surgeReach: 74, minToSurge: 4 };
+
+const crowd = {
+  n: 0, x: 0, t: 0, surge: 0, flash: 0,
+  reset(px) { this.n = 0; this.x = px; this.t = 0; this.surge = 0; this.flash = 0; },
+  join(px) {
+    if (this.n === 0) this.x = px;
+    this.n = Math.min(CROWD.max, this.n + CROWD.joinPerFlag);
+    this.flash = 0.8;
+  },
+  update(dt) {
+    if (this.n <= 0) return;
+    this.t += dt; this.flash = Math.max(0, this.flash - dt);
+    const p = game.player;
+    const want = p.cx - CROWD.gap * (p.face || 1);
+    this.x = lerp(this.x, want, 1 - Math.pow(0.06, dt));
+
+    this.surge -= dt;
+    if (this.surge <= 0 && this.n >= CROWD.minToSurge) {
+      this.surge = CROWD.surgeEvery;
+      let hit = 0;
+      for (const e of game.enemies) {
+        if (e.dead || e.bossGrade || Math.abs(e.cx - this.x) > CROWD.surgeReach) continue;
+        e.stun = Math.max(e.stun || 0, 1.4);
+        hit++;
+      }
+      if (hit) {
+        this.flash = 0.6; shake = 3; Sfx.gate();
+        floatText(this.x, p.y - 22, 'THE STREET!', '#ffd85e');
+        burst(this.x, p.bottom - 4, 16,
+              { colors: ['#d6263c', '#ffd85e', '#fff'], speed: 100, grav: 200, life: .8, size: 2 });
+      }
+    }
+  },
+  draw() {
+    if (this.n <= 0) return;
+    const gy = groundBelow(this.x, game.player.bottom - 2) ?? (13 * TILE);
+    const shown = Math.min(this.n, 8);
+    for (let i = 0; i < shown; i++) {
+      // deterministic scatter: no jitter frame to frame
+      const ox = ((i * 37) % 11) - 5 - i * 5;
+      const bob = Math.floor(this.t * 5 + i) % 2;
+      const x = Math.round(this.x + ox), y = Math.round(gy - 13 - bob);
+      // lighter than a true silhouette: against a night street a dark one
+      // just disappears into the backdrop
+      g.fillStyle = i % 3 === 0 ? '#57648c' : '#46527a';
+      g.fillRect(x, y + 3, 5, 10);
+      g.fillStyle = '#7a86ac'; g.fillRect(x, y + 3, 5, 1);
+      g.fillStyle = '#e8c9a0'; g.fillRect(x + 1, y, 3, 4);      // head
+      if (i % 2 === 0) {                                         // a raised rose
+        g.fillStyle = '#8f1526'; g.fillRect(x + 4, y - 3, 2, 2);
+        g.fillStyle = '#2f8a3a'; g.fillRect(x + 4, y - 1, 1, 3);
+      }
+    }
+    if (this.flash > 0 && Math.floor(game.time * 10) % 2 === 0)
+      drawTextCentered(g, `${this.n} WITH YOU`, this.x, gy - 30, '#ffd85e', 1);
+  },
+};
+
 /* ---------------------------------------------------------- game state */
 
 const game = {
   player: null, enemies: [], coins: [], items: [], boss: null, heli: null,
-  hazards: [], script: null, tea: null, levelIndex: 0, advance: false, actScore: 0,
+  hazards: [], shots: [], script: null, tea: null, levelIndex: 0, advance: false, actScore: 0,
   score: 0, state: 'title', endT: 0, time: 0, best: 0,
 };
 
@@ -2480,7 +2618,8 @@ function reset(toTitle = false, opts = {}) {
   ];
   game.flagsConverted = 0;
   game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
-  game.hazards = []; game.script = null; game.tea = null;
+  game.hazards = []; game.script = null; game.tea = null; game.shots = [];
+  crowd.reset(LEVEL.start.x * TILE);
   game.entry = null;
   game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
   game.advance = false;
@@ -2798,13 +2937,14 @@ function resolveEnemies(dt) {
        all, which is why his advertised window could not actually be cashed in.
        Harmless enemies cannot punish a miss, so there is nothing to exploit by
        being lenient here. */
-    const falling  = e.harmless ? p.vy >= 0 : p.vy > 15;
-    const band     = e.harmless ? e.h * 0.9 : e.h * 0.5;
+    const open     = e.harmless || e.stun > 0;
+    const falling  = open ? p.vy >= 0 : p.vy > 15;
+    const band     = open ? e.h * 0.9 : e.h * 0.5;
     const feetAbove = p.bottom - p.vy * dt <= e.y + band;
     if (falling && feetAbove) {
       e.onStomp(p);
       if (!isBoss) p.vy = CFG.stompBounce;
-    } else if (!e.harmless) p.hurt(e.cx);
+    } else if (!e.harmless && !(e.stun > 0)) p.hurt(e.cx);
   }
   game.enemies = game.enemies.filter(e => !e.dead);
 }
@@ -3036,7 +3176,16 @@ function update(dt) {
   }
 
   for (const e of game.enemies) {
-    e.update(dt);
+    /* Stunned enemies are frozen and harmless for the duration. Handled here
+       rather than in each class so a new enemy gets it for free. */
+    if (e.stun > 0) {
+      e.stun -= dt;
+      e.vx = 0;
+      e.vy = Math.min((e.vy || 0) + CFG.gravity * dt, CFG.maxFall);
+      moveAndCollide(e, dt, { oneWay: false });
+      if (Math.random() < dt * 12)
+        burst(e.cx + rand(-6, 6), e.y, 1, { colors: ['#ff8fd0', '#fff'], speed: 14, grav: -20, life: .6, size: 1 });
+    } else e.update(dt);
     // Anything that leaves the world is dead. Without this a mid boss who
     // ended up in a pit stayed alive forever off-screen and his gate could
     // never be opened — an unrecoverable softlock.
@@ -3048,10 +3197,14 @@ function update(dt) {
   if (game.boss) game.boss.update(dt);
   for (const h of game.hazards) h.update(dt);
   game.hazards = game.hazards.filter(h => !h.dead);
+  if (LEVEL.crowd) crowd.update(dt);
+  for (const r of game.shots) r.update(dt);
+  game.shots = game.shots.filter(r => !r.dead);
   for (const c of game.coins) c.update(dt);
   for (const it of game.items) it.update(dt);
 
   resolveEnemies(dt);
+  resolveShots();
   resolveHazards();
   resolveCoins();
   resolveFlags(dt);
@@ -3190,13 +3343,19 @@ function drawBackdrop() {
     g.fillStyle = LEVEL.voidColor || '#0a0c16';
     g.fillRect(0, 0, VIEW_W, VIEW_H);
 
-    // which zone owns the middle of the screen, and how far into the handover
+    /* The CURRENT zone is simply the last one whose fromX we have passed, and
+       the next dissolves in over the tiles immediately BEFORE its boundary,
+       reaching 100% exactly at it. That ordering matters: the base layer has
+       to be the zone that already covers the screen. Selecting the incoming
+       zone as current the moment the band opened painted the anchored arena
+       alone, and an anchored zone does not reach the left edge until you
+       arrive at it - which showed as void down the side of the screen. */
     const midTile = (cam.x + VIEW_W / 2) / TILE;
     let k = 0;
-    for (let n = 0; n < zones.length; n++) if (midTile >= zones[n].fromX - DISSOLVE_TILES / 2) k = n;
+    for (let n = 0; n < zones.length; n++) if (midTile >= zones[n].fromX) k = n;
     const next = zones[k + 1];
     let f = 0;
-    if (next) f = clamp((midTile - (next.fromX - DISSOLVE_TILES / 2)) / DISSOLVE_TILES, 0, 1);
+    if (next) f = clamp((midTile - (next.fromX - DISSOLVE_TILES)) / DISSOLVE_TILES, 0, 1);
 
     if (!next || f <= 0) { paintZone(g, ART[zones[k].art], zones[k]); return; }
     if (f >= 1)          { paintZone(g, ART[next.art], next); return; }
@@ -3494,6 +3653,7 @@ class LevelFlag extends Entity {
     this.pop = 0.5;
     game.score += 300;
     game.flagsConverted++;
+    if (LEVEL.crowd) crowd.join(this.x);
     floatText(this.x + 9, this.y - 6, '+300', '#ffd85e');
     burst(this.x + 9, this.y + 6, 18,
           { colors: ['#d6263c', '#f4f4f4', '#ffd85e'], speed: 95, life: 0.8, size: 2 });
@@ -3709,6 +3869,8 @@ function drawEntities() {
   }
 
   for (const h of game.hazards) h.draw();
+  for (const r of game.shots) r.draw();
+  if (LEVEL.crowd) crowd.draw();
   if (game.tea) drawTeaScene();
   if (game.heli) drawHeli(game.heli.x, game.heli.y, game.heli.t);
 
@@ -3866,6 +4028,10 @@ function drawHud() {
   if (game.player.combo > 1)
     drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
   if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
+  if (game.player.roses > 0) {
+    drawMiniRose(8, 29);
+    drawText(g, `X${game.player.roses}`, 15, 30, '#ff8fd0', 1);
+  }
 
   /* One bar for whichever boss you are currently up against. Previously only
      Dardubala had one, so Svani's five hits and Sleepy's three were tracked by
@@ -3936,8 +4102,8 @@ function drawTitle() {
   drawScoreboard(VIEW_W / 2, 76);
   if (Math.floor(game.time * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 132, '#fff', 1);
-  drawTextCentered(g, 'ARROWS MOVE   SHIFT RUN   H HUD   C CRT', VIEW_W / 2, 150, '#8890a4', 1);
-  drawTextCentered(g, 'M MUSIC   N SOUND   R RESTART', VIEW_W / 2, 162, '#8890a4', 1);
+  drawTextCentered(g, 'ARROWS MOVE  SHIFT RUN  X THROW ROSE', VIEW_W / 2, 150, '#8890a4', 1);
+  drawTextCentered(g, 'H HUD  C CRT  M MUSIC  N SOUND  R RESTART', VIEW_W / 2, 162, '#8890a4', 1);
 }
 
 function drawEntry() {
