@@ -1028,6 +1028,7 @@ class Player extends Entity {
     this.runT = 0; this.combo = 0;
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
     this.doubleJumpT = 0; this.airJumps = 0;
+    this.extra = 0; this.extraT = 0;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
     // rescales the sprite every frame, and at 4x upscale each 1px change in
     // the rounded draw size is a visible 4px jolt — it reads as vibration.
@@ -1036,6 +1037,18 @@ class Player extends Entity {
 
   hurt(fromX) {
     if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
+    // temporary rose hearts are spent before the real ones
+    if (this.extra > 0) {
+      this.extra--;
+      if (this.extra === 0) this.extraT = 0;
+      this.invuln = CFG.hurtInvuln;
+      this.vy = -150;
+      this.vx = (this.cx < fromX ? -1 : 1) * 110;
+      shake = 4; flash = 0.4; Sfx.hurt();
+      floatText(this.cx, this.y - 12, '-1 ROSE', '#ff8fd0');
+      burst(this.cx, this.y + this.h / 2, 12, { colors: ['#ff8fd0', '#fff'], speed: 100 });
+      return;
+    }
     this.hp--;
     this.invuln = CFG.hurtInvuln;
     this.vy = -150;
@@ -1101,6 +1114,15 @@ class Player extends Entity {
   update(dt) {
     this.charmed = Math.max(0, this.charmed - dt);
     this.charmImmune = Math.max(0, this.charmImmune - dt);
+    // rose hearts wither one at a time rather than all at once
+    if (this.extra > 0) {
+      this.extraT -= dt;
+      if (this.extraT <= 0) {
+        this.extra--;
+        this.extraT = this.extra > 0 ? EXTRA_HEART_TIME : 0;
+        floatText(this.cx, this.y - 12, 'WILTED', '#8890a4');
+      }
+    }
     const hadDJ = this.doubleJumpT > 0;
     this.doubleJumpT = Math.max(0, this.doubleJumpT - dt);
     if (hadDJ && this.doubleJumpT === 0) {
@@ -1708,7 +1730,14 @@ class Shockwave {
   }
 }
 
-const BOMBER = { hp: 3, walk: 30, throwEvery: 2.3, range: 150, blast: 30, fuse: 2.1, puntFuse: 0.75 };
+/* Retuned after the fight proved unkillable in play. The loop asks a lot -
+   reach a live bomb, stomp it, and have the blast catch him - so every number
+   in it has to be forgiving: a longer fuse to reach the bomb, a harder punt,
+   a blast wide enough to actually clip him, and one less hit. */
+const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
+                 blast: 44,        // radius that catches HIM
+                 blastP: 26,       // ...and the smaller one that catches YOU
+                 fuse: 2.9, puntFuse: 1.15, puntVel: 245, flee: 38 };
 
 /* Armoured: stomping him does nothing. The only thing that hurts him is his
    own ordnance, so the fight is about the bombs, not about him. Stomp a live
@@ -1736,8 +1765,8 @@ class Bomber extends Entity {
     if (Math.abs(d) > 10) this.face = Math.sign(d);
 
     // backs away from you so you cannot simply corner him
-    const flee = Math.abs(d) < 56 ? -Math.sign(d) : this.dir;
-    this.dir = Math.abs(d) < 56 ? flee : this.dir;
+    // backs off less than he used to, or he simply outranges you forever
+    if (Math.abs(d) < BOMBER.flee) this.dir = -Math.sign(d) || this.dir;
     this.vx = this.dir * BOMBER.walk;
 
     if (this.cool <= 0 && Math.abs(d) < BOMBER.range) {
@@ -1780,7 +1809,7 @@ class Bomber extends Entity {
    so touching it costs nothing - the blast is the danger, not the casing. */
 class Bomb extends Entity {
   constructor(x, y, dir, owner) {
-    super(x - 4, y, 8, 8);
+    super(x - 6, y, 12, 12);      // a bigger target: you have to land on it
     this.vx = dir * 74; this.vy = -150;
     this.owner = owner; this.fuse = BOMBER.fuse; this.t = 0;
   }
@@ -1792,7 +1821,11 @@ class Bomb extends Entity {
     this.hitWall = false;
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
     moveAndCollide(this, dt, { oneWay: false });
-    if (this.onGround) this.vx *= Math.pow(0.15, dt);   // rolls to a stop
+    /* A thrown bomb rolls to a stop; a PUNTED one skids. Without the
+       exemption friction killed a punt after 87px while he was still backing
+       away, so the return shot never reached him and the fight was
+       unwinnable. */
+    if (this.onGround && !this.punted) this.vx *= Math.pow(0.15, dt);
     if (this.fuse <= 0) this.explode();
     if (Math.random() < dt * 26)
       burst(this.cx, this.y, 1, { colors: ['#ffd85e', '#ff8a5c'], speed: 14, grav: -40, life: .4, size: 1 });
@@ -1802,9 +1835,11 @@ class Bomb extends Entity {
     this.dead = true;
     shake = 6; Sfx.brick();
     burst(this.cx, this.cy2, 26, { colors: ['#ffd85e', '#ff8a5c', '#e8434f', '#fff'], speed: 190, size: 3, life: .7 });
-    const box = { x: this.cx - BOMBER.blast, y: this.y + 4 - BOMBER.blast, w: BOMBER.blast * 2, h: BOMBER.blast * 2 };
+    const ring = r => ({ x: this.cx - r, y: this.y + 4 - r, w: r * 2, h: r * 2 });
+    const box = ring(BOMBER.blast);
     const p = game.player;
-    if (aabb(box, p) && p.invincible <= 0) p.hurt(this.cx);
+    // the player gets the smaller radius, so escaping your own punt is fair
+    if (aabb(ring(BOMBER.blastP), p) && p.invincible <= 0) p.hurt(this.cx);
     for (const e of game.enemies) {
       if (e.dead || e === this) continue;
       if (!aabb(box, e)) continue;
@@ -1816,8 +1851,9 @@ class Bomb extends Entity {
   get cy2() { return this.y + this.h / 2; }
   onStomp(p) {
     // punted: goes where you are facing, with a short fuse
-    this.vx = (p.face || 1) * 150;
-    this.vy = -120;
+    this.vx = (p.face || 1) * BOMBER.puntVel;
+    this.vy = -110;
+    this.punted = true;
     this.fuse = Math.min(this.fuse, BOMBER.puntFuse);
     p.vy = CFG.stompBounce * 0.85;
     floatText(this.cx, this.y - 8, 'KICK!', '#ffd85e');
@@ -2283,17 +2319,19 @@ const Scores = {
 
 const game = {
   player: null, enemies: [], coins: [], items: [], boss: null, heli: null,
-  hazards: [], script: null, tea: null, levelIndex: 0, advance: false,
+  hazards: [], script: null, tea: null, levelIndex: 0, advance: false, actScore: 0,
   score: 0, state: 'title', endT: 0, time: 0, best: 0,
 };
 
 const KHACHAPURI_TIME = 9;   // seconds of invincibility
+const EXTRA_HEART_TIME = 22; // how long a rose-granted 4th heart lasts
+const EXTRA_HEART_MAX = 2;   // ...and how many can stack above the normal 3
 const POWDER_TIME = 18;      // seconds of double jump
 
 function reset(toTitle = false, opts = {}) {
   if (opts.levelIndex != null) loadLevel(opts.levelIndex);
   else if (toTitle) loadLevel(0);          // the title screen is always act one
-  const carried = opts.keepScore ? game.score : 0;
+  const carried = opts.score != null ? opts.score : (opts.keepScore ? game.score : 0);
   buildGrid();
   particles = []; floats = []; bumps = [];
   shake = 0; freeze = 0; flash = 0;
@@ -2317,7 +2355,7 @@ function reset(toTitle = false, opts = {}) {
   game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
   game.hazards = []; game.script = null; game.tea = null;
   game.entry = null;
-  game.score = carried; game.endT = 0; game.time = 0;
+  game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
   game.advance = false;
   game.state = toTitle ? 'title' : 'play';
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
@@ -2651,6 +2689,12 @@ function resolveItems() {
       if (p.hp < p.maxHp) {
         p.hp++;
         floatText(p.cx, p.y - 14, '+1 HEART', '#ff8f9c');
+      } else if (p.extra < EXTRA_HEART_MAX) {
+        // already full: the rose becomes a temporary heart on top of the three
+        p.extra++;
+        p.extraT = EXTRA_HEART_TIME;
+        floatText(p.cx, p.y - 14, '+ROSE HEART', '#ff8fd0');
+        burst(p.cx, p.y + 6, 16, { colors: ['#ff8fd0', '#d6263c', '#fff'], speed: 90, grav: -30, life: .9 });
       } else {
         game.score += 500;
         floatText(p.cx, p.y - 14, '+500', '#ffd85e');
@@ -2814,8 +2858,13 @@ function update(dt) {
     updateCamera(dt);
     if (Input.justDown('KeyR') || (game.endT > 1.4 && Input.jumpTap())) {
       if (game.state === 'won' && game.advance) startCard(game.levelIndex + 1);
+      /* Dying restarts the act you died in, holding the score you entered it
+         with. Sending a player back to act 1 for failing in act 2 makes them
+         replay ten minutes they had already cleared. */
+      else if (game.state === 'lost')
+        reset(false, { levelIndex: game.levelIndex, score: game.actScore });
       else if (Scores.qualifies(game.score)) startEntry(game.score);
-      else reset(true);            // back to the title so the board is visible
+      else reset(true);            // run finished: title, board visible
     }
     return;
   }
@@ -2916,49 +2965,99 @@ function ditherBand(y0, y1, cA, cB) {
    to its own world column and drawn once. An untiled zone needs
    artW >= VIEW_W + drift, where drift is (camMax - camAtEntry) * par; a low
    par is what keeps that satisfiable, and it also reads as planted. */
-function drawZone(art, z, clipL, clipR) {
-  const oy = -Math.round(cam.y * 0.55);
-  g.save();
-  g.beginPath();
-  g.rect(clipL, 0, clipR - clipL, VIEW_H);
-  g.clip();
+/* Backdrop zones.
 
+   A level declares one or more zones, each owning the world from its `fromX`
+   tile onward. Zones do NOT butt up against each other at a hard edge - a
+   vertical cut through a street elevation slices buildings in half and is
+   very obvious. Instead each zone is drawn full-width and the incoming one
+   dissolves in through an ordered-dither mask across a band of travel, which
+   is both invisible in motion and the period-correct way to do a transition.
+
+   `tile: true` mirror-tiles the art (a street repeats fine). The arena does
+   not tile - the Parliament is a building, not wallpaper - so it is anchored
+   to its own world column and drawn once. An untiled zone needs
+   artW >= VIEW_W + drift, where drift is (camMax - camAtEntry) * par. */
+
+const DISSOLVE_TILES = 12;          // how far the crossfade takes to complete
+const DISSOLVE_STEPS = 8;
+let dissolveMasks = null, dissolveScratch = null;
+
+function buildDissolve() {
+  const BAYER = [0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5];
+  dissolveMasks = [];
+  for (let step = 1; step < DISSOLVE_STEPS; step++) {
+    const thresh = step * 16 / DISSOLVE_STEPS;
+    const c = document.createElement('canvas');
+    c.width = VIEW_W; c.height = VIEW_H;
+    const cx = c.getContext('2d');
+    const id = cx.createImageData(VIEW_W, VIEW_H);
+    const d = id.data;
+    for (let y = 0; y < VIEW_H; y++)
+      for (let x = 0; x < VIEW_W; x++) {
+        if (BAYER[((y & 3) << 2) | (x & 3)] < thresh) {
+          const o = (y * VIEW_W + x) * 4;
+          d[o] = d[o+1] = d[o+2] = 255; d[o+3] = 255;
+        }
+      }
+    cx.putImageData(id, 0, 0);
+    dissolveMasks.push(c);
+  }
+  dissolveScratch = document.createElement('canvas');
+  dissolveScratch.width = VIEW_W; dissolveScratch.height = VIEW_H;
+}
+
+function paintZone(ctx, art, z) {
+  const oy = -Math.round(cam.y * 0.55);
   if (z.tile) {
     const bw = art.w;
     const off = Math.round(cam.x * z.par);
     let i = Math.floor(off / bw);
     for (let n = 0; n <= Math.ceil(VIEW_W / bw) + 1; n++, i++) {
       const x = i * bw - off;
-      if (i % 2 === 0) g.drawImage(art.canvas, x, oy);
+      if (i % 2 === 0) ctx.drawImage(art.canvas, x, oy);
       else {                                    // mirror alternates: no hard seam
-        g.save(); g.translate(x + bw, oy); g.scale(-1, 1);
-        g.drawImage(art.canvas, 0, 0); g.restore();
+        ctx.save(); ctx.translate(x + bw, oy); ctx.scale(-1, 1);
+        ctx.drawImage(art.canvas, 0, 0); ctx.restore();
       }
     }
   } else {
     /* (anchor - cam.x) * par, NOT anchor - cam.x * par. The anchor is a world
-       coordinate; it has to be mapped into the parallax layer's own space
+       coordinate and has to be mapped into the parallax layer's own space
        before the camera is subtracted, or the art lands hundreds of pixels
        off screen and the zone renders as flat void. */
     const anchor = (z.anchorX ?? z.fromX) * TILE;
-    g.drawImage(art.canvas, Math.round((anchor - cam.x) * z.par), oy);
+    ctx.drawImage(art.canvas, Math.round((anchor - cam.x) * z.par), oy);
   }
-  g.restore();
 }
 
 function drawBackdrop() {
   const zones = (LEVEL.backdrops || []).filter(z => ART[z.art] && !ART[z.art].isPlaceholder);
   if (zones.length) {
-    // fill first: an untiled zone may not cover the full height on every frame
     g.fillStyle = LEVEL.voidColor || '#0a0c16';
     g.fillRect(0, 0, VIEW_W, VIEW_H);
-    for (let k = 0; k < zones.length; k++) {
-      const z = zones[k], next = zones[k + 1];
-      const l = k === 0 ? 0 : Math.round(z.fromX * TILE - cam.x);
-      const r = next ? Math.round(next.fromX * TILE - cam.x) : VIEW_W;
-      if (r <= 0 || l >= VIEW_W) continue;      // wholly off-camera
-      drawZone(ART[z.art], z, Math.max(0, l), Math.min(VIEW_W, r));
-    }
+
+    // which zone owns the middle of the screen, and how far into the handover
+    const midTile = (cam.x + VIEW_W / 2) / TILE;
+    let k = 0;
+    for (let n = 0; n < zones.length; n++) if (midTile >= zones[n].fromX - DISSOLVE_TILES / 2) k = n;
+    const next = zones[k + 1];
+    let f = 0;
+    if (next) f = clamp((midTile - (next.fromX - DISSOLVE_TILES / 2)) / DISSOLVE_TILES, 0, 1);
+
+    if (!next || f <= 0) { paintZone(g, ART[zones[k].art], zones[k]); return; }
+    if (f >= 1)          { paintZone(g, ART[next.art], next); return; }
+
+    if (!dissolveMasks) buildDissolve();
+    paintZone(g, ART[zones[k].art], zones[k]);
+    const sc = dissolveScratch.getContext('2d');
+    sc.setTransform(1, 0, 0, 1, 0, 0);
+    sc.clearRect(0, 0, VIEW_W, VIEW_H);
+    paintZone(sc, ART[next.art], next);
+    sc.globalCompositeOperation = 'destination-in';
+    sc.drawImage(dissolveMasks[clamp(Math.floor(f * DISSOLVE_STEPS), 0, DISSOLVE_STEPS - 2)], 0, 0);
+    sc.globalCompositeOperation = 'source-over';
+    g.drawImage(dissolveScratch, 0, 0);
     return;
   }
 
@@ -3329,6 +3428,11 @@ function drawEntities() {
     if (e instanceof Dog) {
       drawDog(e.x, e.y, e.face, e.t);
     } else if (e instanceof Bomb) {
+      if (e.fuse < 0.5) {                       // show the radius before it goes
+        const r = BOMBER.blast, k = Math.floor(e.t * 16) % 2;
+        g.fillStyle = k ? 'rgba(255,138,92,.16)' : 'rgba(255,216,94,.10)';
+        g.fillRect(Math.round(e.cx - r), Math.round(e.y + 4 - r), r * 2, r * 2);
+      }
       const flashing = e.fuse < 0.6 && Math.floor(e.t * 16) % 2 === 0;
       const x = Math.round(e.x), y = Math.round(e.y);
       g.fillStyle = flashing ? '#ff5a4a' : '#1c1c22'; g.fillRect(x, y + 1, 8, 7);
@@ -3554,19 +3658,25 @@ function drawParticles() {
   }
 }
 
-function drawHeart(x, y, full) {
-  g.fillStyle = full ? '#e8434f' : '#3a3f4a';
+function drawHeart(x, y, full, col = '#e8434f', hi = '#ff8f9c') {
+  g.fillStyle = full ? col : '#3a3f4a';
   g.fillRect(x + 1, y, 2, 1); g.fillRect(x + 5, y, 2, 1);
   g.fillRect(x, y + 1, 8, 3);
   g.fillRect(x + 1, y + 4, 6, 1);
   g.fillRect(x + 2, y + 5, 4, 1);
   g.fillRect(x + 3, y + 6, 2, 1);
-  if (full) { g.fillStyle = '#ff8f9c'; g.fillRect(x + 1, y + 1, 2, 1); }
+  if (full) { g.fillStyle = hi; g.fillRect(x + 1, y + 1, 2, 1); }
 }
 
 function drawHud() {
   if (!showHud) return;
   for (let i = 0; i < 3; i++) drawHeart(8 + i * 11, 8, i < game.player.hp);
+  // rose hearts sit after the three, pink, and blink as they are about to go
+  for (let i = 0; i < game.player.extra; i++) {
+    const last = i === game.player.extra - 1;
+    const fading = last && game.player.extraT < 4 && Math.floor(game.time * 6) % 2 === 0;
+    if (!fading) drawHeart(8 + (3 + i) * 11, 8, true, '#ff8fd0', '#ffd0e8');
+  }
   drawCoinIcon(9, 20);
   drawText(g, `*${String(game.player.coins).padStart(2, '0')}`, 18, 19, '#ffd85e', 1);
   drawText(g, String(game.score).padStart(6, '0'), 52, 19, '#fff', 1);

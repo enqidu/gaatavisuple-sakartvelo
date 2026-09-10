@@ -48,7 +48,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 |---|---|
 | **Acharuli khachapuri** | 9s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
-| **Rose** | Heals a heart, or 500 points at full health. |
+| **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
 The second jump is a flat velocity set, not an add, so hammering it mid-rise
 cannot stack into an arbitrarily high launch — measured at 55px when spammed
@@ -406,3 +406,20 @@ watching it commit suicide.
 
 `bossGrade` marks anything a khachapuri must not delete. The exemption used to
 be `instanceof FlyingBoss`, so invincibility one-shot every Act 2 boss.
+
+
+## Dying
+
+Restarts the act you died in, holding the score you entered it with. Sending a
+player back to Act 1 for failing in Act 2 makes them replay ten minutes they
+had already cleared.
+
+## Backdrop handovers
+
+Zones do not butt against each other at a hard edge — a vertical cut through a
+street elevation slices buildings in half and is glaring. Each zone is drawn
+full width and the incoming one dissolves in through an ordered-dither mask
+over 12 tiles of travel (`DISSOLVE_TILES`), which is invisible in motion and
+the period-correct way to do it. Masks are built once and composited with
+`destination-in`, so a handover costs two canvas ops per frame and only while
+it is happening.
