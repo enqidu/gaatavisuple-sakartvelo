@@ -747,16 +747,16 @@ const LEVEL_2 = {
   items: [
     { x: 22,  y: 8,  t: 'rose' },
     { x: 36,  y: 10, t: 'powder' },
-    { x: 38,  y: 8,  t: 'khachapuri' },
+    { x: 38,  y: 8,  t: 'tea' },
     { x: 70,  y: 8,  t: 'rose' },
     { x: 89,  y: 8,  t: 'powder' },
-    { x: 91,  y: 6,  t: 'khachapuri' },
+    { x: 91,  y: 6,  t: 'tea' },
     { x: 118, y: 8,  t: 'rose' },
     { x: 136, y: 10, t: 'powder' },
-    { x: 138, y: 8,  t: 'khachapuri' },
+    { x: 138, y: 8,  t: 'tea' },
     { x: 172, y: 8,  t: 'rose' },
     { x: 190, y: 10, t: 'powder' },
-    { x: 193, y: 10, t: 'khachapuri' },
+    { x: 193, y: 10, t: 'tea' },
   ],
 
   flags: [10, 50, 80, 126, 175, 200],
@@ -1861,7 +1861,11 @@ class Bomb extends Entity {
   }
 }
 
-const DARD = { hp: 4, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1 };
+/* Six hits: more than any intermediate. He had four while Svani had five,
+   so the final boss was mechanically weaker than a mid boss and read as one.
+   He also gets a named health bar, which is what actually sells "this is the
+   last one" - Aslan has had one since act 1. */
+const DARD = { hp: 6, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -2247,11 +2251,12 @@ class Coin extends Entity {
   update(dt) { this.t += dt * 7; }
 }
 
-const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12] };
+const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12], tea: [13, 10] };
 
 // [line 1, line 2, colour] — drawn above the pickup so it names itself.
 const ITEM_LABEL = {
   khachapuri: ['ACHARULI', 'KHACHAPURI', '#ffd85e'],
+  tea:        ['HOT', 'TEA', '#e8c07a'],
   powder:     ['WHITE', 'POWDER', '#9ee8ff'],
 };
 
@@ -2267,6 +2272,8 @@ class Item extends Entity {
     if (this.kind === 'khachapuri' && Math.random() < dt * 6)
       burst(this.cx + rand(-6, 6), this.y + 2, 1,
             { colors: ['#ffd85e', '#fff2c0'], speed: 10, grav: -25, life: 0.7, size: 1 });
+    if (this.kind === 'tea' && Math.random() < dt * 5)
+      burst(this.cx, this.y, 1, { colors: ['#fff', '#e8c07a'], speed: 7, grav: -18, life: .9, size: 1 });
     if (this.kind === 'powder' && Math.random() < dt * 7)
       burst(this.cx + rand(-6, 6), this.y + rand(0, 10), 1,
             { colors: ['#9ee8ff', '#fff'], speed: 9, grav: -20, life: 0.8, size: 1 });
@@ -2669,7 +2676,15 @@ function resolveItems() {
   for (const it of game.items) {
     if (it.dead || !aabb(p, it)) continue;
     it.dead = true;
-    if (it.kind === 'powder') {
+    if (it.kind === 'tea') {
+      // same effect as the khachapuri, act 2's own flavour of it
+      p.invincible = KHACHAPURI_TIME;
+      game.score += 500;
+      floatText(p.cx, p.y - 14, 'HOT TEA!', '#e8c07a');
+      floatText(p.cx, p.y - 26, 'INVINCIBLE', '#ff5ec4');
+      shake = 4; flash = 0.5; Sfx.win();
+      burst(it.cx, it.y + 5, 26, { colors: ['#e8e4dc', '#8a5a2a', '#ffd85e'], speed: 130, size: 3 });
+    } else if (it.kind === 'powder') {
       // Lasts for the rest of the life, not on a timer: it exists so you can
       // reach places, and a countdown would just mean rushing the platforming.
       p.doubleJumpT = POWDER_TIME;
@@ -3402,6 +3417,7 @@ function drawEntities() {
   for (const c of game.coins) drawCoin(c);
   for (const it of game.items) {
     if (it.kind === 'khachapuri') drawKhachapuri(it.x, it.y);
+    else if (it.kind === 'tea') drawCup(it.x + 2, it.y, game.time);
     else if (it.kind === 'powder') drawSprite(ART.powder, it);
     else drawRose(it.x, it.y);
 
@@ -3683,6 +3699,22 @@ function drawHud() {
   if (game.player.combo > 1)
     drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
   if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
+
+  // final-boss bar, once he is actually fighting
+  const fin = game.enemies.find(e => e instanceof Dardubala && e.engaged && !e.scriptedOut);
+  if (fin) {
+    const bw = 120, bx = Math.round((VIEW_W - bw) / 2), by = 14;
+    drawTextCentered(g, 'DARDUBALA', VIEW_W / 2, by - 9, '#c9a0ff', 1);
+    g.fillStyle = '#1a1420'; g.fillRect(bx - 1, by - 1, bw + 2, 7);
+    g.fillStyle = '#3a2f4a'; g.fillRect(bx, by, bw, 5);
+    const w = Math.round(bw * clamp(fin.hp / DARD.hp, 0, 1));
+    g.fillStyle = fin.harmless ? '#ffd85e' : '#a04bd0'; g.fillRect(bx, by, w, 5);
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(bx, by, w, 1);
+    for (let i = 1; i < DARD.hp; i++) {
+      g.fillStyle = '#1a1420';
+      g.fillRect(bx + Math.round(bw * i / DARD.hp), by, 1, 5);
+    }
+  }
   /* Stacked, not overlaid. Both timers used to draw a label at y=40/41, so
      holding powder and khachapuri at once printed them on top of each other. */
   let ty = 40;
@@ -3872,7 +3904,12 @@ function frame(now) {
   validateLevel();
   const missing = Object.keys(SPRITES).filter(k => ART[k].isPlaceholder);
   if (missing.length) console.info('placeholders in use:', missing.join(', '));
-  reset(true);
+  /* ?act=2 drops you straight into an act, for playtesting without
+     replaying everything before it. Clamped, so a junk value is harmless. */
+  const wanted = parseInt(new URLSearchParams(location.search).get('act') || '1', 10);
+  const act = Number.isFinite(wanted) ? clamp(wanted - 1, 0, LEVELS.length - 1) : 0;
+  if (act > 0) { reset(false, { levelIndex: act }); Music.start(); }
+  else reset(true);
   document.getElementById('boot').classList.add('hidden');
   requestAnimationFrame(frame);
 })();

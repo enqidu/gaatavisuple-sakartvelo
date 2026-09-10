@@ -46,8 +46,9 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 
 | | |
 |---|---|
-| **Acharuli khachapuri** | 9s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
+| **Acharuli khachapuri** (Act 1) | 9s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
+| **Hot tea** (Act 2) | Act 2's version of the same 9s invincibility. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
 The second jump is a flat velocity set, not an add, so hammering it mid-rise
@@ -423,3 +424,9 @@ over 12 tiles of travel (`DISSOLVE_TILES`), which is invisible in motion and
 the period-correct way to do it. Masks are built once and composited with
 `destination-in`, so a handover costs two canvas ops per frame and only while
 it is happening.
+
+
+## Testing an act directly
+
+`?act=2` boots straight into that act instead of replaying everything before
+it — <http://localhost:8123/?act=2>. Clamped, so a junk value is harmless.
