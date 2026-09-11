@@ -40,6 +40,7 @@ const CFG = {
      Both last only until he lands. */
   ultraJumpVel: -470,
   ultraAirMax:  235,
+  crouchMax:     52,    // crouch-shuffle: enough to reposition, not to travel
   jumpCut:     0.42,
   coyote:      0.10,
   jumpBuffer:  0.12,
@@ -62,6 +63,10 @@ const NIGHT_HAZE = { amount: 0.36, tint: [26, 34, 66], desat: 0.30 };
 
 const SPRITES = {
   hero:   { src: 'assets/hero.png',   h: 30, hitW: 0.55, hitH: 0.92, color: '#2b3a5e' },
+  /* hitH is deliberately mean. The crouch only earns its keep if the box
+     shrinks far enough to open a band a bullet can pass through, and 0.78 of
+     22px gives 17 against the standing 28 - an 11px window. See BULLET.ride. */
+  squat:  { src: 'assets/squat.png',  h: 22, hitW: 0.62, hitH: 0.78, color: '#2b3a5e' },
   walker: { src: 'assets/walker.png', h: 19, hitW: 0.70, hitH: 0.90, color: '#4a7a2f' },
   mid:    { src: 'assets/mid.png',    h: 30, hitW: 0.80, hitH: 0.82, color: '#2d4a7a' },
   boss:   { src: 'assets/boss.png',   h: 34, hitW: 0.55, hitH: 0.90, color: '#1a1a1a' },
@@ -524,6 +529,7 @@ const Input = {
   left()  { return this.down('ArrowLeft')  || this.down('KeyA'); },
   right() { return this.down('ArrowRight') || this.down('KeyD'); },
   sprint(){ return this.down('ShiftLeft')  || this.down('ShiftRight'); },
+  crouch(){ return this.down('ArrowDown')  || this.down('KeyS'); },
   jumpHeld() { return this.down('Space') || this.down('ArrowUp') || this.down('KeyW') || this.down('KeyZ'); },
   jumpTap()  { return this.justDown('Space') || this.justDown('ArrowUp') || this.justDown('KeyW') || this.justDown('KeyZ'); },
   throwTap() { return this.justDown('KeyX') || this.justDown('KeyF'); },
@@ -930,6 +936,16 @@ function validateLevel() {
     if (isSolid(grid[it.y * LEVEL.w + it.x]))
       warn.push(`item '${it.t}' at ${it.x},${it.y} is inside a solid tile`);
 
+  /* The crouch has to open a gap a bullet fits through. If the squat hitbox
+     is ever retuned without moving BULLET.ride, the dodge silently stops
+     working - so it is checked rather than assumed. */
+  if (ART.squat && ART.hero) {
+    const stand = hitboxFor('hero').h, crouch = hitboxFor('squat').h;
+    const top = BULLET.ride, bot = BULLET.ride - BULLET.h;
+    if (top >= stand) warn.push(`bullet rides at ${top}px, above a ${stand}px standing box — unhittable`);
+    if (bot <= crouch) warn.push(`bullet bottom at ${bot}px is inside a ${crouch}px crouch box — cannot be ducked`);
+  }
+
   for (const L of (LEVEL.card || [])) {
     const w = textWidth(L.s, L.sc);
     if (w > VIEW_W - 16) warn.push(`card line "${L.s}" is ${w}px, wider than the screen`);
@@ -1030,6 +1046,34 @@ function bumpEnemiesOn(tx, ty) {
   }
 }
 
+/* Would a box of this size overlap anything solid? Used to refuse to stand up
+   under a ceiling - without it, releasing crouch in a one-tile gap warps the
+   hero's head into the tile above and the vertical sweep shoves him through
+   the floor. */
+function boxHitsSolid(x, y, w, h) {
+  const x0 = Math.floor(x / TILE), x1 = Math.floor((x + w - 1) / TILE);
+  const y0 = Math.floor(y / TILE), y1 = Math.floor((y + h - 1) / TILE);
+  for (let ty = y0; ty <= y1; ty++)
+    for (let tx = x0; tx <= x1; tx++)
+      if (isSolid(tileAt(tx, ty))) return true;
+  return false;
+}
+
+/* Standing on a one-way platform and nothing else - the only place dropping
+   through means anything. */
+function onOneWayOnly(e) {
+  const by = Math.round(e.bottom);
+  const ty = Math.floor((by + 0.5) / TILE);
+  if (Math.abs(by - ty * TILE) > 1.6) return false;
+  let found = false;
+  for (let tx = Math.floor(e.x / TILE); tx <= Math.floor((e.x + e.w - 1) / TILE); tx++) {
+    const t = tileAt(tx, ty);
+    if (isSolid(t)) return false;      // real floor under him too: nothing to drop through
+    if (isOneWay(t)) found = true;
+  }
+  return found;
+}
+
 function hitboxFor(key) {
   const a = ART[key], d = SPRITES[key];
   return { w: Math.max(4, Math.round(a.w * d.hitW)), h: Math.max(4, Math.round(a.h * d.hitH)) };
@@ -1086,6 +1130,9 @@ function moveAndCollide(e, dt, { oneWay = true } = {}) {
       const x0 = Math.floor(e.x / TILE), x1 = Math.floor((e.x + e.w - 1) / TILE);
       for (let tx = x0; tx <= x1; tx++) {
         const t = tileAt(tx, ty);
+        // the probe re-grabs one-way tiles too, so a drop-through has to be
+        // honoured here as well or he is pinned back the frame he lets go
+        if (!oneWay && isOneWay(t) && !isSolid(t)) continue;
         if (isSolid(t) || isOneWay(t)) {
           e.onGround = true;
           // Pin it. Flagging alone was not enough: gravity still accumulates
@@ -1113,6 +1160,11 @@ class Player extends Entity {
     this.doubleJumpT = 0; this.airJumps = 0;
     // A charge, not a timer: it is there to clear one specific gap once.
     this.ultra = 0; this.ultraFlight = false;
+    /* Crouching swaps the hitbox height only - never the width. A narrower box
+       mid-crouch would let him slide into gaps he cannot stand up out of. */
+    this.crouching = false; this.dropT = 0;
+    this.standH = hb.h;
+    this.crouchH = hitboxFor('squat').h;
     this.extra = 0; this.extraT = 0;
     this.roses = 0; this.throwCd = 0; this.throwHint = 0; this.hasThrown = false;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
@@ -1176,7 +1228,28 @@ class Player extends Entity {
 
   get doubleJump() { return this.doubleJumpT > 0; }
 
+  /* Grows and shrinks from the FEET, so the box never moves out from under
+     him. Standing back up is refused when there is no room, which is what
+     stops him being pushed through the floor under a low ceiling. */
+  setCrouch(on) {
+    if (on === this.crouching) return;
+    const b = this.bottom;
+    if (on) {
+      this.h = this.crouchH; this.y = b - this.h;
+      this.crouching = true;
+    } else {
+      const y = b - this.standH;
+      if (boxHitsSolid(this.x, y, this.w, this.standH)) return;   // stay down
+      this.h = this.standH; this.y = y;
+      this.crouching = false;
+    }
+  }
+
   fellInPit() {
+    /* Stand him up before anything measures him. respawnSpot places the box by
+       its own height, so respawning mid-crouch put him 11px low and he stood up
+       into whatever was above. */
+    this.h = this.standH; this.crouching = false; this.dropT = 0;
     const lost = this.spendHeart();
     this.combo = 0;
     shake = 6; flash = 0.5; Sfx.pit();
@@ -1241,8 +1314,15 @@ class Player extends Entity {
     }
     const stuck = this.charmed > 0;
 
+    this.dropT = Math.max(0, this.dropT - dt);
+    // only on the ground, and never while a charmer has him
+    this.setCrouch(!stuck && Input.crouch() && this.onGround && this.dropT <= 0);
+
     const wantL = !stuck && Input.left(), wantR = !stuck && Input.right();
     let max = Input.sprint() ? CFG.sprintMax : CFG.runMax;
+    // A shuffle, not a stop: you have to be able to crouch and still reposition
+    // under Edika's fire, or holding the dodge would pin you in place.
+    if (this.crouching) max = CFG.crouchMax;
     // The surge only exists while that one launch is still in the air.
     if (this.ultraFlight) max = CFG.ultraAirMax;
     if (this.charmSlow) max *= CHARM.slowTo;
@@ -1262,7 +1342,17 @@ class Player extends Entity {
 
     this.coyote = this.onGround ? CFG.coyote : Math.max(0, this.coyote - dt);
     this.buffer = (!stuck && Input.jumpTap()) ? CFG.jumpBuffer : Math.max(0, this.buffer - dt);
-    if (this.buffer > 0 && this.coyote > 0) {
+    /* Crouch + jump on a one-way platform drops you through it. Checked
+       before the jump chain so it consumes the buffer - otherwise he drops
+       and immediately jumps back up through the same platform. */
+    if (this.crouching && this.buffer > 0 && this.onGround && onOneWayOnly(this)) {
+      this.buffer = 0; this.dropT = 0.20;
+      this.setCrouch(false);
+      this.y += 2; this.vy = 60;
+      Sfx.bump();
+      burst(this.cx, this.bottom, 8,
+            { colors: ['#d08a48', '#f0c088', '#fff'], speed: 55, grav: 200, life: .4, size: 1 });
+    } else if (this.buffer > 0 && this.coyote > 0) {
       /* Spent on the next jump off the ground, whenever that is. Deliberately
          not automatic on pickup: he should choose the moment, and he should be
          able to walk back to the lip and line it up. */
@@ -1297,7 +1387,7 @@ class Player extends Entity {
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
 
     const wasAir = !this.onGround;
-    moveAndCollide(this, dt);
+    moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
 
     if (this.ultraFlight && Math.random() < dt * 40)
       burst(this.cx + rand(-4, 4), this.y + rand(4, 20), 1,
@@ -1928,6 +2018,54 @@ class Debris {
   }
 }
 
+/* Edika's shots. Fired at head height over the surface HE is standing on, and
+   they fly dead level from there - they never chase and never change height.
+
+   That flatness is the whole mechanic. An earlier version tracked the floor
+   beneath it so it would step down with the terrain, which sounds better and
+   is much worse: crossing from his step to the floor it slid 60px downward and
+   swept straight through a crouching player on the way. A shot you cannot duck
+   because it is busy descending through you is not a shot, it is a bug. Level
+   flight, bursting on anything solid.
+
+   `ride` is the rest of it. The bullet occupies feet-25 to feet-20, inside a
+   standing hitbox (feet-28 to feet) and clear of a crouching one (feet-17 to
+   feet) by 3px. Retune the squat hitbox and this has to move with it - which
+   is asserted at boot, see the crouch-band check in validateLevel. */
+const BULLET = { speed: 96, ride: 25, w: 7, h: 5, life: 5.0 };
+
+class Bullet {
+  constructor(x, y, dir) {
+    this.x = x; this.y = y; this.w = BULLET.w; this.h = BULLET.h;
+    this.dir = dir; this.t = 0; this.dead = false;
+  }
+  get cx() { return this.x + this.w / 2; }
+  get bottom() { return this.y + this.h; }
+  update(dt) {
+    this.t += dt;
+    this.x += this.dir * BULLET.speed * dt;          // level, always
+    if (this.t > BULLET.life) this.dead = true;
+    if (this.cx < cam.x - 80 || this.cx > cam.x + VIEW_W + 80) this.dead = true;
+    if (isSolid(tileAt(Math.floor(this.cx / TILE), Math.floor((this.y + this.h / 2) / TILE)))) {
+      this.dead = true;
+      burst(this.cx, this.y + 2, 8,
+            { colors: ['#ffd85e', '#ff8a5c', '#fff'], speed: 70, grav: 120, life: .4, size: 1 });
+    }
+    if (Math.random() < dt * 30)
+      burst(this.cx, this.y + 2, 1,
+            { colors: ['#ff8a5c', '#ffd85e'], speed: 10, grav: -8, life: .35, size: 1 });
+  }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#ffd85e'; g.fillRect(x, y, BULLET.w, BULLET.h);
+    g.fillStyle = '#ff8a5c'; g.fillRect(x, y + 1, BULLET.w, 1);
+    g.fillStyle = '#fff';    g.fillRect(this.dir > 0 ? x + BULLET.w - 2 : x, y + 1, 2, 2);
+    // a short tail so it reads as travelling at this size
+    g.fillStyle = 'rgba(255,138,92,.45)';
+    g.fillRect(this.dir > 0 ? x - 5 : x + BULLET.w, y + 1, 5, 3);
+  }
+}
+
 const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
                  blastP: 26,       // ...and the smaller one that catches YOU
@@ -2114,7 +2252,10 @@ class DecoyFox extends Entity {
    and each one paints where it will land before it gets there. */
 const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 1.9, quipEvery: 3.1,
                foxRun: 150, foxLeap: -330, prowl: 1.15, pounce: 0.95, pant: 1.35,
-               debris: 3, doublePounce: 0.38 };
+               debris: 3, doublePounce: 0.38,
+               /* Only the man shoots. It keeps the two forms asking for
+                  different things: duck the man, jump the fox. */
+               shootEvery: 2.1, aim: 0.5 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -2132,6 +2273,7 @@ class Dardubala extends Entity {
     this.phase = 'pace'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
     this.home = spanAround(tx);
     this.quip = 1.4; this.quipN = 0;
+    this.shoot = DARD.shootEvery; this.slam = DARD.slamEvery;
   }
   get bossGrade() { return true; }
   get bossName() { return 'EDIKA'; }
@@ -2143,7 +2285,10 @@ class Dardubala extends Entity {
      handful of unavoidable brushes ended the run before a stomp ever landed.
      Telegraphing and striking should not both be lethal. Note onStomp still
      only accepts a hit during 'winded' - windup is safe, not open. */
-  get harmless() { return this.phase === 'winded' || this.phase === 'windup' || this.phase === 'pant'; }
+  get harmless() {
+    return this.phase === 'winded' || this.phase === 'windup' ||
+           this.phase === 'pant'   || this.phase === 'aim';
+  }
   /* Latches. Without it, retreating back past the arena line switched his
      slams off, so he never opened a window and the fight deadlocked - a bot
      playing it correctly landed zero hits in two minutes. */
@@ -2228,7 +2373,45 @@ class Dardubala extends Entity {
     switch (this.phase) {
       case 'pace':
         this.vx = this.dir * DARD.pace;
-        if (this.engaged && this.phaseT > DARD.slamEvery) { this.phase = 'windup'; this.phaseT = 0; Sfx.deny(); }
+        if (!this.engaged) break;
+        /* Two independent clocks, and the SLAM has priority.
+
+           The slam used to be driven off phaseT, and returning from a shot
+           reset phaseT - with shootEvery (2.1s) under slamEvery (2.8s) he
+           re-armed the slam before it could ever fire and looped
+           pace -> aim -> pace forever. He never went winded, which is the only
+           beat a man-form Edika can be stomped on, so the fight became
+           literally unwinnable: three pilots, zero hits, dead in eight
+           seconds. Whatever else changes here, the stompable window must not
+           be starvable by the shot. */
+        this.shoot -= dt; this.slam -= dt;
+        if (this.slam <= 0) {
+          this.phase = 'windup'; this.phaseT = 0;
+          this.slam = DARD.slamEvery; Sfx.deny();
+          break;
+        }
+        if (this.shoot <= 0) {
+          this.phase = 'aim'; this.phaseT = 0;
+          // he aims at YOU, not along his facing: standing behind him is not free
+          this.aimDir = Math.sign(game.player.cx - this.cx) || this.dir;
+          this.dir = this.aimDir;
+          Sfx.deny();
+        }
+        break;
+      case 'aim':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > DARD.aim) {
+          // his own feet are the reference: a groundBelow search from here
+          // found the floor four tiles under his step and fired into the air
+          const fy = this.bottom;
+          game.hazards.push(new Bullet(this.cx + this.aimDir * 8,
+                                       fy - BULLET.ride, this.aimDir));
+          shake = 3; Sfx.bump();
+          burst(this.cx + this.aimDir * 10, fy - BULLET.ride + 2, 10,
+                { colors: ['#ffd85e', '#ff8a5c', '#fff'], speed: 90, grav: 60, life: .4, size: 1 });
+          this.shoot = DARD.shootEvery + rand(-0.3, 0.5);
+          this.phase = 'pace'; this.phaseT = 0;
+        }
         break;
       case 'windup':
         this.vx *= Math.pow(0.02, dt);
@@ -4337,6 +4520,20 @@ function drawEntities() {
         drawTextCentered(g, '?', e.cx, e.y - 12, '#7ec8f0', 1);
     } else if (e instanceof Dardubala) {
       if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
+      /* The tell for a shot is the LANE, not a symbol over his head - you need
+         to know what height it is coming at, which is the whole point of it.
+         Drawn along the floor he is standing on, flashing, for the 0.5s of
+         wind-up. */
+      if (e.phase === 'aim' && !e.scriptedOut) {
+        const fy = e.bottom - BULLET.ride;
+        const d = e.aimDir || 1;
+        if (Math.floor(game.time * 14) % 2 === 0) {
+          g.fillStyle = 'rgba(255,138,92,.60)';
+          for (let k = 1; k < 14; k++)
+            g.fillRect(Math.round(e.cx + d * (8 + k * 9)), Math.round(fy) + 2, 4, 1);
+        }
+        drawTextCentered(g, 'DUCK', e.cx, e.y - 12, '#ff8a5c', 1);
+      }
       if (e.isFox && !e.scriptedOut) {
         // real art now: running while he hunts, sitting while he is open
         const sitting = e.phase === 'pant';
@@ -4428,9 +4625,10 @@ function drawEntities() {
     const expiring = inv && p.invincible < 1.6;   // flicker out as it runs down
     const tint = inv && (!expiring || Math.floor(p.invincible * 12) % 2 === 0)
       ? INV_TINTS[Math.floor(game.time * 14) % INV_TINTS.length] : null;
-    drawSprite(ART.hero, p, { squash: sq, tint });
+    const art = p.crouching ? ART.squat : ART.hero;
+    drawSprite(art, p, { squash: p.crouching ? 1 : sq, tint });
 
-    const dw = Math.round(ART.hero.w / sq), dh = Math.round(ART.hero.h * sq);
+    const dw = Math.round(art.w / sq), dh = Math.round(art.h * sq);
     drawMiniRose(p.face > 0 ? p.cx + dw * 0.26 : p.cx - dw * 0.26 - 4,
                  p.bottom - dh * 0.54);
 
@@ -4670,8 +4868,8 @@ function drawTitle() {
   }
   if (Math.floor(game.time * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 132, '#fff', 1);
-  drawTextCentered(g, 'ARROWS MOVE  SHIFT RUN  X THROW ROSE', VIEW_W / 2, 150, '#8890a4', 1);
-  drawTextCentered(g, 'H HUD  C CRT  M MUSIC  N SOUND  R RESTART', VIEW_W / 2, 162, '#8890a4', 1);
+  drawTextCentered(g, 'ARROWS MOVE  DOWN DUCK  SHIFT RUN  X ROSE', VIEW_W / 2, 150, '#8890a4', 1);
+  drawTextCentered(g, 'DUCK+JUMP DROPS THROUGH A PLATFORM', VIEW_W / 2, 162, '#8890a4', 1);
 }
 
 function drawEntry() {

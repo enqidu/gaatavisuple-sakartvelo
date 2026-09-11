@@ -545,6 +545,65 @@ charge, or buy a safe approach. Stun is handled centrally in the update loop
 rather than per class, so a stunned enemy is frozen, harmless and stompable
 without any boss knowing the mechanic exists.
 
+## Crouching
+
+`Down` / `S` on the ground. The hitbox drops from **28px to 17px**, growing and
+shrinking from the feet so the box never moves out from under him, and the
+crouch-walk is capped at `CFG.crouchMax` (52) — a shuffle, so you can reposition
+under fire without the dodge pinning you in place.
+
+Standing back up is **refused when there is no room**. Without that check,
+releasing crouch in a one-tile gap warps his head into the tile above and the
+vertical sweep shoves him through the floor.
+
+Only the height changes, never the width. A narrower box mid-crouch would let
+him slide into gaps he cannot stand up out of. `fellInPit` force-stands him
+before anything measures him, because `respawnSpot` places the box by its own
+height and respawning mid-crouch put him 11px low.
+
+**Duck + jump drops you through a one-way platform.** Checked before the jump
+chain so it consumes the buffer — otherwise he drops and immediately jumps back
+up through the same platform. It needs `oneWay: false` threaded into *both* the
+collision sweep and the ground probe at the end of `moveAndCollide`; the probe
+re-grabs one-way tiles independently, so honouring the flag in only one place
+pins him back the frame he lets go.
+
+
+## Edika's bullets
+
+The man form fires along the surface **he** is standing on, at head height,
+dead level — they never chase and never change height.
+
+That flatness is the mechanic, not laziness. An earlier version tracked the
+floor under the bullet so it stepped down with the terrain, which sounds better
+and is much worse: crossing from his step to the floor it slid 60px downward and
+swept straight through a crouching player on the way. A shot you cannot duck
+because it is busy descending through you is not a shot.
+
+`BULLET.ride` is the rest of it. The bullet occupies feet-25 to feet-20 — inside
+a standing box (feet-28 to feet), clear of a crouching one (feet-17 to feet) by
+3px. `validateLevel` asserts that band at boot, so retuning the squat hitbox
+without moving `ride` fails loudly instead of silently killing the dodge.
+
+The tell is the **lane**, not a symbol over his head: you need to know what
+height it is coming at, so the wind-up flashes a dotted line along the floor he
+is on for 0.5s, with DUCK over him. He aims at *you*, not along his facing, so
+standing behind him is not a free ride.
+
+| pilot | result |
+|---|---|
+| ducks the shots | **3/3 wins**, 4 hits, ~12s, ends on 1 heart |
+| ignores them | **0/3**, dead every time |
+
+**The slam and the shot run on separate clocks, and the slam has priority.** The
+slam used to be driven off `phaseT`, and returning from a shot reset `phaseT` —
+with `shootEvery` (2.1s) under `slamEvery` (2.8s) he re-armed the slam before it
+could ever fire and looped pace → aim → pace forever. He never went `winded`,
+which is the only beat a man-form Edika can be stomped on, so the fight was
+literally unwinnable: three pilots, zero hits, dead in eight seconds. Whatever
+else changes here, the stompable window must not be starvable by the shot.
+
+
 ## The crowd
 
 Every flagpole you convert brings two more people out. They trail a few tiles
