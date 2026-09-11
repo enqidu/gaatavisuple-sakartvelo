@@ -752,6 +752,7 @@ const LEVEL_2 = {
   ],
   invincibleLabel: 'MATSONI',
   smashKind: 'tv',
+  heroRose: false,          // no rose in hand on the newsroom raid
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -5257,13 +5258,20 @@ function drawEntities() {
        0.739 of its height up from the feet. Guessing 0.30/0.76 left it short
        of his fist by about two pixels, which at 4x is very visible. The offset
        from centre is therefore (0.902 - 0.5). */
-    const HAND = airborne ? { x: 0.902 - 0.5, y: 0.739 } : { x: 0.26, y: 0.54 };
-    // the fist grips the stem near its base, and drawMiniRose's stem runs from
-    // y+3 to y+7 with a 4-wide bloom on top, so back off by half a bloom and
-    // most of a stem to land the grip on the hand rather than the flower
-    const rx = p.face > 0 ? p.cx + dw * HAND.x - (airborne ? 2 : 0)
-                          : p.cx - dw * HAND.x - (airborne ? 2 : 4);
-    drawMiniRose(rx, p.bottom - dh * HAND.y - (airborne ? 5 : 0));
+    /* Not in every act. The rose he carries is the Rose Revolution's, so he
+       does not walk into a newsroom raid holding one - LEVEL.heroRose turns
+       the overlay off for act 2 in all three poses. The throwable roses from
+       `?` blocks are a separate thing and still work there; only what is
+       drawn in his hand changes. */
+    if (LEVEL.heroRose !== false) {
+      const HAND = airborne ? { x: 0.902 - 0.5, y: 0.739 } : { x: 0.26, y: 0.54 };
+      // the fist grips the stem near its base, and drawMiniRose's stem runs
+      // from y+3 to y+7 with a 4-wide bloom on top, so back off by half a
+      // bloom and most of a stem to land the grip on the hand not the flower
+      const rx = p.face > 0 ? p.cx + dw * HAND.x - (airborne ? 2 : 0)
+                            : p.cx - dw * HAND.x - (airborne ? 2 : 4);
+      drawMiniRose(rx, p.bottom - dh * HAND.y - (airborne ? 5 : 0));
+    }
 
     // Hearts orbiting his head while he is stuck staring.
     if (p.charmed > 0)
