@@ -559,12 +559,18 @@ const LEVEL_1 = {
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
-  /* 179-192 was a four-tile pit. It is now a thirteen-tile ravine spanned by a
-     bridge that gets blown as he steps on it: thirteen tiles is past a plain
-     jump (7) and past the powder's double jump (11), so the only way over is
-     the ultra powder that drops when the bridge does. */
-  ground: [[0, 58], [62, 90], [94, 140], [144, 179], [192, 240]],
-  bridge: { from: 179, to: 192, row: 13 },
+  /* 179-192 was a four-tile pit. It is now a FIFTEEN-tile ravine spanned by a
+     bridge that gets blown as he steps on it, and the ultra powder that drops
+     when it goes is the only way over.
+
+     Fifteen, not thirteen. Thirteen looked right at 60fps - the powder double
+     jump peaked one pixel short of the far lip - but dt is capped at 1/30, and
+     at 30fps that same jump lands cleanly on the lip and skips the whole set
+     piece. Measured at 60/50/30fps, sweeping every launch frame: at fifteen the
+     powder fails at all three and the ultra crosses at all three, held or
+     tapped. Seventeen is where the ultra itself starts falling short. */
+  ground: [[0, 58], [62, 90], [94, 140], [144, 179], [194, 240]],
+  bridge: { from: 179, to: 194, row: 13 },
   oldFlag: 'achara',       // act 1 flies Achara's flag, not the 1918 one
   crowd: true,             // and the street comes out behind him here too
   crowdProp: 'flag',       // carrying little red flags; act 2 carries roses
@@ -621,7 +627,7 @@ const LEVEL_1 = {
     { x: 105, y: 8,  n: 5 }, { x: 114, y: 5,  n: 4 },
     { x: 132, y: 8,  n: 4 }, { x: 140, y: 9,  n: 4 },
     { x: 158, y: 5,  n: 3 }, { x: 166, y: 9,  n: 4 },
-    { x: 193, y: 9,  n: 4 }, { x: 197, y: 8,  n: 4 },
+    { x: 195, y: 9,  n: 4 }, { x: 201, y: 8,  n: 4 },
     { x: 215, y: 8,  n: 3 },
   ],
 
@@ -637,7 +643,10 @@ const LEVEL_1 = {
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
     { x: 154, y: 10, t: 'powder' },      // before the second mid boss
     { x: 158, y: 6,  t: 'rose' },
-    { x: 195, y: 10, t: 'powder' },      // before the third mid boss
+    /* Past the landing, not on it. At 195 it sat one tile off the far lip and
+       handed the double jump straight back, so any later fall was re-crossed
+       with powder+ultra rather than the ultra alone. */
+    { x: 199, y: 9,  t: 'powder' },      // before the third mid boss
     { x: 202, y: 9,  t: 'khachapuri' },
     { x: 212, y: 10, t: 'powder' },      // inside the arena, before Aslan
     { x: 218, y: 9,  t: 'rose' },
@@ -652,7 +661,10 @@ const LEVEL_1 = {
      at 58-62 and her pull dragged the player over the edge — then the respawn
      put him back inside her radius, so she pulled him straight in again. An
      unbreakable loop that drained a heart per cycle. See validateLevel(). */
-  charmers: [30, 42, 106, 168, 198],   // 106 not 102: clear of the gate at 101
+  /* 203 not 198: the ultra crossing lands him around 195 and her pull radius
+     is 62px, so at 198 she caught him the instant he completed the one jump
+     the act forces him to make. */
+  charmers: [30, 42, 106, 168, 203],   // 106 not 102: clear of the gate at 101
 
   /* Each mid boss holds a gate shut. `gate` is the tile column that stays
      solid until he dies, so the level cannot be run past — every mid boss is
@@ -1228,7 +1240,12 @@ class Player extends Entity {
       burst(this.cx, this.bottom, 12,
             { colors: ['#9ee8ff', '#fff', '#c8d8f0'], speed: 70, grav: 120, life: 0.45, size: 1, spread: Math.PI, dir: 0 });
     }
-    if (this.vy < 0 && !Input.jumpHeld()) this.vy *= Math.pow(CFG.jumpCut, dt * 60);
+    /* The ultra launch is exempt. It is the one jump in the game you are
+       *required* to make, and with the cut applied a tapped launch landed 92px
+       short of the far lip - the crossing punished a short press with a heart
+       every time. */
+    if (this.vy < 0 && !Input.jumpHeld() && !this.ultraFlight)
+      this.vy *= Math.pow(CFG.jumpCut, dt * 60);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
 
     const wasAir = !this.onGround;
@@ -1360,6 +1377,11 @@ class MidBoss extends Entity {
     super(tx * TILE, 0, hb.w, hb.h);
     this.gate = gate;
     this.y = groundYAt(tx) - this.h;
+    /* He was the one gate holder without a leash. His last-hit leap carries
+       5.3 tiles and the ledge turn is suppressed mid-leap, so once the pit at
+       179 became a thirteen-tile ravine he could jump off the 192 lip, fall
+       out of the world, and hand you gate 206 for free. */
+    this.home = spanAround(tx);
     this.dir = -1; this.turnCd = 0;
     this.hp = 3; this.hitFlash = 0; this.t = 0;
     this.phase = 'patrol'; this.phaseT = 0;
@@ -1444,6 +1466,7 @@ class MidBoss extends Entity {
     if ((this.hitWall || ledge) && this.turnCd <= 0 && !this.leaping) {
       this.dir *= -1; this.turnCd = TURN_CD;
     }
+    leash(this);
     this.face = this.dir;
   }
 
@@ -2771,7 +2794,12 @@ const crowd = {
       this.surge = CROWD.surgeEvery;
       let hit = 0;
       for (const e of game.enemies) {
-        if (e.dead || e.bossGrade || Math.abs(e.cx - this.x) > CROWD.surgeReach) continue;
+        /* Gate holders are exempt as well as bosses. MidBoss has no
+           bossGrade - and must not get one, it would halve his rose stun and
+           make him immune to the khachapuri one-shot - so he is excluded by
+           the thing that actually matters: he is what a required fight is. */
+        if (e.dead || e.bossGrade || e.gate != null ||
+            Math.abs(e.cx - this.x) > CROWD.surgeReach) continue;
         e.stun = Math.max(e.stun || 0, 1.4);
         hit++;
       }
@@ -2785,7 +2813,10 @@ const crowd = {
   },
   draw() {
     if (this.n <= 0) return;
-    const gy = groundBelow(this.x, game.player.bottom - 2) ?? (13 * TILE);
+    // No fallback. Act 2's pits are 4 tiles wide so a stale row-13 default was
+    // never visible; over Act 1's ravine the whole march stood on nothing.
+    const gy = groundBelow(this.x, game.player.bottom - 2);
+    if (gy == null) return;
     const shown = Math.min(this.n, 8);
     for (let i = 0; i < shown; i++) {
       // deterministic scatter and depth: no jitter frame to frame
@@ -2839,9 +2870,21 @@ const BRIDGE_FALL = 0.85;
 const bridgeRun = {
   state: 'none', t: 0, cut: 0,
   reset() { this.state = LEVEL.bridge ? 'intact' : 'none'; this.t = 0; this.cut = 0; },
-  dropUltra() {
+  drop(tx) {
+    grid[LEVEL.bridge.row * LEVEL.w + tx] = T.AIR;
+    game.planks.push(new Plank(tx * TILE, LEVEL.bridge.row * TILE));
+    burst(tx * TILE + 8, LEVEL.bridge.row * TILE + 4, 5,
+          { colors: ['#8a5a2a', '#c9a06a', '#5a3a18'], speed: 70, grav: 260, life: 0.7, size: 2 });
+  },
+  dropUltra(paid) {
     const b = LEVEL.bridge;
-    game.items.push(new Item(b.from - 1, 11, 'ultra'));
+    const it = new Item(b.from - 1, 11, 'ultra');
+    /* Only the first one is worth anything. The safety net re-drops on the lip
+       the player is already standing on, and bridgeRun.update runs before
+       resolveItems, so it is collected the frame it spawns - scoring every
+       re-drop turned "jump in place" into 475 points a second on the board. */
+    it.noScore = !paid;
+    game.items.push(it);
   },
   update(dt) {
     const b = LEVEL.bridge;
@@ -2849,7 +2892,10 @@ const bridgeRun = {
     const p = game.player;
 
     if (this.state === 'intact') {
-      if (p.cx > b.from * TILE) {
+      /* Set off by standing on the deck, not by crossing an x line. A line can
+         be tripped in mid-air by a jump that clears the whole span, which drops
+         the bridge under nobody and strands the pickup on the far side of it. */
+      if (p.onGround && tileAt(Math.floor(p.cx / TILE), b.row) === T.BRIDGE) {
         this.state = 'falling'; this.t = 0; this.cut = 0;
         shake = 11; flash = 0.5; freeze = 0.08; Sfx.brick();
         floatText(p.cx, p.y - 28, 'THEY BLEW THE BRIDGE', '#ff8a5c');
@@ -2861,23 +2907,31 @@ const bridgeRun = {
       this.t += dt;
       const span = b.to - b.from;
       const want = Math.min(span, Math.ceil(this.t / BRIDGE_FALL * span));
-      while (this.cut < want) {
-        const tx = b.to - 1 - this.cut;           // far end first, back toward him
-        grid[b.row * LEVEL.w + tx] = T.AIR;
-        game.planks.push(new Plank(tx * TILE, b.row * TILE));
-        burst(tx * TILE + 8, b.row * TILE + 4, 5,
-              { colors: ['#8a5a2a', '#c9a06a', '#5a3a18'], speed: 70, grav: 260, life: 0.7, size: 2 });
-        this.cut++;
-      }
+      /* The front stops at his feet. It eats the deck right to left and never
+         takes the plank he is on or anything left of it, so the way back is
+         always still there and the collapse follows him out rather than racing
+         him. Walk right instead, into the part that has already gone, and that
+         is a fall he chose.
+
+         Sparing only the single tile under him was not enough: the front then
+         cut the tile he was about to step onto, so a 0.6s reaction - an
+         ordinary human beat - still cost a heart with nothing he could have
+         done. Capping the front at his column is what makes a retreat always
+         work. It cannot be abused in the other direction either, because the
+         far end goes first: there is never any deck left to run across. */
+      const standing = p.onGround ? Math.floor(p.cx / TILE) : null;
+      const onDeck = standing != null && standing >= b.from && standing < b.to;
+      const capped = onDeck ? Math.min(want, b.to - 1 - standing) : want;
+      while (this.cut < capped) this.drop(b.to - 1 - this.cut++);
       shake = Math.max(shake, 4);
-      if (this.cut >= span) { this.state = 'down'; this.dropUltra(); Sfx.pit(); }
+      if (this.cut >= span) { this.state = 'down'; this.dropUltra(true); Sfx.pit(); }
       return;
     }
 
     // down: never leave him on the near side with no way over
     if (p.onGround && p.cx < b.from * TILE && p.ultra <= 0 && !p.ultraFlight &&
         !game.items.some(i => i.kind === 'ultra' && !i.dead))
-      this.dropUltra();
+      this.dropUltra(false);
   },
 };
 
@@ -3289,7 +3343,7 @@ function resolveItems() {
       // One charge, no clock. See CFG.ultraJumpVel for why it is a leap and
       // not just a very tall hop.
       p.ultra = 1;
-      game.score += 500;
+      if (!it.noScore) game.score += 500;
       floatText(p.cx, p.y - 14, 'ULTRA POWDER', '#ffd85e');
       floatText(p.cx, p.y - 26, 'ONE BIG JUMP', '#fff');
       shake = 5; flash = 0.5; Sfx.start();
@@ -3459,6 +3513,9 @@ function update(dt) {
     (game.script || updateEscape)(dt);
     for (const h of game.hazards) h.update(dt);
     game.hazards = game.hazards.filter(h => !h.dead);
+    for (const pl of game.planks) pl.update(dt);
+    game.planks = game.planks.filter(pl => !pl.dead);
+    if (LEVEL.crowd) crowd.update(dt);
     updateEffects(dt);
     updateCamera(dt);
     return;
@@ -3869,7 +3926,10 @@ function drawSprite(art, e, { bob = 0, squash = 1, tint = null } = {}) {
 }
 
 function shadowUnder(e) {
-  const gy = groundYAt(Math.floor(e.cx / TILE));
+  // groundBelow, not groundYAt: the latter returns a row-13 fallback for an
+  // empty column, which drew a shadow in mid-air the whole way over the ravine.
+  const gy = groundBelow(e.cx, e.bottom);
+  if (gy == null) return;
   const d = gy - e.bottom;
   if (d < 0 || d > 130) return;
   const w = Math.max(3, Math.round(e.w * (1 - d / 200)));

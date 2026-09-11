@@ -49,7 +49,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 |---|---|
 | **Acharuli khachapuri** (Act 1) | 7s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
-| **Ultra white powder** (Act 1) | **One** charge, no clock. The next jump off the ground launches at `ultraJumpVel` and raises the air speed cap to `ultraAirMax` until he lands. It only exists to cross the blown bridge — see *The bridge*. |
+| **Ultra white powder** (Act 1) | **One** charge, no clock. The next jump off the ground launches at `ultraJumpVel` and raises the air speed cap to `ultraAirMax` until he lands, and `jumpCut` does not apply. It only exists to cross the blown bridge — see *The bridge*. Only the first one scores. |
 | **Hot tea** (Act 2) | Act 2's version of the same 9s invincibility. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
@@ -57,7 +57,7 @@ The second jump is a flat velocity set, not an add, so hammering it mid-rise
 cannot stack into an arbitrarily high launch — measured at 55px when spammed
 versus 119px used properly.
 
-**Jump apex is 70px single, 119px with powder.** It was 61.8px, and a block four
+**Jump apex is 70px single, 119px with powder, 122px with the ultra.** It was 61.8px, and a block four
 tiles up needs a 64px rise — so six surfaces in the level, including a `?` block
 and the first mid boss's own platform, missed by 2.2px and simply could not be
 reached.
@@ -482,6 +482,13 @@ a cordon, not a minister.
 They are pressure, not units: no controls, no collision, and they never block
 you. `LEVEL.crowd` turns them on — **both acts** have them.
 
+**Gate holders are exempt from the surge**, alongside bosses. `MidBoss` carries
+no `bossGrade` — and must not be given one, it would halve his thrown-rose stun
+and make him immune to the khachapuri one-shot — so the filter excludes
+`e.gate != null` instead: the thing that actually matters is that he *is* a
+required fight. Without this, turning the crowd on in Act 1 froze all three of
+them for 1.4s every 5s and made the act nearly free.
+
 What every other marcher carries is `LEVEL.crowdProp`: **Act 1 carries little
 red flags** on sticks, Act 2 carries roses. The prop is drawn out to the right
 of the head, and the crowd is painted right to left at 9px spacing, so a flag is
@@ -490,28 +497,59 @@ never overpainted by the neighbour standing behind it.
 
 ## The bridge (Act 1)
 
-Tiles 179–192 used to be a four-tile pit. It is now a **thirteen-tile ravine**
-spanned by a `T.BRIDGE` deck laid flush with the ground either side, so it reads
-as a road rather than a platform to climb.
+Tiles 179–192 used to be a four-tile pit. 179–194 is now a **fifteen-tile
+ravine** spanned by a `T.BRIDGE` deck laid flush with the ground either side, so
+it reads as a road rather than a platform to climb.
 
-Stepping onto it sets it off. The deck goes **from the far end back toward you**
-over 0.85s (`BRIDGE_FALL`), dropping decorative `Plank`s into the ravine — they
-are deliberately kept out of `game.hazards`, because the collapse is a thing you
-are made to watch, not a thing that hits you. 0.85s over 13 tiles is 245px/s, so
-sprinting across ahead of it is not on; walking out of it is.
+**Why fifteen and not thirteen.** Thirteen looked correct at 60fps — the powder
+double jump peaked one pixel short of the far lip. But `dt` is capped at 1/30,
+and at 30fps that same jump lands cleanly on the lip and skips the entire set
+piece. Sweeping every launch frame at 60/50/30fps:
+
+| gap | plain | powder | ultra (held) | ultra (tapped) |
+|---|---|---|---|---|
+| 13 tiles | no | **yes at 30fps** | yes | yes |
+| **15 tiles** | **no** | **no** | **yes** | **yes** |
+| 17 tiles | no | no | no | no |
+
+Fifteen is the only width where the powder fails and the ultra succeeds at every
+frame rate, and it sits two tiles clear of both edges.
+
+Stepping onto the deck sets it off — the trigger is *contact* (`p.onGround` and
+the tile under him is `T.BRIDGE`), not an x line. An x line could be tripped in
+mid-air by a jump that cleared the whole span, dropping the bridge under nobody
+and stranding the pickup behind you.
+
+The deck then goes **from the far end back toward you** over 0.9s
+(`BRIDGE_FALL`), dropping decorative `Plank`s — deliberately kept out of
+`game.hazards`, because the collapse is a thing you are made to watch, not a
+thing that hits you.
+
+**The front stops at your feet.** It never takes the plank you are standing on
+or anything to the left of it, so the way back is always still there and the
+collapse follows you out instead of racing you. Stand perfectly still and it
+halts one tile short and waits, forever. Measured: releasing forward when it
+blows and backing off survives at every reaction time from 0s to 2s. Keep
+*holding* right and you walk into the part that has already gone — that is a
+fall you chose, and it costs one heart.
+
+Sparing only the single tile underfoot was not enough: the front then ate the
+tile you were about to step onto, so a 0.6s reaction — an ordinary human beat —
+still cost a heart with nothing you could have done.
 
 Then the **ultra white powder** drops on the near lip, and it is the only way
-over. Measured, sprinting, with a full run-up:
+over. Apex is 122px; the crossing lands around tile 194.
 
-| | widest gap cleared |
-|---|---|
-| Plain jump | 7 tiles |
-| Powder double jump | 11 tiles |
-| **Ultra powder** | **crosses the 13** with a 122px rise |
+A pure vertical mega-jump was the wrong shape: to carry fifteen tiles on hang
+time alone it would have to rise fifteen tiles, which is taller than the level.
+The horizontal surge (`ultraAirMax`) is what crosses the gap; the big rise
+(`ultraJumpVel`) is what sells it. `-470` is already at the camera ceiling — the
+view only clamps 120px above his head — so any extra range has to come from the
+speed cap, not the height.
 
-A pure vertical mega-jump was the wrong shape: to carry thirteen tiles on hang
-time alone it would have to rise thirteen tiles, which is taller than the level.
-The horizontal surge is what crosses the gap; the big rise is what sells it.
+`jumpCut` is **exempt** during an ultra flight. It is the one jump the game
+requires you to make, and with the cut applied a tapped launch landed 92px short
+every time.
 
 The pipe that used to sit at 176 was moved back to 165. At 176 it was a wall one
 tile short of the ravine — you cleared it, landed on the single tile at 178 and
@@ -519,8 +557,25 @@ were already over the edge, with no ground to build up the speed the crossing
 needs.
 
 **No softlock.** While the bridge is down, if you are on the near side, on the
-ground, with no charge and no ultra powder in the level, another one drops. A
-bad jump costs a heart, never the run.
+ground, with no charge and no ultra powder in the level, another one drops.
+`respawnSpot` always resolves a ravine fall to the near span, so there is no
+far-side stranding case. A bad jump costs a heart, never the run.
+
+**The re-drop is not worth points.** `bridgeRun.update` runs before
+`resolveItems`, so a respawned pickup is collected the frame it appears on the
+lip you are already standing on — scoring every one turned "jump in place" into
+475 points a second on the leaderboard. Only the first drop pays.
+
+Two things the widened ravine broke, and how they are fixed:
+
+- `MidBoss` was the **only gate holder never leashed**. His last-hit leap
+  carries 5.3 tiles and the ledge turn is suppressed mid-leap, so he could jump
+  off the 194 lip, fall out of the world, and hand you gate 206 for free. He now
+  gets `spanAround` + `leash` like every other gate holder.
+- `shadowUnder` used `groundYAt`, which returns a row-13 fallback for an empty
+  column — it painted a shadow in mid-air the whole way across, reading as an
+  invisible floor. It uses `groundBelow` and bails on `null`. The crowd had the
+  same bug and the same fix; over Act 2's four-tile pits neither was visible.
 
 
 ## Damage order
