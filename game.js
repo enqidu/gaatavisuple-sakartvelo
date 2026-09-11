@@ -1164,8 +1164,8 @@ function burst(x, y, n, opts = {}) {
   }
 }
 
-function floatText(x, y, text, color = '#fff', s = 1) {
-  floats.push({ x, y, text, color, s, life: 0.9, max: 0.9 });
+function floatText(x, y, text, color = '#fff', s = 1, life = 0.9) {
+  floats.push({ x, y, text, color, s, life, max: life });
 }
 
 function updateEffects(dt) {
@@ -1175,7 +1175,9 @@ function updateEffects(dt) {
     p.vx *= 0.99; p.life -= dt;
   }
   particles = particles.filter(p => p.life > 0);
-  for (const f of floats) { f.y -= 16 * dt; f.life -= dt; }
+  // the slow drift is for +100s; a held line like SAXLSHIIIIIIII would walk
+  // right off the top of the buffer over two and a half seconds
+  for (const f of floats) { if (f.max <= 1.2) f.y -= 16 * dt; f.life -= dt; }
   floats = floats.filter(f => f.life > 0);
   shake = Math.max(0, shake - dt * 14);
   flash = Math.max(0, flash - dt * 3.4);
@@ -2979,7 +2981,11 @@ class Dardubala extends Entity {
             speed: 180, size: 3 });
     if (this.hp <= 0) {
       game.addCombo(p, this.cx, this.y, 3000);
-      floatText(this.cx, this.y - 18, 'SAXLSHIIIIIIII', '#ffd85e');
+      /* His last word, and the punchline of the whole act - at scale 1 for
+         0.9s it went by in a blink. Scale 2 for 2.6s, held still, and kept
+         clear of the top of the buffer. 166px wide at that scale, so it
+         fits. */
+      floatText(this.cx, this.y - 26, 'SAXLSHIIIIIIII', '#ffd85e', 2, 2.6);
       shake = 14; flash = 0.8; freeze = 0.2;
       game.teaOutro();
     } else {
@@ -3969,7 +3975,7 @@ function updateTea(dt) {
       b.foxed = true;
       burst(b.cx, b.y + 8, 22,
             { colors: ['#dde3ec', '#ffffff', '#9aa6b8'], speed: 90, grav: -20, life: .9, size: 2 });
-      floatText(b.cx, b.y - 10, '*SILVER FOX*', '#dde3ec');
+      floatText(b.cx, b.y - 10, '*WHITE FOX*', '#dde3ec');
       Sfx.deny();
     }
     if (b.y < -60) t.boss = null;
