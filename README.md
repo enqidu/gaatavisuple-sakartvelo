@@ -542,7 +542,37 @@ stomped on means asking the player to land on a moving target, which was most
 of what made Edika feel uncatchable.
 
 
+## Music
+
+Acts 1 and 2 share `assets/music.m4a`. **Act 3 is synthesised** — `LEVEL.music
+= 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
+84bpm over i–VI–III–VII: a square bass on the root, a sparse triangle line that
+leaves most of the bar empty, and a noise tick on the offbeat. The one track
+looping across three acts had worn thin by the time you reach Rustaveli, and
+this is the act that should feel like something is closing in.
+
+It rides the **same `AudioContext` as `Sfx`** (exposed as `Sfx.context`) —
+browsers cap how many a page may open, and a second one would need its own
+unlock gesture. Scheduled with 180ms lookahead against `actx.currentTime`
+rather than `setTimeout`, which drifts tens of milliseconds under load and on a
+loop this slow turns into an audible stagger.
+
+`Music.retune()` runs on every `loadLevel`. Stopping the synth is
+unconditional, so leaving act 3 always silences it — an earlier version
+returned early when the file element did not exist yet and left the synth
+playing underneath act 1. Nothing starts until the first `Music.start()`, which
+only happens on a real keypress, so `retune` can re-pick the source on later
+act changes without ever being the thing that begins audio.
+
+
 ## Act endings
+
+**Every act finishes on a flag.** Act 1 always did; acts 2 and 3 used to end
+the moment their boss died. Now beating the boss opens the final gate and hands
+play back, and the flag is the finish — so in act 3 he drinks the tea *and then*
+walks out to the flag, rather than the drink being the end of the run. Both
+paths fall through to an immediate win for any act with no `finishX`, so this
+cannot strand a level that was never given one.
 
 `LEVEL.afterLines` is an epilogue under the win title, revealed one line at a
 time (`AFTER_LEAD` 1.0s, then 0.75s each) with the restart prompt held back

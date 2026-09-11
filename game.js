@@ -460,6 +460,10 @@ const Sfx = (() => {
     notes.forEach(([f, d], i) => setTimeout(() => tone(f, d, type, gain), i * step));
 
   return {
+    // shared so the act 3 synth does not open a second AudioContext; browsers
+    // cap how many a page may have, and a second one would need its own
+    // unlock gesture
+    get context() { try { return ensure(); } catch (e) { return null; } },
     jump:  () => tone(300, 0.14, 'square', 0.045, 680),
     stomp: () => tone(220, 0.10, 'square', 0.06, 60),
     coin:  () => seq([[988, 0.06], [1319, 0.11]], 60),
@@ -486,6 +490,97 @@ const Sfx = (() => {
    browsers refuse audio until a real user gesture, and a play() call on page
    load just throws and leaves the track silently dead. */
 
+/* ---------------------------------------------------------- act 3's music
+
+   Synthesised rather than a second audio file: the one track looping across
+   three acts had worn thin by the time you reach Rustaveli, and this is the
+   act that should feel like something is closing in.
+
+   D natural minor, 84bpm, i - VI - III - VII, which is about as bleak as four
+   chords get without being funny about it. Three voices: a square bass on the
+   root, a sparse triangle line above it that leaves most of the bar empty, and
+   a noise tick on the offbeat for pulse.
+
+   Scheduled with lookahead against actx.currentTime rather than setTimeout -
+   setTimeout drifts by tens of milliseconds under load, which on a loop this
+   slow turns into an audible stagger. */
+const DarkTune = (() => {
+  const BPM = 84, SIXTEENTH = 60 / BPM / 4, LOOKAHEAD = 0.18;
+  const N = { D2: 73.42, F2: 87.31, A2: 110.00, Bb1: 58.27, C2: 65.41,
+              D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00,
+              Bb4: 466.16, C5: 523.25, D5: 587.33 };
+  // four bars of sixteenths; null is a rest
+  const BASS = [
+    N.D2,null,null,null, N.D2,null,null,null, N.A2,null,null,null, N.D2,null,null,null,
+    N.Bb1,null,null,null, N.Bb1,null,null,null, N.F2,null,null,null, N.Bb1,null,null,null,
+    N.F2,null,null,null, N.F2,null,null,null, N.C2,null,null,null, N.F2,null,null,null,
+    N.C2,null,null,null, N.C2,null,null,null, N.Bb1,null,null,null, N.A2,null,null,null,
+  ];
+  const LEAD = [
+    N.D4,null,null,N.F4, null,null,N.A4,null, null,null,null,null, N.G4,null,N.F4,null,
+    N.D4,null,null,null, N.Bb4,null,null,null, null,null,N.A4,null, null,null,null,null,
+    N.C5,null,null,N.A4, null,null,N.F4,null, null,null,null,null, N.E4,null,N.D4,null,
+    null,null,null,null, N.E4,null,N.F4,null, null,null,N.G4,null, N.A4,null,null,null,
+  ];
+
+  let actx = null, out = null, timer = null, step = 0, next = 0, on = false;
+
+  function blip(freq, t, dur, type, gain) {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(out);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function tick(t) {                       // a short noise burst for the offbeat
+    const len = Math.floor(actx.sampleRate * 0.03);
+    const buf = actx.createBuffer(1, len, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = actx.createBufferSource(); src.buffer = buf;
+    const g = actx.createGain(); g.gain.setValueAtTime(0.020, t);
+    src.connect(g).connect(out); src.start(t);
+  }
+  function schedule() {
+    while (next < actx.currentTime + LOOKAHEAD) {
+      const i = step % BASS.length;
+      if (BASS[i]) blip(BASS[i], next, SIXTEENTH * 3.4, 'square', 0.075);
+      if (LEAD[i]) blip(LEAD[i], next, SIXTEENTH * 2.2, 'triangle', 0.055);
+      if (i % 4 === 2) tick(next);
+      next += SIXTEENTH; step++;
+    }
+  }
+  return {
+    start() {
+      if (on) return;
+      try {
+        actx = Sfx.context;
+        if (!actx) return;
+        if (actx.state === 'suspended') actx.resume();
+        out = actx.createGain();
+        out.gain.value = 0.6;
+        out.connect(actx.destination);
+        step = 0; next = actx.currentTime + 0.08; on = true;
+        timer = setInterval(schedule, 25);
+        schedule();
+      } catch (e) { /* no audio device */ }
+    },
+    stop() {
+      if (!on) return;
+      on = false;
+      clearInterval(timer); timer = null;
+      try { out.gain.setTargetAtTime(0.0001, actx.currentTime, 0.05); } catch (e) {}
+      const dead = out;
+      setTimeout(() => { try { dead.disconnect(); } catch (e) {} }, 400);
+      out = null;
+    },
+    setMuted(m) { try { if (out) out.gain.value = m ? 0 : 0.6; } catch (e) {} },
+    get playing() { return on; },
+  };
+})();
+
 const Music = (() => {
   let el = null, failed = false, muted = false;
   const ensure = () => {
@@ -496,18 +591,51 @@ const Music = (() => {
     el.addEventListener('error', () => { failed = true; console.warn('music: assets/music.m4a failed to load'); });
     return el;
   };
+  // which source an act wants; LEVEL.music === 'dark' takes the synth
+  const wantsSynth = () => typeof LEVEL !== 'undefined' && LEVEL && LEVEL.music === 'dark';
+  /* Nothing plays until the first start(), which only happens on a real
+     keypress - browsers will not let audio begin without one. `armed` is what
+     lets retune() re-pick the source on later act changes without ever being
+     the thing that starts audio in the first place. */
+  let armed = false;
+
+  function pick() {
+    if (wantsSynth()) {
+      if (el) el.pause();
+      DarkTune.start(); DarkTune.setMuted(muted);
+      return;
+    }
+    DarkTune.stop();                      // unconditional: leaving act 3 silences it
+    const a = ensure();
+    if (!a) return;
+    a.muted = muted;
+    a.play().catch(e => console.warn('music: autoplay blocked —', e.name));
+  }
+
   return {
-    start() {
-      const a = ensure();
-      if (!a) return;
-      a.muted = muted;
-      a.play().catch(e => console.warn('music: autoplay blocked —', e.name));
+    start() { armed = true; pick(); },
+    /* Called on every level load. Stopping the synth is unconditional so that
+       leaving act 3 always silences it - an earlier version returned early
+       when the file element did not exist yet and left the synth running
+       under act 1. Switching to a source that is already the live one is a
+       no-op, so restarting an act does not re-cue from the top. */
+    retune() {
+      if (!armed) { DarkTune.stop(); return; }
+      const synth = wantsSynth();
+      if (synth && DarkTune.playing) return;
+      if (!synth && el && !el.paused && !DarkTune.playing) return;
+      pick();
     },
     // Independent of the effects mute: the track is the loud one, and wanting
     // it off is not the same as wanting the coin blips off.
-    toggle() { muted = !muted; if (el) el.muted = muted; return muted; },
+    toggle() {
+      muted = !muted;
+      if (el) el.muted = muted;
+      DarkTune.setMuted(muted);
+      return muted;
+    },
     get muted() { return muted; },
-    get playing() { return !!el && !el.paused; },
+    get playing() { return DarkTune.playing || (!!el && !el.paused); },
     get element() { return el; },
   };
 })();
@@ -741,8 +869,11 @@ const LEVEL_1 = {
 const LEVEL_2 = {
   w: 196, h: LEVEL_H,
   start: { x: 3, y: 11 },
-  finishX: null,            // beating the Anchor ends the act
-  finalGate: null,
+  /* Beating the Anchor is not the end of the act - it opens the way to the
+     flag, same as Aslan does in act 1. reconcileGates drops the gate off
+     game.bossBeaten, so the run out is always walkable once he is down. */
+  finishX: 193,
+  finalGate: 188,
   voidColor: '#080a12',
   subtitle: 'GAATAVISUPLE MEDIA',
   card: [
@@ -868,8 +999,10 @@ const LEVEL_2 = {
 const LEVEL_3 = {
   w: 232, h: LEVEL_H,
   start: { x: 3, y: 11 },
-  finishX: null,           // no flag: beating Dardubala is the finish
-  finalGate: null,
+  music: 'dark',           // the synth loop, not the shared track
+  // tea first, then the flag: updateTea hands play back and opens the gate
+  finishX: 227,
+  finalGate: 222,
   voidColor: '#0a0c16',
   subtitle: 'GAATAVISUPLE PARLAMENTI',
   card: [
@@ -999,6 +1132,7 @@ function enemyKind(t) {
 function loadLevel(i) {
   game.levelIndex = clamp(i, 0, LEVELS.length - 1);
   LEVEL = LEVELS[game.levelIndex];
+  if (typeof Music !== 'undefined') Music.retune();
 }
 
 let grid;
@@ -2536,7 +2670,13 @@ class Anchor extends Entity {
     burst(this.cx, this.y + this.h / 2, 30,
           { colors: ['#f4f4f4', '#ffd85e', '#2b3a5e'], speed: 190, size: 3 });
     if (this.gate != null) openGate(this.gate);
-    game.win();
+    /* Hand back to play and let him run for the flag. Falls through to an
+       immediate win for any act that has no flag, so this cannot strand a
+       level that was never given a finishX. */
+    game.bossBeaten = true;
+    if (LEVEL.finishX != null) {
+      if (LEVEL.finalGate != null) openGate(LEVEL.finalGate, 'RUN FOR THE FLAG');
+    } else game.win();
   }
 }
 
@@ -3996,7 +4136,17 @@ function updateTea(dt) {
     Sfx.coin();
   }
   if (T0 > 3.6 && T0 < 3.6 + dt) floatText(p.cx, p.y - 28, 'HE GOT AWAY', '#c9a0ff');
-  if (T0 > 5.6) game.win();
+  /* He drinks the tea, THEN walks out to the flag - the drink is the beat
+     after the fight, not the end of the act. Same handoff act 1 uses after
+     the helicopter leaves. */
+  if (T0 > 5.6) {
+    if (LEVEL.finishX != null) {
+      game.state = 'play';
+      game.tea = null; game.script = null;
+      game.bossBeaten = true;
+      if (LEVEL.finalGate != null) openGate(LEVEL.finalGate, 'RUN FOR THE FLAG');
+    } else game.win();
+  }
 }
 
 /* ---------------------------------------------------------- camera */
