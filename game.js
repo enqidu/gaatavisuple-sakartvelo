@@ -716,6 +716,7 @@ const LEVEL_1 = {
        208+ boss arena: Aslan starts diving
        226  final gate — opens when Aslan is beaten
        231  flag                                                            */
+  finalBoss: 'ASLAN',
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
@@ -801,18 +802,15 @@ const LEVEL_1 = {
   /* Powder sits ahead of every boss so a death is never a walk back in
      without it, and ahead of the tall stretches it exists to open up. */
   items: [
-    { x: 40,  y: 8,  t: 'rose' },
     { x: 50,  y: 10, t: 'powder' },      // before the first mid boss
-    { x: 70,  y: 9,  t: 'khachapuri' },
     { x: 100, y: 10, t: 'rose' },
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
     { x: 154, y: 10, t: 'powder' },      // before the second mid boss
-    { x: 158, y: 6,  t: 'rose' },
     /* Past the landing, not on it. At 195 it sat one tile off the far lip and
        handed the double jump straight back, so any later fall was re-crossed
        with powder+ultra rather than the ultra alone. */
     { x: 199, y: 9,  t: 'powder' },      // before the third mid boss
-    { x: 202, y: 9,  t: 'khachapuri' },
+    { x: 202, y: 9,  t: 'khachapuri' },  // the act's one invincibility
     { x: 212, y: 10, t: 'powder' },      // inside the arena, before Aslan
     { x: 218, y: 9,  t: 'rose' },
   ],
@@ -877,13 +875,13 @@ const LEVEL_2 = {
   voidColor: '#080a12',
   subtitle: 'GAATAVISUPLE MEDIA',
   card: [
-    { t: 0.0, s: 'THEN THEY CAME',   c: '#e8e0d0', sc: 1 },
-    { t: 0.5, s: 'FOR THE NEWSROOM', c: '#e8e0d0', sc: 1 },
-    { t: 1.8, s: '2007 NOVEMBER:',   c: '#ffd85e', sc: 2 },
+    { t: 0.0, s: 'AND NOW TIME TO FREE MEDIA', c: '#e8e0d0', sc: 1 },
+    { t: 1.4, s: '2007 NOVEMBER:',             c: '#ffd85e', sc: 2 },
   ],
   invincibleLabel: 'MATSONI',
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
+  finalBoss: 'THE ANCHOR',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -969,13 +967,10 @@ const LEVEL_2 = {
   ],
 
   items: [
-    { x: 20,  y: 8,  t: 'rose' },
-    { x: 36,  y: 8,  t: 'matsoni' },
     { x: 56,  y: 8,  t: 'powder' },
     { x: 74,  y: 8,  t: 'rose' },
     { x: 102, y: 8,  t: 'powder' },
-    { x: 120, y: 8,  t: 'rose' },
-    { x: 134, y: 7,  t: 'matsoni' },
+    { x: 134, y: 7,  t: 'matsoni' },     // the act's one invincibility
     { x: 150, y: 8,  t: 'powder' },
     { x: 156, y: 10, t: 'rose' },
   ],
@@ -999,6 +994,7 @@ const LEVEL_2 = {
 const LEVEL_3 = {
   w: 232, h: LEVEL_H,
   start: { x: 3, y: 11 },
+  finalBoss: 'EDIKA',
   music: 'dark',           // the synth loop, not the shared track
   // tea first, then the flag: updateTea hands play back and opens the gate
   finishX: 227,
@@ -1089,16 +1085,13 @@ const LEVEL_3 = {
   ],
 
   items: [
-    { x: 22,  y: 8,  t: 'rose' },
     { x: 36,  y: 10, t: 'powder' },
-    { x: 38,  y: 8,  t: 'tea' },
-    { x: 70,  y: 8,  t: 'rose' },
     { x: 89,  y: 8,  t: 'powder' },
     { x: 118, y: 8,  t: 'rose' },
     { x: 136, y: 10, t: 'powder' },
     { x: 172, y: 8,  t: 'rose' },
     { x: 190, y: 10, t: 'powder' },
-    { x: 193, y: 10, t: 'tea' },
+    { x: 193, y: 10, t: 'tea' },         // the act's one invincibility
   ],
 
   flags: [10, 50, 80, 126, 175, 200],
@@ -5498,7 +5491,9 @@ function drawGatePrompts() {
     g.fillStyle = '#8a6a10'; g.fillRect(gx - 1, y + 7, 3, 3);
 
     const guardAlive = gt.guard && !gt.guard.dead;
-    drawTextCentered(g, gt.kind === 'final' ? 'BEAT ASLAN' : 'BEAT THE GUARD',
+    // per act: this read BEAT ASLAN on the studio gate and on Parliament's
+    drawTextCentered(g, gt.kind === 'final' ? `BEAT ${LEVEL.finalBoss || 'THE BOSS'}`
+                                            : 'BEAT THE GUARD',
                      gx, y - 12, '#ffd85e', 1);
     if (gt.kind !== 'final' && guardAlive && Math.floor(game.time * 3) % 2 === 0)
       drawTextCentered(g, '<<< HE IS BACK THERE', gx, y - 22, '#7ec8f0', 1);
