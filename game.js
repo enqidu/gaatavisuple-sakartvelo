@@ -67,6 +67,10 @@ const SPRITES = {
      shrinks far enough to open a band a bullet can pass through, and 0.78 of
      22px gives 17 against the standing 28 - an 11px window. See BULLET.ride. */
   squat:  { src: 'assets/squat.png',  h: 22, hitW: 0.62, hitH: 0.78, color: '#2b3a5e' },
+  /* Airborne pose. Its hitW/hitH are never read - the collision box only ever
+     comes from 'hero' and 'squat', so swapping the art mid-jump cannot change
+     what he collides with. */
+  jump:   { src: 'assets/jump.png',   h: 30, hitW: 0.55, hitH: 0.92, color: '#2b3a5e' },
   walker: { src: 'assets/walker.png', h: 19, hitW: 0.70, hitH: 0.90, color: '#4a7a2f' },
   mid:    { src: 'assets/mid.png',    h: 30, hitW: 0.80, hitH: 0.82, color: '#2d4a7a' },
   boss:   { src: 'assets/boss.png',   h: 34, hitW: 0.55, hitH: 0.90, color: '#1a1a1a' },
@@ -86,7 +90,11 @@ const SPRITES = {
   l3bomb:  { src: 'assets/l3_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
              key: { minHolePct: Infinity } },
   l3dard:  { src: 'assets/l3_dardubala.png', h: 40, hitW: 0.55, hitH: 0.90, color: '#c03030' },
-  l3foxrun:{ src: 'assets/l3_fox_run.png',   h: 26, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
+  /* 28, not 26, and the art itself now carries a baked dark outline plus a
+     contrast lift. The extraction had eaten its outline - the checkerboard's
+     dark grey and the fox's own were the same value - and next to the sitting
+     pose it read as a pale flat slab rather than the same animal. */
+  l3foxrun:{ src: 'assets/l3_fox_run.png',   h: 28, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
   l3foxsit:{ src: 'assets/l3_fox_sit.png',   h: 30, hitW: 0.60, hitH: 0.85, color: '#dde3ec' },
   /* Act 2, the television company. Both backdrops are already dark interiors,
      so the haze is gentle - NIGHT_HAZE on top of them turned the screens to
@@ -774,10 +782,23 @@ const LEVEL_2 = {
     { x: 133, y: 8,  w: 3, t: T.PLATFORM },
 
     { x: 148, y: 10, w: 3, t: T.PLATFORM },
-    // the studio floor: a low riser he paces, reachable from either side
-    { x: 164, y: 11, w: 4, t: T.PLATFORM },
-    { x: 168, y: 10, w: 12, t: T.PLATFORM },
-    { x: 180, y: 11, w: 4, t: T.PLATFORM },
+    /* The studio is VERTICAL, and deliberately not act 3's arena.
+
+       Parliament is a symmetric three-tier staircase you climb to reach the
+       man standing on top of it, and act 2 had been built as the same shape
+       with different art: low riser, wide middle, low riser. Here the Anchor
+       owns the FLOOR and never leaves it - he ignores one-way tiles like every
+       other enemy - while the desk and the lighting gantries above are yours.
+       One camera is down on his floor, in his fire; the other two are up in
+       the rigging. So the fight is a climb and two descents rather than a
+       staircase.
+
+       Heights are chosen so the route is forced: a 69px jump reaches y=139
+       from the floor, which clears the desk at 176 but NOT gantry A at 128.
+       You have to go floor -> desk -> gantry. */
+    { x: 170, y: 11, w: 5, t: T.PLATFORM },   // the news desk
+    { x: 176, y: 9,  w: 4, t: T.PLATFORM },   // lighting gantry, low
+    { x: 181, y: 7,  w: 4, t: T.PLATFORM },   // lighting gantry, high
   ],
 
   pipes: [
@@ -803,9 +824,11 @@ const LEVEL_2 = {
     { t: 'l2girl2', x: 102 }, { t: 'l2girl', x: 110 },
     { t: 'l2man',   x: 120 }, { t: 'l2girl2', x: 128 },
     { t: 'l2girl',  x: 146 }, { t: 'l2man',  x: 154 },
-    // the three feeds. Spread across the studio so none can be reached
-    // without crossing his fire.
-    { t: 'l2camera', x: 165 }, { t: 'l2camera', x: 178 }, { t: 'l2camera', x: 188 },
+    /* One feed per level of the room: his floor, the desk, the high gantry.
+       Each is a different traversal problem, which is the point of the space. */
+    { t: 'l2camera', x: 159 },    // on the floor, in his fire
+    { t: 'l2camera', x: 172 },    // on the news desk
+    { t: 'l2camera', x: 182 },    // up in the rigging
     { t: 'l2anchor', x: 174 },
   ],
 
@@ -2325,7 +2348,9 @@ class StudioCamera extends Entity {
     this.t += dt;
     if (this.settled) return;
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    // oneWay TRUE, unlike every other enemy: a camera is set down on the
+    // gantry it is meant to film from, and must not drop through it
+    moveAndCollide(this, dt, { oneWay: true });
     if (this.onGround) { this.settled = true; this.vx = 0; this.vy = 0; }
   }
   onStomp(p) { p.vy = CFG.stompBounce; this.smash(p); }
@@ -2499,7 +2524,7 @@ class PressGirl  extends Journalist { constructor(tx) { super(tx, 'l2girl',  'hi
 class PressGirl2 extends Journalist { constructor(tx) { super(tx, 'l2girl2', 'charge'); } }
 class PressMan   extends Journalist { constructor(tx) { super(tx, 'l2man',   'low');    } }
 
-const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
+const BOMBER = { hp: 3, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
                  blastP: 26,       // ...and the smaller one that catches YOU
                  fuse: 2.9, puntFuse: 1.15, puntVel: 245, flee: 38 };
@@ -3980,6 +4005,11 @@ function resolveEnemies(dt) {
     // Khachapuri: touching anything destroys it. Bosses are exempt — they are
     // only ever damaged by a stomp in their own vulnerable window.
     if (p.invincible > 0 && !isBoss) {
+      /* Anything with its own death routine runs it rather than being
+         silently flagged dead. A studio camera has to tell the Anchor its
+         feed is gone; killing it this way left his health bar reading four
+         with every camera already smashed. */
+      if (e.smash) { e.smash(p); continue; }
       e.hp = 0; e.dead = true;
       game.addCombo(p, e.cx, e.y, 400);
       burst(e.cx, e.y + e.h / 2, 20, { colors: ['#ffd85e', '#ff5ec4', '#fff'], speed: 150, size: 3 });
@@ -5184,12 +5214,20 @@ function drawEntities() {
     const expiring = inv && p.invincible < 1.6;   // flicker out as it runs down
     const tint = inv && (!expiring || Math.floor(p.invincible * 12) % 2 === 0)
       ? INV_TINTS[Math.floor(game.time * 14) % INV_TINTS.length] : null;
-    const art = p.crouching ? ART.squat : ART.hero;
-    drawSprite(art, p, { squash: p.crouching ? 1 : sq, tint });
+    const airborne = !p.onGround && !p.crouching;
+    const art = p.crouching ? ART.squat : airborne ? ART.jump : ART.hero;
+    // the jump art is a pose, not a stretch: squashing it too reads as rubber
+    drawSprite(art, p, { squash: (p.crouching || airborne) ? 1 : sq, tint });
 
     const dw = Math.round(art.w / sq), dh = Math.round(art.h * sq);
-    drawMiniRose(p.face > 0 ? p.cx + dw * 0.26 : p.cx - dw * 0.26 - 4,
-                 p.bottom - dh * 0.54);
+    /* The rose is an overlay, not part of any of the three poses, so it has to
+       be put back in the right hand for each of them. The jump pose throws a
+       fist up and forward, so it rides higher and further out than the
+       standing one - otherwise it floats by his hip while his arm is over his
+       head. */
+    drawMiniRose(p.face > 0 ? p.cx + dw * (airborne ? 0.30 : 0.26)
+                            : p.cx - dw * (airborne ? 0.30 : 0.26) - 4,
+                 p.bottom - dh * (airborne ? 0.76 : 0.54));
 
     // Hearts orbiting his head while he is stuck staring.
     if (p.charmed > 0)

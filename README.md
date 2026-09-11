@@ -51,6 +51,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
 | **Ultra white powder** (Act 1) | **One** charge, no clock. The next jump off the ground launches at `ultraJumpVel` and raises the air speed cap to `ultraAirMax` until he lands, and `jumpCut` does not apply. It only exists to cross the blown bridge — see *The bridge*. Only the first one scores. |
 | **Hot tea** (Act 3) | Act 2's version of the same 9s invincibility. |
+| **Jump pose** | `jump.png` is drawn whenever he is airborne and not crouching. Its `hitW`/`hitH` are never read — the collision box only ever comes from `hero` and `squat` — so swapping the art mid-jump cannot change what he collides with. The rose is an overlay rather than part of any pose, so it is repositioned per pose; the jump throws a fist up and forward, so it rides higher and further out or it floats by his hip while his arm is over his head. |
 | **Matsoni** (Act 2) | Act 2's invincibility. A clay bowl, deliberately not the tea cup — each act's pickup should be recognisable from its silhouette alone. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
@@ -504,6 +505,19 @@ Each telegraphs its own lane at the height it will arrive at, and the charger
 gets an arrow instead, because there is no lane — she *is* the projectile.
 
 ### The Anchor
+
+The arena is **vertical**, and deliberately not Act 3's. Parliament is a
+symmetric three-tier staircase (`196+6@r11 / 200+14@r9 / 214+6@r11`) and this
+had been built as the same shape with different art. Now the Anchor owns the
+floor and never leaves it — he ignores one-way tiles like every other enemy —
+while the news desk and the two lighting gantries above are yours. One camera
+is down on his floor in his fire; the other two are up in the rigging, so the
+fight is a climb and two descents rather than a staircase.
+
+Heights are chosen so the climb is real: a 69px jump reaches y=139 from the
+floor, which clears the desk at 176 but not the gantries. Verified hop by hop —
+floor→desk lands, desk→low gantry lands, low→high lands, and floor→gantry
+fails back to the floor.
 
 **Deliberately not another timing window.** He is never stompable while he is
 broadcasting: three cameras cover the studio, and while any tally light is lit,
