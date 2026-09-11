@@ -616,6 +616,35 @@ only happens on a real keypress, so `retune` can re-pick the source on later
 act changes without ever being the thing that begins audio.
 
 
+## Difficulty
+
+`D` on the title screen, remembered in `localStorage`. It only works there —
+flipping it mid-run would add or remove pickups from a level already in
+progress.
+
+**Easy** is the game as tuned. **Hard** halves what keeps you alive and touches
+nothing else: no change to enemy counts, boss patterns or timings.
+
+| act | roses | invincibility | powder |
+|---|---|---|---|
+| 1 | 3 → 1 | 1 → 0 | 5 → 5 |
+| 2 | 3 → 1 | 1 → 0 | 3 → 3 |
+| 3 | 6 → 3 | 1 → 0 | 4 → 4 |
+
+`Math.floor(n / 2)`, and the ones that go are the **earliest** — what survives
+is whatever sits closest to a boss, where a heart is worth most. On hard that
+leaves act 1 with the rose at 218 inside Aslan's arena, and act 3 with both
+arena roses. With one invincibility per act, floor takes it to zero; that is
+the intent, not an accident of rounding.
+
+**Powders are never filtered.** They are traversal rather than power, and the
+act 1 bridge cannot be crossed without the ultra — halving them would make the
+level impossible, not hard.
+
+The filter is deterministic, so a level plays the same on every attempt rather
+than being a different lottery each time.
+
+
 ## Act endings
 
 **Every act finishes on a flag.** Act 1 always did; acts 2 and 3 used to end

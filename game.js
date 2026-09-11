@@ -3680,6 +3680,50 @@ class Item extends Entity {
 
 const ENTRY_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ.- ';
 
+/* ---------------------------------------------------------- difficulty
+
+   Easy is the game as tuned; hard halves the pickups that keep you alive and
+   leaves everything else - enemy counts, boss patterns, timings - exactly as
+   it is. Powders are never touched: they are traversal, not power, and the
+   act 1 bridge is impossible without the ultra.
+
+   `Math.floor(n / 2)`, and the ones that go are the EARLIEST. What survives is
+   whatever sits closest to a boss, which is where a heart is worth most. With
+   one invincibility per act, floor takes it to zero - that is the intent, not
+   an accident of rounding. */
+const HEALING = new Set(['rose']);
+const INVINCIBLE = new Set(['khachapuri', 'matsoni', 'tea']);
+
+const Difficulty = {
+  KEY: 'mishamode.difficulty.v1',
+  level: 'easy',
+  load() {
+    try {
+      const v = localStorage.getItem(this.KEY);
+      if (v === 'easy' || v === 'hard') this.level = v;
+    } catch (e) { /* storage unavailable - stay on easy */ }
+    return this.level;
+  },
+  set(v) {
+    this.level = v;
+    try { localStorage.setItem(this.KEY, v); } catch (e) { /* not persisted */ }
+  },
+  toggle() { this.set(this.level === 'easy' ? 'hard' : 'easy'); return this.level; },
+  get hard() { return this.level === 'hard'; },
+
+  /* Deterministic: the same pickups vanish every run, so a level is a level
+     rather than a different lottery each attempt. */
+  filterItems(items) {
+    if (!this.hard) return items;
+    const drop = new Set();
+    for (const group of [HEALING, INVINCIBLE]) {
+      const idx = items.map((it, i) => group.has(it.t) ? i : -1).filter(i => i >= 0);
+      for (let k = 0; k < idx.length - Math.floor(idx.length / 2); k++) drop.add(idx[k]);
+    }
+    return items.filter((_it, i) => !drop.has(i));
+  },
+};
+
 const Scores = {
   KEY: 'mishamode.scores.v1',
   MAX: 5,
@@ -4006,7 +4050,7 @@ function reset(toTitle = false, opts = {}) {
   game.coins = [];
   for (const r of LEVEL.coinRuns)
     for (let i = 0; i < r.n; i++) game.coins.push(new Coin(r.x + i, r.y));
-  game.items = LEVEL.items.map(i => new Item(i.x, i.y, i.t));
+  game.items = Difficulty.filterItems(LEVEL.items).map(i => new Item(i.x, i.y, i.t));
   game.flags = LEVEL.flags.map(tx => new LevelFlag(tx));
   game.charmers = LEVEL.charmers.map(tx => new Admirer(tx));
   game.gates = [
@@ -5818,9 +5862,15 @@ function drawTitle() {
     return;
   }
   if (Math.floor(game.time * 2) % 2 === 0)
-    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 132, '#fff', 1);
-  drawTextCentered(g, 'ARROWS MOVE  DOWN DUCK  SHIFT RUN  X ROSE', VIEW_W / 2, 150, '#8890a4', 1);
-  drawTextCentered(g, 'DUCK+JUMP DROPS THROUGH A PLATFORM', VIEW_W / 2, 162, '#8890a4', 1);
+    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 128, '#fff', 1);
+  const hard = Difficulty.hard;
+  drawTextCentered(g, `D  DIFFICULTY: ${hard ? 'HARD' : 'EASY'}`, VIEW_W / 2, 142,
+                   hard ? '#ff8a5c' : '#7ae07a', 1);
+  // one slot, two uses: the platform hint matters on easy, the warning on hard
+  drawTextCentered(g, hard ? 'HALF THE ROSES, NO INVINCIBILITY'
+                           : 'DUCK+JUMP DROPS THROUGH A PLATFORM',
+                   VIEW_W / 2, 152, '#8890a4', 1);
+  drawTextCentered(g, 'ARROWS MOVE  DOWN DUCK  SHIFT RUN  X ROSE', VIEW_W / 2, 164, '#8890a4', 1);
 }
 
 function drawEntry() {
@@ -5999,6 +6049,9 @@ function frame(now) {
   if (Input.justDown('KeyN')) Sfx.toggle();
   if (Input.justDown('KeyC')) crt = !crt;
   if (Input.justDown('KeyB')) debug = !debug;
+  /* Only from the title: flipping it mid-run would add or remove pickups from
+     a level already in progress. */
+  if (Input.justDown('KeyD') && game.state === 'title') { Difficulty.toggle(); Sfx.coin(); }
 
   update(dt);
   render();
@@ -6010,6 +6063,7 @@ function frame(now) {
   display.width = VIEW_W * SCALE;
   display.height = VIEW_H * SCALE;
   fitCanvas();
+  Difficulty.load();
   await loadAll();
   /* Every act, each against its own grid.
 
