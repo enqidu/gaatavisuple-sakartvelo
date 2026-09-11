@@ -903,6 +903,7 @@ const LEVEL_1 = {
     { x: 50,  y: 10, t: 'powder' },      // before the first mid boss
     { x: 100, y: 10, t: 'rose' },
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
+    { x: 150, y: 9,  t: 'rose' },
     { x: 154, y: 10, t: 'powder' },      // before the second mid boss
     /* Past the landing, not on it. At 195 it sat one tile off the far lip and
        handed the double jump straight back, so any later fall was re-crossed
@@ -1068,6 +1069,7 @@ const LEVEL_2 = {
     { x: 56,  y: 8,  t: 'powder' },
     { x: 74,  y: 8,  t: 'rose' },
     { x: 102, y: 8,  t: 'powder' },
+    { x: 120, y: 8,  t: 'rose' },
     { x: 134, y: 7,  t: 'matsoni' },     // the act's one invincibility
     { x: 150, y: 8,  t: 'powder' },
     { x: 156, y: 10, t: 'rose' },
@@ -1184,11 +1186,20 @@ const LEVEL_3 = {
   items: [
     { x: 36,  y: 10, t: 'powder' },
     { x: 89,  y: 8,  t: 'powder' },
+    { x: 66,  y: 9,  t: 'rose' },
     { x: 118, y: 8,  t: 'rose' },
     { x: 136, y: 10, t: 'powder' },
+    { x: 164, y: 9,  t: 'rose' },
     { x: 172, y: 8,  t: 'rose' },
     { x: 190, y: 10, t: 'powder' },
-    { x: 193, y: 10, t: 'tea' },         // the act's one invincibility
+    /* Moved out of the arena. At 193 it was inside it, so the fight opened
+       with nine seconds of invincibility and the first two hits were free. */
+    { x: 140, y: 9,  t: 'tea' },         // the act's one invincibility
+    /* Two inside the arena. Edika is four hits with two forms and a decoy,
+       and arriving on three hearts with nothing to top up on made a single
+       mistake early cost the whole attempt. */
+    { x: 197, y: 10, t: 'rose' },
+    { x: 216, y: 10, t: 'rose' },
   ],
 
   flags: [10, 50, 80, 126, 175, 200],
@@ -2336,7 +2347,12 @@ class Svani extends Entity {
    the stomp contract. */
 class Shockwave {
   constructor(x, y, dir, color) {
-    this.x = x; this.y = y - 10; this.w = 8; this.h = 10;
+    /* The box used to be 10px tall while only its bottom 6px were ever drawn,
+       so four pixels of it were invisible and a wave could hit you with clear
+       air between you and anything on screen. The box is now the drawn part,
+       and the drawing overhangs it by a pixel, so if anything it reads as
+       slightly bigger than it hits. */
+    this.x = x; this.y = y - 6; this.w = 8; this.h = 6;
     this.dir = dir; this.color = color; this.life = 2.2; this.dead = false; this.t = 0;
   }
   get cx() { return this.x + this.w / 2; }
@@ -2355,10 +2371,12 @@ class Shockwave {
   draw() {
     const x = Math.round(this.x), y = Math.round(this.y);
     const k = Math.floor(this.t * 14) % 2;
+    g.fillStyle = 'rgba(0,0,0,.45)';                  // reads on a pale floor too
+    g.fillRect(x - 1, y - 2 + k, this.w + 2, 9 - k);
     g.fillStyle = this.color;
-    g.fillRect(x, y + 4 + k, this.w, 6 - k);
+    g.fillRect(x, y - 1 + k, this.w, 7 - k);
     g.fillStyle = '#fff';
-    g.fillRect(x + 1, y + 5 + k, this.w - 2, 1);
+    g.fillRect(x + 1, y + k, this.w - 2, 1);
   }
 }
 
@@ -2923,14 +2941,27 @@ class DecoyFox extends Entity {
   constructor(x, y, dir) {
     super(x, y, 14, 12);
     this.dir = dir; this.turnCd = 0; this.t = rand(0, 3); this.phase = 'prowl'; this.phaseT = 0;
+    this.grace = DARD.grace;
   }
   get bossGrade() { return true; }
+  /* The real Edika got a grace after every hit; this one never did, and it is
+     spawned a couple of tiles from a player who has just landed a stomp and is
+     still standing there. So the second fox was the one killing on sight. */
+  get harmless() { return this.grace > 0; }
   update(dt) {
     this.t += dt; this.phaseT += dt;
+    this.grace = Math.max(0, (this.grace ?? 0) - dt);
     this.turnCd = Math.max(0, this.turnCd - dt);
     this.hitWall = false;
     const p = game.player;
     const d = p.cx - this.cx;
+    if (this.grace > 0) {                 // hold still until it is fair to move
+      this.vx = 0;
+      this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+      moveAndCollide(this, dt, { oneWay: false });
+      this.face = this.dir;
+      return;
+    }
     if (Math.abs(d) > 12) this.dir = Math.sign(d);
     this.vx = this.dir * DARD.foxRun * 0.85;
     if (this.onGround && Math.random() < dt * 2.0) this.vy = -180;
@@ -2980,7 +3011,7 @@ const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 2.2, quipE
                /* Harmless for this long after every hit. Long enough to hop
                   off and reposition before a fox that was a man a moment ago
                   starts hunting. */
-               grace: 0.9 };
+               grace: 1.5 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -3084,7 +3115,8 @@ class Dardubala extends Entity {
               this.chained = false;
               this.phase = 'pant'; this.phaseT = 0;
               const fy = groundBelow(this.cx, this.bottom + 2) ?? (13 * TILE);
-              for (const d of [-1, 1]) game.hazards.push(new Shockwave(this.cx, fy, d, '#e8eef8'));
+              // was #e8eef8: a white wave on pale stone, effectively invisible
+              for (const d of [-1, 1]) game.hazards.push(new Shockwave(this.cx, fy, d, '#7ec8f0'));
             }
           }
           break;
@@ -3217,9 +3249,13 @@ class Dardubala extends Entity {
        zero and drove his health bar negative. */
     if (this.hp <= 0 || this.scriptedOut) return;
     this.hp--; this.hitFlash = 0.4;
-    // he also stands still through it, so the new form does not close the
-    // gap while it is still untouchable
-    this.grace = DARD.grace; this.vx = 0;
+    /* Knocked away from you rather than frozen in place. Standing still still
+       left the new form in the same pixel you were, so the moment grace ran
+       out it was already touching you - which is what "kills instantly" meant.
+       Now the transform physically makes room. */
+    this.grace = DARD.grace;
+    this.vx = (Math.sign(this.cx - (p ? p.cx : this.cx)) || 1) * 120;
+    if (this.onGround) this.vy = -150;
     this.phase = this.isFox ? 'prowl' : 'pace'; this.phaseT = 0;
     shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
     burst(this.cx, this.y + this.h / 2, 26,
@@ -3240,7 +3276,10 @@ class Dardubala extends Entity {
                 this.isFox ? '#dde3ec' : '#c9a0ff');
       if (this.hp === 1 && !this.split) {      // last stage: a second fox
         this.split = true;
-        const dec = new DecoyFox(this.cx + (this.face > 0 ? -26 : 26), this.y, -this.face || 1);
+        // on the far side of Edika FROM the player, so it cannot appear in
+        // the space he is standing in
+        const away = Math.sign(this.cx - p.cx) || 1;
+        const dec = new DecoyFox(this.cx + away * 40, this.y, -away);
         dec.home = this.home;
         game.enemies.push(dec);
         floatText(this.cx, this.y - 30, 'TWO OF THEM', '#ff5ec4');
