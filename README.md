@@ -414,6 +414,27 @@ Firebase/Supabase, or a small serverless function — plus some abuse handling,
 since a client-side score can be posted by anyone.
 
 
+## Act cards
+
+Each act opens on a typed card over its own backdrop — the act is loaded first,
+so the text sits on the scenery you are about to play. `LEVEL.card` supplies the
+lines; an act without one falls straight through to play.
+
+| Act | |
+|---|---|
+| 1 | ADJARA WAS USURPED / BY SEPARATISTS / **2004:** |
+| 2 | BUT EVERYTHING STARTED / WITH ROSES.... / **2003 NOVEMBER:** |
+
+Prose at scale 1, the date alone at scale 2. The font is fixed-width uppercase
+5x7 on a 320px screen, so lines have to be broken by hand — "BUT EVERYTHING
+STARTED WITH ROSES...." is 234px at scale 2 and does not fit with any margin.
+`validateLevel` measures every card line and warns if one is wider than the
+screen.
+
+This used to be one global `CARD_LINES` tuned to Act 2, with the act number
+hard-coded into the footer.
+
+
 ## Act 2
 
 Opens on a typed card — "BUT EVERYTHING STARTED / WITH ROSES...." then

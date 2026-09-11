@@ -546,6 +546,11 @@ const LEVEL_1 = {
   backdrops: [{ art: 'bg', fromX: 0, par: 0.34, tile: true }],
   subtitle: 'GAATAVISUPLE ACHARA',
   invincibleLabel: 'ACHARULI',
+  card: [
+    { t: 0.0, s: 'ADJARA WAS USURPED', c: '#e8e0d0', sc: 1 },
+    { t: 0.5, s: 'BY SEPARATISTS',     c: '#e8e0d0', sc: 1 },
+    { t: 1.8, s: '2004:',              c: '#ffd85e', sc: 2 },
+  ],
   winLines: [['ASLANI GAIQTSA', '#ffd85e'], ['ACHARA TAVISUPALIA!', '#7ae07a']],
   start: { x: 3, y: 11 },
   finishX: 231,
@@ -708,6 +713,11 @@ const LEVEL_2 = {
   finalGate: null,
   voidColor: '#0a0c16',
   subtitle: 'GAATAVISUPLE PARLAMENTI',
+  card: [
+    { t: 0.0, s: 'BUT EVERYTHING STARTED', c: '#e8e0d0', sc: 1 },
+    { t: 0.5, s: 'WITH ROSES....',         c: '#e8e0d0', sc: 1 },
+    { t: 1.8, s: '2003 NOVEMBER:',         c: '#ffd85e', sc: 2 },
+  ],
   invincibleLabel: 'HOT TEA',
   crowd: true,             // act 2 only: the street turns out behind you
   winLines: [['REVOLUTSIA!', '#7ae07a']],
@@ -884,6 +894,11 @@ function validateLevel() {
     if (e.gate != null && nearPit(e.gate, 1)) warn.push(`gate at ${e.gate} is on a pit edge`);
   if (LEVEL.finalGate != null && nearPit(LEVEL.finalGate, 1))
     warn.push(`final gate at ${LEVEL.finalGate} is on a pit edge`);
+
+  for (const L of (LEVEL.card || [])) {
+    const w = textWidth(L.s, L.sc);
+    if (w > VIEW_W - 16) warn.push(`card line "${L.s}" is ${w}px, wider than the screen`);
+  }
 
   if (warn.length) console.warn('level placement:\n  ' + warn.join('\n  '));
   return warn;
@@ -3042,18 +3057,23 @@ game.win = function () {
 
 /* ---------------------------------------------------------- act card
 
-   Loads the next level first so the card sits over that level's own backdrop,
-   then types its lines out. Uppercase-only 5x7 font and a 320px screen, so
-   the first line has to break in two: "BUT EVERYTHING STARTED WITH ROSES...."
-   is 234px at scale 2 on one line, which does not fit with any margin. */
-const CARD_LINES = [
-  { t: 0.0, s: 'BUT EVERYTHING STARTED', c: '#e8e0d0', sc: 1 },
-  { t: 0.5, s: 'WITH ROSES....',         c: '#e8e0d0', sc: 1 },
-  { t: 1.8, s: '2003 NOVEMBER:',         c: '#ffd85e', sc: 2 },
-];
+   Loads the act first so the card sits over that act's own backdrop, then
+   types its lines out. Each act supplies its own `card` - it used to be one
+   global tuned to act 2, with the act number hard-coded into the footer.
+
+   Uppercase-only 5x7 font on a 320px screen, so the prose breaks across two
+   lines and the date lands alone at scale 2. "BUT EVERYTHING STARTED WITH
+   ROSES...." is 234px at scale 2 on one line, which does not fit with any
+   margin - see cardFits() in validateLevel. */
+function cardOf() { return LEVEL.card || []; }
+function cardEnd() {
+  const c = cardOf();
+  return c.length ? c[c.length - 1].t + 1.2 : 0;
+}
 
 function startCard(i) {
   reset(false, { levelIndex: i, keepScore: true });
+  if (!LEVEL.card) { game.state = 'play'; return; }   // an act without one just starts
   game.state = 'card';
   game.card = { t: 0 };
 }
@@ -3061,8 +3081,7 @@ function startCard(i) {
 function updateCard(dt) {
   game.card.t += dt;
   game.time += dt;
-  const done = game.card.t > CARD_LINES[CARD_LINES.length - 1].t + 1.2;
-  if (done && (Input.jumpTap() || Input.justDown('Enter'))) {
+  if (game.card.t > cardEnd() && (Input.jumpTap() || Input.justDown('Enter'))) {
     game.card = null;
     game.state = 'play';
     Sfx.start();
@@ -3074,16 +3093,17 @@ function drawCard() {
   g.fillStyle = 'rgba(6,8,16,.78)';
   g.fillRect(0, 0, VIEW_W, VIEW_H);
   let y = 52;
-  for (const L of CARD_LINES) {
+  for (const L of cardOf()) {
     if (t < L.t) { y += L.sc === 2 ? 30 : 14; continue; }
     // typewriter: one character every 45ms
     const n = Math.min(L.s.length, Math.floor((t - L.t) / 0.045));
     drawTextCentered(g, L.s.slice(0, n), VIEW_W / 2, y, L.c, L.sc);
     y += L.sc === 2 ? 30 : 14;
   }
-  const done = t > CARD_LINES[CARD_LINES.length - 1].t + 1.2;
-  if (t > 2.6) drawTextCentered(g, `ACT 2 - ${LEVEL.subtitle}`, VIEW_W / 2, 124, '#7ec8f0', 1);
-  if (done && Math.floor(t * 2) % 2 === 0)
+  if (t > 2.6)
+    drawTextCentered(g, `ACT ${game.levelIndex + 1} - ${LEVEL.subtitle}`,
+                     VIEW_W / 2, 124, '#7ec8f0', 1);
+  if (t > cardEnd() && Math.floor(t * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE', VIEW_W / 2, 150, '#8890a4', 1);
 }
 
@@ -3499,9 +3519,12 @@ function update(dt) {
     game.time += dt;
     updateEffects(dt);
     if (Input.jumpTap() || Input.justDown('Enter')) {
-      game.state = 'play';
       Sfx.start();
       Music.start();          // this keypress is the gesture that unblocks audio
+      // act 1 has a card of its own now; startCard falls through to play for
+      // any act that does not
+      if (LEVELS[0].card) startCard(0);
+      else game.state = 'play';
     }
     return;
   }
