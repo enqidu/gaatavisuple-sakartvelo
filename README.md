@@ -49,6 +49,7 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 |---|---|
 | **Acharuli khachapuri** (Act 1) | 7s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
+| **Ultra white powder** (Act 1) | **One** charge, no clock. The next jump off the ground launches at `ultraJumpVel` and raises the air speed cap to `ultraAirMax` until he lands. It only exists to cross the blown bridge — see *The bridge*. |
 | **Hot tea** (Act 2) | Act 2's version of the same 9s invincibility. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
@@ -200,10 +201,21 @@ for a run-up.
 
 ## Flags
 
-Poles along the route fly the **old republic flag** (dark crimson, black-over-
-white canton — 1918–1921 and 1990–2004). Touching one changes it to the
-**five-cross flag** adopted in 2004, worth 300. `game.flagsConverted` counts
-them.
+Touching a pole changes it to the **five-cross flag** adopted in 2004, worth
+300. `game.flagsConverted` counts them. What it changes *from* is per-act, via
+`LEVEL.oldFlag`:
+
+- **Act 1** (`oldFlag: 'achara'`) flies **Adjara's own flag** — navy field,
+  seven yellow seven-pointed stars in the upper hoist, three over four.
+- **Act 2** (no `oldFlag`) flies the **old republic flag** (dark crimson,
+  black-over-white canton — 1918–1921 and 1990–2004).
+
+The Achara flag is hand-drawn rather than sampled from `assets/flag-achara.png`.
+The stars are 0.6% of that image's pixels, so area-averaging it down to the
+15×10 the flags are drawn at makes them vanish entirely and it comes out a plain
+navy rectangle. The star centres and the 3-over-4 lattice are taken from the
+real thing; only the spacing is opened from 1px to 2px, because at 1px the two
+rows merge into a pair of solid bars.
 
 ## The distraction
 
@@ -394,9 +406,9 @@ its 525 and skate the edge, so it runs at 0.15 and reads as planted.
 |---|---|
 | **Guard** | Cordon, not a Goomba. Walking into one breaks the nearby line into a short charge. One stomp. |
 | **Sleepy** | Asleep on his feet. Noise only accrues while you are on the ground AND moving near him, so the answer is to jump the whole approach. Asleep he is harmless and stompable; awake he cannot be touched. A hit wakes him. |
-| **Svani** | Five hits across three stages. Stage 2 adds a floor slam whose wave you jump; stage 3 chains stun straight back into wind-up. He hunts, so backing away does not stall the fight. |
+| **Svani Edika** | Five hits across three stages. Stage 2 adds a floor slam whose wave you jump; stage 3 chains stun straight back into wind-up. He hunts, so backing away does not stall the fight. |
 | **Bomber** | Armoured — stomping him does nothing. His own bombs are the only thing that hurt him, and you punt a live one back by stomping it. |
-| **Dardubala** | Four hits, and he changes form with every one: **man → fox → man → two foxes.** As a man he holds the top step and slams, and the waves run along the **floor**, so the fight is about climbing to him during the window after a slam. As a fox he is fast, charges and leaps, and the window is after a pounce. On the last hit a second fox joins him — only one is really him; the other pops when stomped. Never chases, never dives: deliberately not the Act 1 boss reskinned. Emits deadpan stage directions instead of dialogue, and goes out shouting SAXLSHIIIIIIII. |
+| **Dardubala** | Four hits, and he changes form with every one: **man → fox → man → two foxes.** As a man he holds the top step and slams, and the waves run along the **floor**, so the fight is about climbing to him during the window after a slam. As a fox he is fast, charges and leaps, and the window is after a pounce — drawn from real art, **running** (`l2_fox_run.png`) while he hunts and **sitting** (`l2_fox_sit.png`, gold-tinted) during the open window, so the beat you can hit is readable at a glance. On the last hit a second fox joins him — only one is really him; the other pops when stomped. Never chases, never dives: deliberately not the Act 1 boss reskinned. Emits deadpan stage directions instead of dialogue, and goes out shouting SAXLSHIIIIIIII. Slams also shake masonry down onto **his own step**, because once you had climbed up there nothing could reach you. The falling chunks paint their landing spot before they arrive — the first pass dropped four of them from 46px up, which is 0.3s of warning and a coin flip rather than a dodge, and a pilot that used to survive the whole fight died in six seconds without landing a hit. |
 
 Every one of those was found broken by testing and fixed: Sleepy's hearing
 range equalled the jump reach so the intended approach was impossible; Svani
@@ -460,7 +472,7 @@ charge, or buy a safe approach. Stun is handled centrally in the update loop
 rather than per class, so a stunned enemy is frozen, harmless and stompable
 without any boss knowing the mechanic exists.
 
-## The crowd (Act 2)
+## The crowd
 
 Every flagpole you convert brings two more people out. They trail a few tiles
 behind, and once four have joined they **surge** on their own every five
@@ -468,7 +480,47 @@ seconds, flooring any guard near them. Bosses are immune — the street can shif
 a cordon, not a minister.
 
 They are pressure, not units: no controls, no collision, and they never block
-you. `LEVEL.crowd` gates them to Act 2.
+you. `LEVEL.crowd` turns them on — **both acts** have them.
+
+What every other marcher carries is `LEVEL.crowdProp`: **Act 1 carries little
+red flags** on sticks, Act 2 carries roses. The prop is drawn out to the right
+of the head, and the crowd is painted right to left at 9px spacing, so a flag is
+never overpainted by the neighbour standing behind it.
+
+
+## The bridge (Act 1)
+
+Tiles 179–192 used to be a four-tile pit. It is now a **thirteen-tile ravine**
+spanned by a `T.BRIDGE` deck laid flush with the ground either side, so it reads
+as a road rather than a platform to climb.
+
+Stepping onto it sets it off. The deck goes **from the far end back toward you**
+over 0.85s (`BRIDGE_FALL`), dropping decorative `Plank`s into the ravine — they
+are deliberately kept out of `game.hazards`, because the collapse is a thing you
+are made to watch, not a thing that hits you. 0.85s over 13 tiles is 245px/s, so
+sprinting across ahead of it is not on; walking out of it is.
+
+Then the **ultra white powder** drops on the near lip, and it is the only way
+over. Measured, sprinting, with a full run-up:
+
+| | widest gap cleared |
+|---|---|
+| Plain jump | 7 tiles |
+| Powder double jump | 11 tiles |
+| **Ultra powder** | **crosses the 13** with a 122px rise |
+
+A pure vertical mega-jump was the wrong shape: to carry thirteen tiles on hang
+time alone it would have to rise thirteen tiles, which is taller than the level.
+The horizontal surge is what crosses the gap; the big rise is what sells it.
+
+The pipe that used to sit at 176 was moved back to 165. At 176 it was a wall one
+tile short of the ravine — you cleared it, landed on the single tile at 178 and
+were already over the edge, with no ground to build up the speed the crossing
+needs.
+
+**No softlock.** While the bridge is down, if you are on the near side, on the
+ground, with no charge and no ultra powder in the level, another one drops. A
+bad jump costs a heart, never the run.
 
 
 ## Damage order

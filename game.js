@@ -33,6 +33,13 @@ const CFG = {
      platform — missed by 2.2px and simply could not be reached. */
   jumpVel:    -355,
   airJumpVel: -300,     // the powder's second jump, deliberately weaker
+  /* The ultra powder's one-shot launch. A purely vertical monster is the wrong
+     shape here: to carry thirteen tiles of ravine on hang time alone it would
+     have to rise thirteen tiles, which is taller than the level. The horizontal
+     surge is what actually crosses the gap; the big rise is what sells it.
+     Both last only until he lands. */
+  ultraJumpVel: -470,
+  ultraAirMax:  235,
   jumpCut:     0.42,
   coyote:      0.10,
   jumpBuffer:  0.12,
@@ -74,6 +81,8 @@ const SPRITES = {
   l2bomb:  { src: 'assets/l2_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
              key: { minHolePct: Infinity } },
   l2dard:  { src: 'assets/l2_dardubala.png', h: 40, hitW: 0.55, hitH: 0.90, color: '#c03030' },
+  l2foxrun:{ src: 'assets/l2_fox_run.png',   h: 26, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
+  l2foxsit:{ src: 'assets/l2_fox_sit.png',   h: 30, hitW: 0.60, hitH: 0.85, color: '#dde3ec' },
   l2bg:    { src: 'assets/l2_bg.png',    h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
   l2bg2:   { src: 'assets/l2_bg2.png',   h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
   l2arena: { src: 'assets/l2_arena.png', h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
@@ -530,7 +539,7 @@ addEventListener('keyup', e => Input.keys.delete(e.code));
 
 /* ---------------------------------------------------------- level */
 
-const T = { AIR: 0, GROUND: 1, BRICK: 2, QUESTION: 3, USED: 4, PLATFORM: 5, PIPE: 6, GATE: 7 };
+const T = { AIR: 0, GROUND: 1, BRICK: 2, QUESTION: 3, USED: 4, PLATFORM: 5, PIPE: 6, GATE: 7, BRIDGE: 8 };
 
 const LEVEL_1 = {
   w: 240, h: LEVEL_H,
@@ -550,7 +559,15 @@ const LEVEL_1 = {
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
-  ground: [[0, 58], [62, 90], [94, 140], [144, 188], [192, 240]],
+  /* 179-192 was a four-tile pit. It is now a thirteen-tile ravine spanned by a
+     bridge that gets blown as he steps on it: thirteen tiles is past a plain
+     jump (7) and past the powder's double jump (11), so the only way over is
+     the ultra powder that drops when the bridge does. */
+  ground: [[0, 58], [62, 90], [94, 140], [144, 179], [192, 240]],
+  bridge: { from: 179, to: 192, row: 13 },
+  oldFlag: 'achara',       // act 1 flies Achara's flag, not the 1918 one
+  crowd: true,             // and the street comes out behind him here too
+  crowdProp: 'flag',       // carrying little red flags; act 2 carries roses
 
   blocks: [
     { x: 14, y: 9,  w: 1, t: T.QUESTION },
@@ -578,7 +595,6 @@ const LEVEL_1 = {
     { x: 164, y: 9,  w: 4, t: T.BRICK },
     { x: 166, y: 9,  w: 1, t: T.QUESTION },
     { x: 173, y: 10, w: 3, t: T.PLATFORM },
-    { x: 180, y: 8,  w: 4, t: T.PLATFORM },
 
     { x: 196, y: 10, w: 4, t: T.PLATFORM },
     { x: 204, y: 8,  w: 2, t: T.BRICK },   // trimmed to keep column 206 clear for the gate
@@ -590,7 +606,10 @@ const LEVEL_1 = {
     { x: 31,  y: 11, h: 2 },
     { x: 48,  y: 11, h: 2 },
     { x: 110, y: 11, h: 2 },
-    { x: 176, y: 10, h: 3 },
+    /* Was at 176. That put a wall one tile short of the ravine: he cleared the
+       pipe, landed on the single tile at 178 and was already over the edge,
+       with no ground to build up the speed the crossing needs. */
+    { x: 165, y: 10, h: 3 },
     { x: 210, y: 11, h: 2 },
   ],
 
@@ -601,8 +620,8 @@ const LEVEL_1 = {
     { x: 79,  y: 4,  n: 3 }, { x: 90,  y: 9,  n: 4 },
     { x: 105, y: 8,  n: 5 }, { x: 114, y: 5,  n: 4 },
     { x: 132, y: 8,  n: 4 }, { x: 140, y: 9,  n: 4 },
-    { x: 158, y: 5,  n: 3 }, { x: 181, y: 6,  n: 4 },
-    { x: 188, y: 9,  n: 4 }, { x: 197, y: 8,  n: 4 },
+    { x: 158, y: 5,  n: 3 }, { x: 166, y: 9,  n: 4 },
+    { x: 193, y: 9,  n: 4 }, { x: 197, y: 8,  n: 4 },
     { x: 215, y: 8,  n: 3 },
   ],
 
@@ -625,7 +644,7 @@ const LEVEL_1 = {
   ],
 
   // Flagpoles flying the old republic flag; touching one changes it over.
-  flags: [12, 45, 76, 108, 145, 186, 218],
+  flags: [12, 45, 76, 108, 145, 171, 218],   // 171 not 186: 186 is over the ravine now
 
   // Placed to make a stretch awkward rather than to pad it out: on the run-up
   // to a gap, beside a gate, and in the boss arena.
@@ -650,7 +669,7 @@ const LEVEL_1 = {
     { t: 'walker', x: 126 }, { t: 'walker', x: 134 },
     { t: 'mid',    x: 152, gate: 161 },
     { t: 'walker', x: 162 }, { t: 'walker', x: 170 },
-    { t: 'walker', x: 184 },
+    { t: 'walker', x: 172 },
     { t: 'mid',    x: 200, gate: 206 },
     { t: 'walker', x: 208 },
   ],
@@ -802,6 +821,10 @@ function buildGrid() {
     for (let i = 0; i < b.w; i++) set(b.x + i, b.y, b.t);
   for (const p of LEVEL.pipes)
     for (let i = 0; i < p.h; i++) { set(p.x, p.y + i, T.PIPE); set(p.x + 1, p.y + i, T.PIPE); }
+  // Laid flush with the ground either side, so it reads as a road and not as a
+  // platform to climb. Taking it away is what opens the ravine.
+  if (LEVEL.bridge)
+    for (let x = LEVEL.bridge.from; x < LEVEL.bridge.to; x++) set(x, LEVEL.bridge.row, T.BRIDGE);
 
   for (const e of LEVEL.enemies) if (e.gate != null) raiseGate(e.gate);
   if (LEVEL.finalGate != null) raiseGate(LEVEL.finalGate);
@@ -858,7 +881,7 @@ function validateLevel() {
 
 const tileAt = (tx, ty) =>
   (tx < 0 || ty < 0 || tx >= LEVEL.w || ty >= LEVEL.h) ? T.AIR : grid[ty * LEVEL.w + tx];
-const isSolid  = t => t === T.GROUND || t === T.BRICK || t === T.QUESTION || t === T.USED || t === T.PIPE || t === T.GATE;
+const isSolid  = t => t === T.GROUND || t === T.BRICK || t === T.QUESTION || t === T.USED || t === T.PIPE || t === T.GATE || t === T.BRIDGE;
 const isOneWay = t => t === T.PLATFORM;
 
 function groundYAt(tx) {
@@ -1028,6 +1051,8 @@ class Player extends Entity {
     this.runT = 0; this.combo = 0;
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
     this.doubleJumpT = 0; this.airJumps = 0;
+    // A charge, not a timer: it is there to clear one specific gap once.
+    this.ultra = 0; this.ultraFlight = false;
     this.extra = 0; this.extraT = 0;
     this.roses = 0; this.throwCd = 0; this.throwHint = 0; this.hasThrown = false;
     // Squash/stretch are short discrete timers, not a continuous lerp. A lerp
@@ -1158,6 +1183,8 @@ class Player extends Entity {
 
     const wantL = !stuck && Input.left(), wantR = !stuck && Input.right();
     let max = Input.sprint() ? CFG.sprintMax : CFG.runMax;
+    // The surge only exists while that one launch is still in the air.
+    if (this.ultraFlight) max = CFG.ultraAirMax;
     if (this.charmSlow) max *= CHARM.slowTo;
     const accel = this.onGround ? CFG.runAccel : CFG.airAccel;
 
@@ -1176,7 +1203,17 @@ class Player extends Entity {
     this.coyote = this.onGround ? CFG.coyote : Math.max(0, this.coyote - dt);
     this.buffer = (!stuck && Input.jumpTap()) ? CFG.jumpBuffer : Math.max(0, this.buffer - dt);
     if (this.buffer > 0 && this.coyote > 0) {
-      this.vy = CFG.jumpVel;
+      /* Spent on the next jump off the ground, whenever that is. Deliberately
+         not automatic on pickup: he should choose the moment, and he should be
+         able to walk back to the lip and line it up. */
+      if (this.ultra > 0) {
+        this.ultra--; this.ultraFlight = true;
+        this.vy = CFG.ultraJumpVel;
+        shake = 6; flash = 0.3;
+        floatText(this.cx, this.y - 14, 'LIFTOFF', '#ffd85e');
+        burst(this.cx, this.bottom, 26,
+              { colors: ['#ffd85e', '#fff', '#ffb03a'], speed: 150, grav: 220, life: 0.7, size: 2, spread: Math.PI });
+      } else this.vy = CFG.jumpVel;
       this.buffer = 0; this.coyote = 0; this.stretchT = 0.10;
       this.airJumps = this.doubleJump ? 1 : 0;
       Sfx.jump();
@@ -1197,7 +1234,12 @@ class Player extends Entity {
     const wasAir = !this.onGround;
     moveAndCollide(this, dt);
 
+    if (this.ultraFlight && Math.random() < dt * 40)
+      burst(this.cx + rand(-4, 4), this.y + rand(4, 20), 1,
+            { colors: ['#ffd85e', '#fff'], speed: 12, grav: -30, life: 0.5, size: 1 });
+
     if (wasAir && this.onGround) {
+      this.ultraFlight = false;
       this.squashT = 0.10;
       this.combo = 0;
       this.airJumps = this.doubleJump ? 1 : 0;   // recharge on landing
@@ -1650,7 +1692,7 @@ class Svani extends Entity {
     this.home = spanAround(tx);
   }
   get bossGrade() { return true; }
-  get bossName() { return 'SVANI'; }
+  get bossName() { return 'SVANI EDIKA'; }
   chip(p) { this.damage(p); }
   get maxHp() { return SVANI.hp; }
   get stage() { return this.hp > 3 ? 1 : this.hp > 1 ? 2 : 3; }
@@ -1776,6 +1818,45 @@ class Shockwave {
    reach a live bomb, stomp it, and have the blast catch him - so every number
    in it has to be forgiving: a longer fuse to reach the bomb, a harder punt,
    a blast wide enough to actually clip him, and one less hit. */
+/* Shaken loose by a slam. The fight used to be trivially safe once you were
+   up on his step - the floor waves could not reach you there, so you could
+   simply stand next to him and wait. This makes the platform cost something
+   too, and it is jumped or side-stepped like anything else. */
+class Debris {
+  constructor(x, y) {
+    this.x = x - 3; this.y = y; this.w = 6; this.h = 6;
+    this.vy = 0; this.dead = false; this.t = 0;
+  }
+  get cx() { return this.x + this.w / 2; }
+  get bottom() { return this.y + this.h; }
+  update(dt) {
+    this.t += dt;
+    this.vy = Math.min(this.vy + CFG.gravity * 0.5 * dt, 260);
+    this.y += this.vy * dt;
+    const tx = Math.floor(this.cx / TILE), ty = Math.floor((this.bottom) / TILE);
+    const t = tileAt(tx, ty);
+    if (isSolid(t) || isOneWay(t) || this.y > LEVEL_H_PX) {
+      this.dead = true;
+      burst(this.cx, this.bottom, 8,
+            { colors: ['#c9a06a', '#8a7250', '#fff'], speed: 80, grav: 300, life: .5, size: 2 });
+    }
+  }
+  draw() {
+    // where it is going to land, painted before it arrives
+    const landY = groundBelow(this.cx, this.bottom + 1);
+    if (landY != null && Math.floor(this.t * 12) % 2 === 0) {
+      const lx = Math.round(this.cx) - 5, ly = Math.round(landY) - 3;
+      g.fillStyle = 'rgba(255,138,92,.75)';
+      g.fillRect(lx, ly, 2, 2); g.fillRect(lx + 8, ly, 2, 2);
+      g.fillRect(lx, ly + 1, 10, 1);
+    }
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#a8916a'; g.fillRect(x, y, 6, 6);
+    g.fillStyle = '#7a684a'; g.fillRect(x, y + 4, 6, 2);
+    g.fillStyle = '#d8c8a8'; g.fillRect(x + 1, y + 1, 2, 1);
+  }
+}
+
 const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
                  blastP: 26,       // ...and the smaller one that catches YOU
@@ -1950,8 +2031,19 @@ class DecoyFox extends Entity {
   }
 }
 
-const DARD = { hp: 4, pace: 26, slamEvery: 3.0, windup: 0.8, winded: 2.5, quipEvery: 3.1,
-               foxRun: 132, foxLeap: -300, prowl: 1.5, pounce: 1.0, pant: 1.6 };
+/* Tightened after the fight played as too easy. The openings were 2.5s and
+   1.6s long and arrived every few seconds, and once you climbed onto his step
+   nothing could reach you there - you could stand beside him and wait. Now the
+   slam shakes masonry down onto his own platform, the fox pounces in a real
+   leap and sometimes twice, and both windows are roughly a third shorter. */
+/* Hard but reactable. The first tightening went too far: four chunks falling
+   from 46px up gave about 0.3s of warning, which is not a dodge, it is a coin
+   flip - a pilot that used to survive the whole fight died in six seconds
+   without landing a hit. Fewer chunks, dropped from higher, falling slower,
+   and each one paints where it will land before it gets there. */
+const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 1.9, quipEvery: 3.1,
+               foxRun: 150, foxLeap: -330, prowl: 1.15, pounce: 0.95, pant: 1.35,
+               debris: 3, doublePounce: 0.38 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -2028,11 +2120,23 @@ class Dardubala extends Entity {
           }
           break;
         case 'pounce':
-          this.vx = this.dir * DARD.foxRun * 1.45;
+          this.vx = this.dir * DARD.foxRun * 1.5;
           if (this.phaseT > DARD.pounce || (this.onGround && this.phaseT > 0.35)) {
-            this.phase = 'pant'; this.phaseT = 0;
-            burst(this.cx, this.bottom, 12,
-                  { colors: ['#dde3ec', '#fff'], speed: 80, grav: 300, life: .5, size: 2, spread: Math.PI });
+            burst(this.cx, this.bottom, 14,
+                  { colors: ['#dde3ec', '#fff'], speed: 90, grav: 300, life: .5, size: 2, spread: Math.PI });
+            // a second leap often follows, so standing behind him is not an answer
+            if (!this.chained && Math.random() < DARD.doublePounce) {
+              this.chained = true;
+              this.phaseT = 0;
+              this.dir = Math.sign(p.cx - this.cx) || this.dir;
+              if (this.onGround) this.vy = DARD.foxLeap * 0.85;
+              shake = 3;
+            } else {
+              this.chained = false;
+              this.phase = 'pant'; this.phaseT = 0;
+              const fy = groundBelow(this.cx, this.bottom + 2) ?? (13 * TILE);
+              for (const d of [-1, 1]) game.hazards.push(new Shockwave(this.cx, fy, d, '#e8eef8'));
+            }
           }
           break;
         case 'pant':
@@ -2079,6 +2183,11 @@ class Dardubala extends Entity {
           const floorY = onGroundSpan ? 13 * TILE
                        : (groundBelow(this.cx, this.bottom + TILE) ?? 13 * TILE);
           for (const dir of [-1, 1]) game.hazards.push(new Shockwave(this.cx, floorY, dir, '#c9a0ff'));
+          // and shake the ceiling down onto his own step, so up here is not free
+          const n = DARD.debris + (this.hp <= 2 ? 1 : 0);
+          for (let i = 0; i < n; i++)
+            game.hazards.push(new Debris(this.cx + (i - (n - 1) / 2) * 34 + rand(-5, 5),
+                                         this.y - 92 - i * 14));
         }
         break;
       case 'winded':
@@ -2472,13 +2581,14 @@ class Coin extends Entity {
   update(dt) { this.t += dt * 7; }
 }
 
-const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12], tea: [13, 10] };
+const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12], ultra: [12, 12], tea: [13, 10] };
 
 // [line 1, line 2, colour] — drawn above the pickup so it names itself.
 const ITEM_LABEL = {
   khachapuri: ['ACHARULI', 'KHACHAPURI', '#ffd85e'],
   tea:        ['HOT', 'TEA', '#e8c07a'],
   powder:     ['WHITE', 'POWDER', '#9ee8ff'],
+  ultra:      ['ULTRA WHITE', 'POWDER', '#ffd85e'],
 };
 
 class Item extends Entity {
@@ -2498,6 +2608,9 @@ class Item extends Entity {
     if (this.kind === 'powder' && Math.random() < dt * 7)
       burst(this.cx + rand(-6, 6), this.y + rand(0, 10), 1,
             { colors: ['#9ee8ff', '#fff'], speed: 9, grav: -20, life: 0.8, size: 1 });
+    if (this.kind === 'ultra' && Math.random() < dt * 16)
+      burst(this.cx + rand(-7, 7), this.y + rand(0, 12), 1,
+            { colors: ['#ffd85e', '#fff', '#ffb03a'], speed: 14, grav: -34, life: 0.9, size: 1 });
   }
 }
 
@@ -2554,7 +2667,7 @@ const CROWD_HAIR = ['#241c22', '#33231a', '#171419', '#3d3128'];   // all well b
 const CROWD_COAT = ['#8f3b46', '#39557f', '#57457a', '#7a6a34', '#3f6b55', '#8a5a2e'];
 const CROWD_LEGS = ['#2b3040', '#37303f', '#232733', '#3d3a30'];
 
-function drawPerson(cx, groundY, seed, back, step, rose) {
+function drawPerson(cx, groundY, seed, back, step, prop) {
   const H = back ? 22 : 26;
   const x = Math.round(cx) - 4, y = Math.round(groundY) - H;
   const dim = back ? 0.66 : 1;
@@ -2590,7 +2703,20 @@ function drawPerson(cx, groundY, seed, back, step, rose) {
 
   // arms
   g.fillStyle = mix(coat);
-  if (rose) {
+  if (prop === 'flag') {
+    /* Held out to the right, above head height. The crowd is drawn right to
+       left at 9px spacing, so a flag on this side is never painted over by
+       the neighbour behind. */
+    g.fillRect(x + 7, y + 5, 1, 5);              // one raised
+    g.fillStyle = mix(skin); g.fillRect(x + 7, y + 3, 1, 2);
+    g.fillStyle = mix('#6b7280'); g.fillRect(x + 8, y - 5, 1, 9);   // stick
+    const flap = (seed + Math.floor(game.time * 6)) % 2;            // it flutters
+    g.fillStyle = mix('#c0242c');
+    g.fillRect(x + 9, y - 5 + flap, 5, 4);
+    g.fillStyle = mix('#8f1526');
+    g.fillRect(x + 9, y - 2 + flap, 5, 1);
+    g.fillStyle = mix(coat); g.fillRect(x + 1, y + 10, 1, 5);
+  } else if (prop === 'rose') {
     g.fillRect(x + 7, y + 5, 1, 5);              // one raised
     g.fillStyle = mix(skin); g.fillRect(x + 7, y + 3, 1, 2);
     g.fillStyle = mix('#8f1526'); g.fillRect(x + 6, y, 3, 3);
@@ -2666,10 +2792,92 @@ const crowd = {
       const ox = ((i * 37) % 9) - 4 - i * 9;
       const back = i % 3 === 2;                       // a row standing further off
       const step = Math.floor(this.t * 5 + i * 1.7) % 2;
-      drawPerson(this.x + ox, gy, i, back, step, i % 2 === 0);
+      // act 1 marches with little red flags, act 2 with roses
+      const prop = i % 2 === 0 ? (LEVEL.crowdProp || 'rose') : null;
+      drawPerson(this.x + ox, gy, i, back, step, prop);
     }
     if (this.flash > 0 && Math.floor(game.time * 10) % 2 === 0)
       drawTextCentered(g, `${this.n} WITH YOU`, this.x, gy - 34, '#ffd85e', 1);
+  },
+};
+
+/* ---------------------------------------------------------- the bridge
+
+   Purely decorative rubble. Kept out of game.hazards on purpose: the collapse
+   is a thing he is made to watch, not a thing that hits him, and the whole
+   point is that he retreats from it unharmed. */
+class Plank {
+  constructor(x, y) {
+    this.x = x; this.y = y; this.w = TILE; this.h = 7;
+    this.vy = rand(-40, 10); this.vx = rand(-14, 14);
+    this.spin = rand(-3, 3); this.tilt = 0; this.dead = false;
+  }
+  get cx() { return this.x + this.w / 2; }
+  update(dt) {
+    this.vy = Math.min(this.vy + CFG.gravity * 0.8 * dt, 340);
+    this.y += this.vy * dt; this.x += this.vx * dt;
+    this.tilt += this.spin * dt;
+    if (this.y > LEVEL_H_PX + 20) this.dead = true;
+  }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const lean = Math.round(Math.sin(this.tilt) * 2);
+    g.fillStyle = '#8a5a2a'; g.fillRect(x, y + lean, TILE, 4);
+    g.fillStyle = '#5a3a18'; g.fillRect(x, y + lean + 3, TILE, 1);
+    g.fillStyle = '#b07c42'; g.fillRect(x, y + lean, TILE, 1);
+  }
+}
+
+/* Intact until he sets foot on it, then it goes from the far end back toward
+   him - he has to walk out of it, and it takes long enough (0.85s over 13
+   tiles = 245px/s) that sprinting across ahead of the collapse is not on.
+   Afterwards the ultra powder sits on the near lip, and comes back if he ever
+   ends up over there without a charge, so a bad jump can strand him a heart
+   but never the run. */
+const BRIDGE_FALL = 0.85;
+
+const bridgeRun = {
+  state: 'none', t: 0, cut: 0,
+  reset() { this.state = LEVEL.bridge ? 'intact' : 'none'; this.t = 0; this.cut = 0; },
+  dropUltra() {
+    const b = LEVEL.bridge;
+    game.items.push(new Item(b.from - 1, 11, 'ultra'));
+  },
+  update(dt) {
+    const b = LEVEL.bridge;
+    if (!b || this.state === 'none' || game.state !== 'play') return;
+    const p = game.player;
+
+    if (this.state === 'intact') {
+      if (p.cx > b.from * TILE) {
+        this.state = 'falling'; this.t = 0; this.cut = 0;
+        shake = 11; flash = 0.5; freeze = 0.08; Sfx.brick();
+        floatText(p.cx, p.y - 28, 'THEY BLEW THE BRIDGE', '#ff8a5c');
+      }
+      return;
+    }
+
+    if (this.state === 'falling') {
+      this.t += dt;
+      const span = b.to - b.from;
+      const want = Math.min(span, Math.ceil(this.t / BRIDGE_FALL * span));
+      while (this.cut < want) {
+        const tx = b.to - 1 - this.cut;           // far end first, back toward him
+        grid[b.row * LEVEL.w + tx] = T.AIR;
+        game.planks.push(new Plank(tx * TILE, b.row * TILE));
+        burst(tx * TILE + 8, b.row * TILE + 4, 5,
+              { colors: ['#8a5a2a', '#c9a06a', '#5a3a18'], speed: 70, grav: 260, life: 0.7, size: 2 });
+        this.cut++;
+      }
+      shake = Math.max(shake, 4);
+      if (this.cut >= span) { this.state = 'down'; this.dropUltra(); Sfx.pit(); }
+      return;
+    }
+
+    // down: never leave him on the near side with no way over
+    if (p.onGround && p.cx < b.from * TILE && p.ultra <= 0 && !p.ultraFlight &&
+        !game.items.some(i => i.kind === 'ultra' && !i.dead))
+      this.dropUltra();
   },
 };
 
@@ -2677,7 +2885,7 @@ const crowd = {
 
 const game = {
   player: null, enemies: [], coins: [], items: [], boss: null, heli: null,
-  hazards: [], shots: [], script: null, tea: null, levelIndex: 0, advance: false, actScore: 0,
+  hazards: [], planks: [], shots: [], script: null, tea: null, levelIndex: 0, advance: false, actScore: 0,
   score: 0, state: 'title', endT: 0, time: 0, best: 0,
 };
 
@@ -2715,8 +2923,9 @@ function reset(toTitle = false, opts = {}) {
   ];
   game.flagsConverted = 0;
   game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
-  game.hazards = []; game.script = null; game.tea = null; game.shots = [];
+  game.hazards = []; game.planks = []; game.script = null; game.tea = null; game.shots = [];
   crowd.reset(LEVEL.start.x * TILE);
+  bridgeRun.reset();
   game.entry = null;
   game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
   game.advance = false;
@@ -3076,6 +3285,16 @@ function resolveItems() {
       floatText(p.cx, p.y - 14, 'DOUBLE JUMP', '#9ee8ff');
       shake = 3; flash = 0.4; Sfx.start();
       burst(it.cx, it.y + 5, 26, { colors: ['#9ee8ff', '#fff', '#c8d8f0'], speed: 120, grav: -40, size: 2, life: 1 });
+    } else if (it.kind === 'ultra') {
+      // One charge, no clock. See CFG.ultraJumpVel for why it is a leap and
+      // not just a very tall hop.
+      p.ultra = 1;
+      game.score += 500;
+      floatText(p.cx, p.y - 14, 'ULTRA POWDER', '#ffd85e');
+      floatText(p.cx, p.y - 26, 'ONE BIG JUMP', '#fff');
+      shake = 5; flash = 0.5; Sfx.start();
+      burst(it.cx, it.y + 5, 34,
+            { colors: ['#ffd85e', '#fff', '#ffb03a'], speed: 150, grav: -50, size: 3, life: 1.1 });
     } else if (it.kind === 'khachapuri') {
       p.invincible = KHACHAPURI_TIME;
       game.score += 500;
@@ -3303,6 +3522,9 @@ function update(dt) {
   if (game.boss) game.boss.update(dt);
   for (const h of game.hazards) h.update(dt);
   game.hazards = game.hazards.filter(h => !h.dead);
+  for (const pl of game.planks) pl.update(dt);
+  game.planks = game.planks.filter(pl => !pl.dead);
+  bridgeRun.update(dt);
   if (LEVEL.crowd) crowd.update(dt);
   for (const r of game.shots) r.update(dt);
   game.shots = game.shots.filter(r => !r.dead);
@@ -3553,6 +3775,18 @@ function drawTile(t, px, py, tx, ty) {
       for (let k = 0; k < TILE; k += 5) { g.fillStyle = '#a05a20'; g.fillRect(px + k, py + 2, 1, 3); }
       break;
     }
+    case T.BRIDGE: {
+      // deck plus the trestle under it; the ravine below is empty, so the
+      // supports have the whole tile to themselves
+      g.fillStyle = '#8a5a2a'; g.fillRect(px, py, TILE, 6);
+      g.fillStyle = '#b07c42'; g.fillRect(px, py, TILE, 2);
+      g.fillStyle = '#5a3a18'; g.fillRect(px, py + 5, TILE, 1);
+      for (let k = 0; k < TILE; k += 4) { g.fillStyle = '#6b4520'; g.fillRect(px + k, py + 2, 1, 3); }
+      g.fillStyle = '#4a2f14';
+      g.fillRect(px + 2, py + 6, 2, 10); g.fillRect(px + 12, py + 6, 2, 10);
+      g.fillRect(px, py + 9, TILE, 1);
+      break;
+    }
     case T.GATE: {
       g.fillStyle = '#4a5262'; g.fillRect(px + 2, py, 12, TILE);
       g.fillStyle = '#6d7688';
@@ -3746,6 +3980,23 @@ function drawFlagOld(x, y, wave) {
   g.fillRect(x + 11 + wave, y, 4, 10);
 }
 
+/* Adjara's own flag, flown until 2004: navy field, seven yellow seven-pointed
+   stars in the upper hoist, three over four. Hand-drawn rather than sampled
+   from assets/flag-achara.png because the stars are 0.6% of that image's
+   pixels - area-averaged down to 15x10 they vanish and it comes out a plain
+   navy rectangle. Star centres and the 3-over-4 lattice are taken from the
+   real thing; only the spacing is opened up from 1px to 2px, because at 1px
+   the two rows merge into a pair of solid bars. */
+function drawFlagAchara(x, y, wave) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = '#18185a'; g.fillRect(x, y, 15, 10);
+  g.fillStyle = '#fef652';
+  for (const sx of [3, 5, 7])       g.fillRect(x + sx, y + 2, 1, 1);   // three over...
+  for (const sx of [2, 4, 6, 8])    g.fillRect(x + sx, y + 4, 1, 1);   // ...four
+  g.fillStyle = 'rgba(0,0,0,.22)';
+  g.fillRect(x + 11 + wave, y, 4, 10);
+}
+
 /* Planted along the route flying the old flag. Touch one and it changes over
    to the five-cross — the 2004 swap, done one pole at a time. */
 class LevelFlag extends Entity {
@@ -3777,6 +4028,7 @@ function drawLevelFlags() {
     g.fillStyle = '#ffd85e'; g.fillRect(px - 1, f.base - 49, 4, 3); // finial
     const fy = f.base - 45 + wave + lift;
     if (f.converted) drawFlagNew(px + 2, fy, wave);
+    else if (LEVEL.oldFlag === 'achara') drawFlagAchara(px + 2, fy, wave);
     else             drawFlagOld(px + 2, fy, wave);
   }
 }
@@ -3823,6 +4075,8 @@ function drawEntities() {
     if (it.kind === 'khachapuri') drawKhachapuri(it.x, it.y);
     else if (it.kind === 'tea') drawCup(it.x + 2, it.y, game.time);
     else if (it.kind === 'powder') drawSprite(ART.powder, it);
+    else if (it.kind === 'ultra')
+      drawSprite(ART.powder, it, { tint: `rgba(255,196,60,${0.42 + Math.sin(game.time * 6) * 0.16})` });
     else drawRose(it.x, it.y);
 
     // Named on two lines: "ACHARULI KHACHAPURI" on one line is 114px wide and
@@ -3891,12 +4145,19 @@ function drawEntities() {
       drawSprite(ART.l2bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
       if (e.taunt > 0) drawTextCentered(g, 'ARMOURED', e.cx, e.y - 11, '#ff8a5c', 1);
     } else if (e instanceof DecoyFox) {
-      drawFox(e.cx - 17, e.y - 2, e.face, e.t, 1.3);
+      drawSprite(ART.l2foxrun, e, { tint: 'rgba(120,150,210,.30)' });   // the decoy, tinted cooler
     } else if (e instanceof Dardubala) {
       if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
-      if (e.isFox && !e.scriptedOut) {        // fight form: bigger than the cameo
-        drawFox(e.cx - 20, e.bottom - 22, e.face, e.t, 1.55);
-        if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
+      if (e.isFox && !e.scriptedOut) {
+        // real art now: running while he hunts, sitting while he is open
+        const sitting = e.phase === 'pant';
+        const art = sitting ? ART.l2foxsit : ART.l2foxrun;
+        const flash = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+        const open = sitting && Math.floor(game.time * 10) % 2 === 0;
+        drawSprite(art, e, {
+          tint: flash ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.45)' : null,
+        });
+        if (sitting && Math.floor(game.time * 8) % 2 === 0)
           drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
         if (e.phase === 'pounce' && Math.floor(game.time * 14) % 2 === 0)
           drawTextCentered(g, '!', e.cx, e.y - 12, '#ff5ec4', 2);
@@ -3956,6 +4217,7 @@ function drawEntities() {
   }
 
   for (const h of game.hazards) h.draw();
+  for (const pl of game.planks) pl.draw();
   for (const r of game.shots) r.draw();
   if (LEVEL.crowd) crowd.draw();
   if (game.tea) drawTeaScene();
@@ -4159,6 +4421,9 @@ function drawHud() {
   if (game.player.doubleJumpT > 0)
     timerBar(game.player.airJumps > 0 ? '2X JUMP' : '2X USED',
              game.player.doubleJumpT / POWDER_TIME, '#9ee8ff', '#e8f8ff', '#4a5866');
+  // A charge, so it gets a full bar rather than a draining one.
+  if (game.player.ultra > 0)
+    timerBar('ULTRA READY', 1, '#ffd85e', '#fff2c0', '#6a5a20');
   if (game.player.invincible > 0)
     timerBar(LEVEL.invincibleLabel || 'ACHARULI',
              game.player.invincible / KHACHAPURI_TIME, '#ffd85e', '#fff2c0', '#6a5a20');
