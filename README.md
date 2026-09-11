@@ -448,7 +448,7 @@ new number reaches them within ten minutes and pulls the new script with it.
 | | | |
 |---|---|---|
 | 1 | GAATAVISUPLE ACHARA | Batumi, 2004. Aslan, the bridge, the ultra powder. |
-| 2 | GAATAVISUPLE MEDIA | The television company. Reporters, smashable monitors, the Anchor. |
+| 2 | GAATAVISUPLE MEDIA | The television company, November 2007. Reporters, smashable monitors, the Anchor. |
 | 3 | GAATAVISUPLE PARLAMENTI | Rustaveli, 2003. Was act 2 until act 2 was inserted ahead of it. |
 
 **Asset prefixes follow the act number**: `l2_*` is the television company,

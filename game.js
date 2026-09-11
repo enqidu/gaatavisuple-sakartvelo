@@ -748,7 +748,7 @@ const LEVEL_2 = {
   card: [
     { t: 0.0, s: 'THEN THEY CAME',   c: '#e8e0d0', sc: 1 },
     { t: 0.5, s: 'FOR THE NEWSROOM', c: '#e8e0d0', sc: 1 },
-    { t: 1.8, s: 'LIVE ON AIR:',     c: '#ffd85e', sc: 2 },
+    { t: 1.8, s: '2007 NOVEMBER:',   c: '#ffd85e', sc: 2 },
   ],
   invincibleLabel: 'MATSONI',
   smashKind: 'tv',
