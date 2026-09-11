@@ -754,6 +754,10 @@ const LEVEL_2 = {
   smashKind: 'tv',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
+  afterLines: [
+    ['FREEING TV WAS ONE OF THE KEY MOMENTS', '#cfd8e8'],
+    ['FOR RESTORING DEMOCRACY',              '#cfd8e8'],
+  ],
 
   backdrops: [
     { art: 'l2hall',   fromX: 0,   par: 0.34, tile: true },
@@ -875,6 +879,17 @@ const LEVEL_3 = {
   invincibleLabel: 'HOT TEA',
   crowd: true,             // act 2 only: the street turns out behind you
   winLines: [['REVOLUTSIA!', '#7ae07a']],
+  /* The last act, so this is the run's ending rather than an interlude. It
+     gets room to breathe: one line at a time, and the restart prompt waits
+     until the last of them has landed. */
+  afterLines: [
+    ['THIS IS HOW ALL STARTED. THE GREATNESS.',    '#e8e0d0'],
+    ['', null],
+    ['SOMETIMES ITS SUN AND GOOD WEATHER..',       '#cfd8e8'],
+    ["SOMETIMES WE STRUGGLE SOMETIMES WE'RE HAPPY", '#cfd8e8'],
+    ['GOOD WEATHER OR NOT..',                      '#cfd8e8'],
+    ['...',                                        '#8890a4'],
+  ],
 
   backdrops: [
     { art: 'l3bg',    fromX: 0,   par: 0.34, tile: true },
@@ -2204,12 +2219,12 @@ class Bullet {
     }
     if (Math.random() < dt * 30)
       burst(this.cx, this.y + 2, 1,
-            { colors: this.kind === 'speech' ? ['#f4f4f4', '#c8d8f0'] : ['#ff8a5c', '#ffd85e'],
+            { colors: this.kind === 'smear' ? ['#f4f4f4', '#c8d8f0'] : ['#ff8a5c', '#ffd85e'],
               speed: 10, grav: -8, life: .35, size: 1 });
   }
   draw() {
     const x = Math.round(this.x), y = Math.round(this.y);
-    if (this.kind === 'speech') {
+    if (this.kind === 'smear') {
       // a little speech bubble - what the press actually shoot with
       g.fillStyle = '#f4f4f4'; g.fillRect(x, y, BULLET.w, BULLET.h - 1);
       g.fillStyle = '#f4f4f4'; g.fillRect(x + 1, y + BULLET.h - 1, 2, 1);   // the tail
@@ -2247,10 +2262,14 @@ class Bullet {
 
    One class, because the walking, ledge-turning and stomping are identical and
    only the answer to "what does this one do when it sees you" differs. */
+/* What they shout is the joke. You are the one raiding the newsroom, so the
+   reporting comes at you labelled the way a government labels reporting it
+   does not like - the projectile is literally called a smear because that is
+   what the man swinging at it has decided journalism is. */
 const PRESS = {
   walk: 20, sight: 120,
-  high:   { fireEvery: 3.4, aim: 0.55, cry: 'FREE SPEECH' },
-  low:    { fireEvery: 3.8, aim: 0.70, cry: 'FREE PRESS'  },
+  high:   { fireEvery: 3.4, aim: 0.55, cry: 'UNSUPPORTED ACCUSATIONS' },
+  low:    { fireEvery: 3.8, aim: 0.70, cry: 'FACTLESS ATTACKS' },
   charge: { fireEvery: 3.0, aim: 0.50, cry: 'NO COMMENT?', dash: 132, dashT: 0.85 },
 };
 
@@ -2283,7 +2302,7 @@ class Journalist extends Entity {
         } else {
           const ride = this.style === 'low' ? BULLET.lowRide : BULLET.ride;
           game.hazards.push(new Bullet(this.cx + this.aimDir * 7,
-                                       this.bottom - ride, this.aimDir, 'speech'));
+                                       this.bottom - ride, this.aimDir, 'smear'));
           Sfx.bump();
           this.fire = this.cfg.fireEvery * rand(0.8, 1.4);
           this.phase = 'walk'; this.phaseT = 0;
@@ -2473,7 +2492,7 @@ class Anchor extends Entity {
         if (this.gap <= 0 && this.left > 0) {
           game.hazards.push(new Bullet(this.cx + this.aimDir * 9,
                                        this.bottom - BULLET.ride, this.aimDir,
-                                       'speech', ANCHOR.speed));
+                                       'smear', ANCHOR.speed));
           this.left--; this.gap = ANCHOR.gap;
           shake = Math.max(shake, 2); Sfx.bump();
         }
@@ -5509,11 +5528,34 @@ function drawOverlay() {
     // Split across two lines: at scale 2 the full sentence is 408px wide and
     // the buffer is only 320.
     const lines = LEVEL.winLines || [['LEVEL CLEAR', '#7ae07a']];
-    lines.forEach(([txt, col], i) => drawTextCentered(g, txt, VIEW_W / 2, 44 + i * 24, col, 2));
-    drawTextCentered(g, `SCORE ${game.score}`, VIEW_W / 2, 104, '#fff', 1);
-    if (game.endT > 1.4 && Math.floor(game.endT * 2) % 2 === 0)
+    const after = LEVEL.afterLines || [];
+
+    /* Laid out from the content rather than from fixed offsets: act 3's
+       epilogue is six lines and act 1 has none, and a hardcoded y for the
+       score would either collide with one or float in the middle of the
+       other. */
+    const AFTER_GAP = 11, AFTER_LEAD = 1.0, AFTER_STEP = 0.75;
+    const hTitle = lines.length * 24;
+    const hAfter = after.length ? 12 + after.length * AFTER_GAP : 0;
+    const total = hTitle + hAfter + 22 + 22;
+    let y = Math.max(24, Math.round((VIEW_H - total) / 2));
+
+    lines.forEach(([txt, col], i) => drawTextCentered(g, txt, VIEW_W / 2, y + i * 24, col, 2));
+    y += hTitle + (after.length ? 12 : 0);
+
+    // one line at a time, so an ending reads as an ending
+    after.forEach(([txt, col], i) => {
+      if (txt && game.endT > AFTER_LEAD + i * AFTER_STEP)
+        drawTextCentered(g, txt, VIEW_W / 2, y + i * AFTER_GAP, col, 1);
+    });
+    y += hAfter;
+
+    drawTextCentered(g, `SCORE ${game.score}`, VIEW_W / 2, y + 6, '#fff', 1);
+    // the prompt waits for the last line rather than talking over it
+    const settled = AFTER_LEAD + Math.max(0, after.length - 1) * AFTER_STEP + 0.8;
+    if (game.endT > Math.max(1.4, settled) && Math.floor(game.endT * 2) % 2 === 0)
       drawTextCentered(g, game.advance ? 'PRESS SPACE TO CONTINUE' : 'PRESS R TO RESTART',
-                       VIEW_W / 2, 128, '#8890a4', 1);
+                       VIEW_W / 2, y + 26, '#8890a4', 1);
   }
 
   if (game.state === 'lost') {

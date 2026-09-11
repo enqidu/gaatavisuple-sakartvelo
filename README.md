@@ -491,9 +491,14 @@ and only the answer to *what does this one do when it sees you* differs.
 
 | | cry | attack | answer |
 |---|---|---|---|
-| `l2girl` | FREE SPEECH | shot at head height | **duck** |
-| `l2man` | FREE PRESS | shot along the floor (`BULLET.lowRide`) | **jump** — ducking is no help |
+| `l2girl` | UNSUPPORTED ACCUSATIONS | shot at head height | **duck** |
+| `l2man` | FACTLESS ATTACKS | shot along the floor (`BULLET.lowRide`) | **jump** — ducking is no help |
 | `l2girl2` | NO COMMENT? | no projectile: she charges you | **get out of the way** |
+
+What they shout is the joke. You are the one raiding the newsroom, so the
+reporting arrives labelled the way a government labels reporting it dislikes —
+the projectile's internal kind is `smear`, because that is what the man
+swinging at it has decided journalism is.
 
 The low shot rides 9–4px above the feet, which is inside *both* a standing box
 and a crouching one. That is deliberate: the same enemy family asks for
@@ -535,6 +540,21 @@ Every vulnerable window in the game — Edika's `winded` and `pant` — sets
 `vx = 0` outright instead of decaying. Coasting through the one beat you can be
 stomped on means asking the player to land on a moving target, which was most
 of what made Edika feel uncatchable.
+
+
+## Act endings
+
+`LEVEL.afterLines` is an epilogue under the win title, revealed one line at a
+time (`AFTER_LEAD` 1.0s, then 0.75s each) with the restart prompt held back
+until the last one lands, so an ending reads as an ending rather than a
+scoreboard.
+
+The win screen lays itself out from its content rather than fixed offsets: act
+1 has no epilogue and act 3 has six lines, and a hardcoded y for the score
+would either collide with one or float in the middle of the other.
+
+Every line is checked against the 320px buffer and the font's glyph table —
+the widest is act 3's 257px. The apostrophe in *WE'RE* exists in `GLYPHS`.
 
 
 ## Act cards
