@@ -544,6 +544,35 @@ of what made Edika feel uncatchable.
 
 ## Music
 
+### Asset sizes — why loading was slow
+
+The page was fetching **13.7MB**. It now fetches **1.6MB**, and none of it
+looks different.
+
+Nothing was wrong with the pipeline: decode + key-out + haze across every
+sprite measured ~470ms warm. The whole delay was download, and the cause was
+assets shipping at whatever resolution they arrived in. `squat.png` was a
+1254×1254 PNG — 1.1MB — for a sprite drawn **22 pixels tall**. Two backdrops
+were 2.2MB each.
+
+The rule now:
+
+- **`raw: true` backdrops ship at exactly their draw height** (240px, giving
+  320 wide). That is native, so it is lossless — the buffer is 320×180 and
+  nothing ever samples them larger.
+- **Keyed sprites ship at 4× their draw height.** The key-out reads cleaner
+  edges at higher resolution and the final downscale still antialiases, but
+  beyond 4× every extra pixel is discarded at boot.
+
+Originals live in `assets/_src/` and the two `assets/level N (...)` folders;
+the page fetches only what `SPRITES` names.
+
+**When adding art, downscale it first.** A 1254px PNG for a 30px sprite costs a
+megabyte of load time and buys nothing.
+
+
+### The soundtrack
+
 Acts 1 and 2 share `assets/music.m4a`. **Act 3 is synthesised** — `LEVEL.music
 = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
 84bpm over i–VI–III–VII: a square bass on the root, a sparse triangle line that
