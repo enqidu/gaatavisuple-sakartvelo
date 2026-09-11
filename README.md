@@ -573,12 +573,10 @@ megabyte of load time and buys nothing.
 
 ### The soundtrack
 
-Acts 1 and 2 share `assets/music.m4a`. **Act 3 is synthesised** — `LEVEL.music
-= 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
+**Act 3 plays `assets/music.m4a`; acts 1 and 2 are synthesised** — `LEVEL.music = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
 84bpm over i–VI–III–VII: a square bass on the root, a sparse triangle line that
-leaves most of the bar empty, and a noise tick on the offbeat. The one track
-looping across three acts had worn thin by the time you reach Rustaveli, and
-this is the act that should feel like something is closing in.
+leaves most of the bar empty, and a noise tick on the offbeat. One recorded track looping across three acts had worn thin, so the synth
+carries the two earlier ones and the recording is saved for the finale.
 
 It rides the **same `AudioContext` as `Sfx`** (exposed as `Sfx.context`) —
 browsers cap how many a page may open, and a second one would need its own

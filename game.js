@@ -717,6 +717,7 @@ const LEVEL_1 = {
        226  final gate — opens when Aslan is beaten
        231  flag                                                            */
   finalBoss: 'ASLAN',
+  music: 'dark',           // the synth; act 3 takes the recorded track
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
@@ -882,6 +883,7 @@ const LEVEL_2 = {
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
   finalBoss: 'THE ANCHOR',
+  music: 'dark',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -994,8 +996,7 @@ const LEVEL_2 = {
 const LEVEL_3 = {
   w: 232, h: LEVEL_H,
   start: { x: 3, y: 11 },
-  finalBoss: 'EDIKA',
-  music: 'dark',           // the synth loop, not the shared track
+  finalBoss: 'EDIKA',       // act 3 runs the recorded track, not the synth
   // tea first, then the flag: updateTea hands play back and opens the gate
   finishX: 227,
   finalGate: 222,
@@ -3341,7 +3342,13 @@ class FlyingBoss extends Entity {
    spent 64% of its frames charmed. The immunity window runs from the player,
    not the character, and suspends the pull and the slow too, so he always gets
    a clean walk away. */
-const CHARM = { radius: 62, pull: 340, slowTo: 0.5, hold: 1.1, cooldown: 2.4, immune: 2.0 };
+/* `laughAt` is much tighter than `radius` on purpose. The laugh used to fire
+   the moment he entered her pull - about four tiles - so simply walking the
+   level set it off over and over. It now waits until he is nearly on top of
+   her, and will not repeat for `laughCd` seconds however much he paces back
+   and forth across the line. */
+const CHARM = { radius: 62, pull: 340, slowTo: 0.5, hold: 1.1, cooldown: 2.4, immune: 2.0,
+                laughAt: 20, laughCd: 6.0 };
 
 class Admirer extends Entity {
   constructor(tx) {
@@ -3360,8 +3367,15 @@ class Admirer extends Entity {
     const inRange = Math.abs(d) < CHARM.radius && Math.abs(p.bottom - this.bottom) < 44;
     const wasActive = this.active;
     this.active = inRange && this.cd <= 0 && p.invincible <= 0 && p.charmImmune <= 0;
-    // Laughs as you come into range, on the rising edge only.
-    if (this.active && !wasActive) Stinger.laugh({ onlyIfIdle: true });
+    // Laughs only when he is right up against her, on the rising edge, and at
+    // most once every laughCd seconds per admirer.
+    this.laughCd = Math.max(0, (this.laughCd || 0) - dt);
+    const veryNear = Math.abs(d) < CHARM.laughAt && Math.abs(p.bottom - this.bottom) < 26;
+    if (veryNear && !this.wasNear && this.active && this.laughCd <= 0) {
+      Stinger.laugh({ onlyIfIdle: true });
+      this.laughCd = CHARM.laughCd;
+    }
+    this.wasNear = veryNear;
 
     if (this.active && p.charmed <= 0) {
       p.charmPull -= Math.sign(d) * CHARM.pull;
@@ -5684,6 +5698,35 @@ function drawOverlay() {
   if (game.state === 'won') {
     g.fillStyle = 'rgba(6,18,10,.58)';
     g.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    /* End of the run, not the end of an act: a whole crowd of him bouncing
+       behind the credits. Drawn after the dim so they read bright against it
+       and before the text so they never sit on top of a word.
+
+       Sizes and phases come off the index rather than Math.random, so the
+       crowd is the same every time it is watched and nobody flickers between
+       frames. */
+    if (!game.advance && ART.jump) {
+      const a = ART.jump, N = 11;
+      for (let i = 0; i < N; i++) {
+        const ph = i * 2.399;                       // irrational-ish: no lockstep
+        const sc = 1.3 + (i % 4) * 0.38;
+        const w = Math.round(a.w * sc), h = Math.round(a.h * sc);
+        const x = Math.round(((i + 0.5) / N) * VIEW_W + Math.sin(game.endT * 0.5 + ph) * 22);
+        const hop = Math.abs(Math.sin(game.endT * 2.0 + ph));
+        const y = Math.round(VIEW_H - 2 - (i % 3) * 9 - hop * 30) - h;
+        g.save();
+        g.globalAlpha = 0.34 + (i % 4) * 0.12;      // the big ones read as nearer
+        if (i % 2) { g.translate(x + w, y); g.scale(-1, 1); g.drawImage(a.canvas, 0, 0, a.w, a.h, 0, 0, w, h); }
+        else       { g.drawImage(a.canvas, 0, 0, a.w, a.h, x, y, w, h); }
+        g.restore();
+      }
+      /* A second dim over the crowd, before any text. Without it they read as
+         foreground and the epilogue - which is the whole point of this screen
+         - becomes unreadable behind eleven bouncing torsos. */
+      g.fillStyle = 'rgba(6,18,10,.52)';
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
     // Split across two lines: at scale 2 the full sentence is 408px wide and
     // the buffer is only 320.
     const lines = LEVEL.winLines || [['LEVEL CLEAR', '#7ae07a']];
