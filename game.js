@@ -5008,7 +5008,18 @@ function frame(now) {
   display.height = VIEW_H * SCALE;
   fitCanvas();
   await loadAll();
-  validateLevel();
+  /* Every act, each against its own grid.
+
+     validateLevel reads `grid` for the bump-headroom and buried-pickup checks,
+     and `grid` is built by reset() - which runs AFTER this. So the checks were
+     dereferencing undefined and boot died on the spot: the game shipped stuck
+     on LOADING. Local testing never caught it because every test called
+     validateLevel() from the console, always after a reset.
+
+     Doing it per level also closes the older gap where only act 1 was ever
+     checked, because LEVEL was still bound to LEVEL_1 at this point. */
+  for (let i = 0; i < LEVELS.length; i++) { loadLevel(i); buildGrid(); validateLevel(); }
+  loadLevel(0);
   const missing = Object.keys(SPRITES).filter(k => ART[k].isPlaceholder);
   if (missing.length) console.info('placeholders in use:', missing.join(', '));
   /* ?act=2 drops you straight into an act, for playtesting without
