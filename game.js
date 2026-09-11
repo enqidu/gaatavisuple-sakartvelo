@@ -572,8 +572,6 @@ const LEVEL_1 = {
   ground: [[0, 58], [62, 90], [94, 140], [144, 179], [194, 240]],
   bridge: { from: 179, to: 194, row: 13 },
   oldFlag: 'achara',       // act 1 flies Achara's flag, not the 1918 one
-  crowd: true,             // and the street comes out behind him here too
-  crowdProp: 'flag',       // carrying little red flags; act 2 carries roses
 
   blocks: [
     { x: 14, y: 9,  w: 1, t: T.QUESTION },
@@ -2774,6 +2772,10 @@ function drawPerson(cx, groundY, seed, back, step, prop) {
    not pawns, and they never collide with the player. */
 const CROWD = { joinPerFlag: 2, max: 12, gap: 34, surgeEvery: 5.0, surgeReach: 74, minToSurge: 4 };
 
+// What each marcher is holding, by draw index. Eight entries for the eight
+// that get drawn: three flags, three roses, two empty-handed.
+const CROWD_PROPS = ['flag', 'rose', null, 'rose', 'flag', null, 'flag', 'rose'];
+
 const crowd = {
   n: 0, x: 0, t: 0, surge: 0, flash: 0,
   reset(px) { this.n = 0; this.x = px; this.t = 0; this.surge = 0; this.flash = 0; },
@@ -2794,10 +2796,12 @@ const crowd = {
       this.surge = CROWD.surgeEvery;
       let hit = 0;
       for (const e of game.enemies) {
-        /* Gate holders are exempt as well as bosses. MidBoss has no
-           bossGrade - and must not get one, it would halve his rose stun and
-           make him immune to the khachapuri one-shot - so he is excluded by
-           the thing that actually matters: he is what a required fight is. */
+        /* Gate holders are exempt as well as bosses: the street can shift a
+           cordon, not a minister, and it must never be able to walk you past
+           a required fight. Act 2's gate holders all carry bossGrade anyway,
+           but MidBoss does not - and must not be given one, it would halve his
+           thrown-rose stun and make him immune to the khachapuri one-shot - so
+           the filter keys off the thing that actually matters. */
         if (e.dead || e.bossGrade || e.gate != null ||
             Math.abs(e.cx - this.x) > CROWD.surgeReach) continue;
         e.stun = Math.max(e.stun || 0, 1.4);
@@ -2823,9 +2827,10 @@ const crowd = {
       const ox = ((i * 37) % 9) - 4 - i * 9;
       const back = i % 3 === 2;                       // a row standing further off
       const step = Math.floor(this.t * 5 + i * 1.7) % 2;
-      // act 1 marches with little red flags, act 2 with roses
-      const prop = i % 2 === 0 ? (LEVEL.crowdProp || 'rose') : null;
-      drawPerson(this.x + ox, gy, i, back, step, prop);
+      // A mixed march: some red flags, some roses, some with their hands
+      // free. Keyed off the index so it is scattered but never re-rolls
+      // between frames - a prop that flickered in and out would read as noise.
+      drawPerson(this.x + ox, gy, i, back, step, CROWD_PROPS[i % CROWD_PROPS.length]);
     }
     if (this.flash > 0 && Math.floor(game.time * 10) % 2 === 0)
       drawTextCentered(g, `${this.n} WITH YOU`, this.x, gy - 34, '#ffd85e', 1);
@@ -4508,6 +4513,22 @@ function drawScoreboard(cx, y) {
   }
 }
 
+/* A phone can render this fine but cannot play it: every control is a key and
+   there is not a single touch handler in the file, so a tap does nothing and
+   the title screen is where it ends. Say so rather than leaving people poking
+   at "PRESS SPACE TO START".
+
+   Coarse pointer AND no fine pointer anywhere - a touchscreen laptop has a
+   trackpad, so it reports `any-pointer: fine` and is correctly left alone.
+   Evaluated once: matchMedia is cheap but this runs every frame. A keyboard
+   paired later still works, because nothing here gates input. */
+const noKeyboard = (() => {
+  try {
+    return matchMedia('(pointer: coarse)').matches &&
+           !matchMedia('(any-pointer: fine)').matches;
+  } catch (e) { return false; }
+})();
+
 function drawTitle() {
   g.fillStyle = 'rgba(8,10,20,.62)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
   const bounce = Math.round(Math.sin(game.time * 2.4) * 2);
@@ -4516,6 +4537,13 @@ function drawTitle() {
   drawTextCentered(g, 'SAKARTVELO', VIEW_W / 2, 38 + bounce, '#ffd85e', 3);
   drawTextCentered(g, `ACT 1 - ${LEVELS[0].subtitle}`, VIEW_W / 2, 62, '#7ec8f0', 1);
   drawScoreboard(VIEW_W / 2, 76);
+  if (noKeyboard) {
+    if (Math.floor(game.time * 2) % 2 === 0)
+      drawTextCentered(g, 'THIS ONE NEEDS A KEYBOARD', VIEW_W / 2, 132, '#ffd85e', 1);
+    drawTextCentered(g, 'OPEN IT ON A COMPUTER TO PLAY', VIEW_W / 2, 150, '#fff', 1);
+    drawTextCentered(g, 'NO TOUCH CONTROLS YET - SORRY', VIEW_W / 2, 162, '#8890a4', 1);
+    return;
+  }
   if (Math.floor(game.time * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 132, '#fff', 1);
   drawTextCentered(g, 'ARROWS MOVE  SHIFT RUN  X THROW ROSE', VIEW_W / 2, 150, '#8890a4', 1);

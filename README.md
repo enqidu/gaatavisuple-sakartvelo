@@ -480,19 +480,49 @@ seconds, flooring any guard near them. Bosses are immune — the street can shif
 a cordon, not a minister.
 
 They are pressure, not units: no controls, no collision, and they never block
-you. `LEVEL.crowd` turns them on — **both acts** have them.
+you. `LEVEL.crowd` turns them on — **Act 2 only**. Act 1 walks it alone, which
+is the point of Act 1: the street has not come out yet.
 
-**Gate holders are exempt from the surge**, alongside bosses. `MidBoss` carries
-no `bossGrade` — and must not be given one, it would halve his thrown-rose stun
-and make him immune to the khachapuri one-shot — so the filter excludes
-`e.gate != null` instead: the thing that actually matters is that he *is* a
-required fight. Without this, turning the crowd on in Act 1 froze all three of
-them for 1.4s every 5s and made the act nearly free.
+`CROWD_PROPS` says what each marcher is holding, by draw index — three **little
+red flags** on sticks, three **roses**, two pairs of empty hands, across the
+eight that get drawn. It is keyed off the index rather than rolled, so a prop
+never flickers in and out between frames. Props are drawn out to the right of
+the head, and the crowd is painted right to left at 9px spacing, so a raised
+flag is never overpainted by the neighbour standing behind it.
 
-What every other marcher carries is `LEVEL.crowdProp`: **Act 1 carries little
-red flags** on sticks, Act 2 carries roses. The prop is drawn out to the right
-of the head, and the crowd is painted right to left at 9px spacing, so a flag is
-never overpainted by the neighbour standing behind it.
+**Gate holders are exempt from the surge**, alongside bosses: it must never be
+able to walk you past a required fight. Act 2's gate holders all carry
+`bossGrade` anyway, but `MidBoss` does not — and must not be given one, it would
+halve his thrown-rose stun and make him immune to the khachapuri one-shot — so
+the filter keys off `e.gate != null`, the thing that actually matters. This was
+found the hard way: with the crowd briefly enabled in Act 1 it froze all three
+of them for 1.4s every 5s and made the act nearly free.
+
+
+## Phones
+
+It renders on a phone and cannot be played on one: every control is a key and
+there is not a single touch handler in the file, so a tap does nothing and the
+title screen is where it ends. Rather than leave people poking at "PRESS SPACE
+TO START", the title detects the case and says so.
+
+The check is `(pointer: coarse)` **and not** `(any-pointer: fine)` — a
+touchscreen laptop has a trackpad, reports a fine pointer, and is correctly left
+alone. It is evaluated once at load, because the title draws every frame.
+Nothing is gated on it: pair a Bluetooth keyboard and the game plays normally.
+
+`index.html` also carries a `viewport` meta. Without it a phone lays the page
+out at a fake 980px desktop width and zooms out, which made even the notice
+unreadable. With it, landscape fills 82% of the screen at ~2 real pixels per
+game pixel; portrait is a 26% letterboxed strip.
+
+Adding real touch controls would be small — input is already abstracted behind
+`Input.down(code)` / `Input.justDown(code)` reading a `Set` of key codes, so
+buttons could push the same codes with no change to any game logic. The reason
+it has not been done is playability, not plumbing: the hard beats want three
+fingers at once (hold right, hold sprint, time the jump), and the tight windows
+— the fifteen-tile crossing, Edika's 1.05–1.9s openings — are exactly what a
+touch d-pad is worst at.
 
 
 ## The bridge (Act 1)
