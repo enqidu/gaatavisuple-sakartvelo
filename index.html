@@ -38,6 +38,12 @@
   <div id="wrap"><canvas id="game" width="1280" height="720"></canvas></div>
   <!-- canvas dimensions are set from VIEW_W/VIEW_H * SCALE at boot -->
   <div id="boot">LOADING…</div>
-  <script src="game.js"></script>
+  <!-- The ?v= is a cache buster, and it has to be bumped on every push that
+       touches game.js. GitHub Pages serves the script with a long max-age, so
+       without it a returning player keeps running the previous build and the
+       change you just shipped simply is not there. index.html itself is served
+       with max-age=600, so the new number reaches them within ten minutes and
+       pulls the new script with it. -->
+  <script src="game.js?v=7"></script>
 </body>
 </html>

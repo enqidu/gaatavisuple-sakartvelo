@@ -414,6 +414,16 @@ Firebase/Supabase, or a small serverless function — plus some abuse handling,
 since a client-side score can be posted by anyone.
 
 
+## Deploying
+
+`index.html` loads the script as `game.js?v=N`. **Bump that number on every push
+that touches `game.js`.** GitHub Pages serves the script with a long `max-age`,
+so without it a returning player keeps running the previous build and whatever
+you just shipped simply is not there — which is indistinguishable from the
+feature being broken. `index.html` itself is served with `max-age=600`, so the
+new number reaches them within ten minutes and pulls the new script with it.
+
+
 ## Act cards
 
 Each act opens on a typed card over its own backdrop — the act is loaded first,
