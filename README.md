@@ -579,19 +579,18 @@ recognise falls back to `assets/music.m4a`.
 `TRACKS` holds recorded files by name and `TUNES` holds synthesised loops;
 `LEVEL.music` names either, and anything unrecognised falls back to `main`.
 
-| act | `LEVEL.music` | |
-|---|---|---|
-| 1 | `misha` | `assets/misha_magaria.mp3` |
-| 2 | `misha` | same file, and it **does not restart** crossing from act 1 |
-| 3 | *(default)* | `assets/music.m4a` |
+**All three acts play `assets/music.m4a`, and it restarts with every level** —
+entering an act, and restarting one after a death. `Music.cue()` does that from
+`reset()`, deliberately *not* from `retune()`: retune fires on any `loadLevel`,
+including the boot loop that validates all three acts, and re-cueing there
+would fight itself.
 
-The two synth loops (`dark`, `chase`) are still there and still work; no act
-currently asks for them.
+Unused but kept, in case an act wants its own again: the `misha` track and the
+two synth loops `dark` and `chase`. None costs anything at runtime — audio
+elements are only built when an act names them.
 
-Audio elements are built on demand and kept, so switching acts never
-re-downloads, and nothing is fetched until the first `Music.start()` — which
-only fires on a real keypress. That keeps both tracks out of the boot payload,
-which stays ~1.6MB.
+Nothing is fetched until the first `Music.start()`, which only fires on a real
+keypress, so no track touches the boot payload. It stays ~1.6MB.
 
 Web Audio has no pulse-width control, so the thin arpeggio pulse is faked by
 detuning a second square 0.5% against the first — close enough at this size.

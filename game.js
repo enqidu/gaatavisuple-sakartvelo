@@ -681,7 +681,7 @@ const Music = (() => {
      keypress - browsers will not let audio begin without one. `armed` is what
      lets retune() re-pick the source on later act changes without ever being
      the thing that starts audio in the first place. */
-  function pick() {
+  function pick(fromStart = false) {
     const tune = tuneFor();
     if (tune) {
       silenceTracks(null); liveTrack = null;
@@ -695,11 +695,17 @@ const Music = (() => {
     if (!a) return;
     liveTrack = name;
     a.muted = muted;
+    if (fromStart) { try { a.currentTime = 0; } catch (e) {} }
     a.play().catch(e => console.warn('music: autoplay blocked —', e.name));
   }
 
   return {
-    start() { armed = true; pick(); },
+    start() { armed = true; pick(true); },
+    /* Called by reset(), so the track starts over every time a level does -
+       entering an act, and restarting one after a death. Deliberately not in
+       retune(): retune fires on any loadLevel, including the boot loop that
+       validates all three acts, and re-cueing there would fight itself. */
+    cue() { if (armed) pick(true); },
     /* Called on every level load. Stopping the synth and the other tracks is
        unconditional, so leaving an act always silences whatever it was
        playing - an earlier version returned early when the file element did
@@ -809,7 +815,6 @@ const LEVEL_1 = {
        226  final gate — opens when Aslan is beaten
        231  flag                                                            */
   finalBoss: 'ASLAN',
-  music: 'misha',          // Misha Magaria, 8-bit
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
@@ -975,7 +980,6 @@ const LEVEL_2 = {
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
   finalBoss: 'THE ANCHOR',
-  music: 'misha',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -3982,6 +3986,7 @@ function reset(toTitle = false, opts = {}) {
   game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
   game.advance = false;
   game.state = toTitle ? 'title' : 'play';
+  if (typeof Music !== 'undefined') Music.cue();   // the track starts over with the level
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
 }
 
