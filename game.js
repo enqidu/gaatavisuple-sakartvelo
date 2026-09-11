@@ -77,20 +77,33 @@ const SPRITES = {
 
   /* Level 2. NIGHT_HAZE darkens toward navy instead of lightening toward sky:
      the level-1 pale preset flattens a night scene into daylight grey.
-     l2bomb needs the pocket pass off - his white vest and cream trousers are
+     l3bomb needs the pocket pass off - his white vest and cream trousers are
      large enclosed regions and the trousers sit only ~34 from the white
      background, so the pass deleted his clothes. */
-  l2guard: { src: 'assets/l2_guard.png',     h: 28, hitW: 0.55, hitH: 0.90, color: '#4a4ab0' },
-  l2sleepy:{ src: 'assets/l2_sleepy.png',    h: 30, hitW: 0.60, hitH: 0.90, color: '#d8d8e0' },
-  l2svani: { src: 'assets/l2_svani.png',     h: 32, hitW: 0.62, hitH: 0.88, color: '#a03040' },
-  l2bomb:  { src: 'assets/l2_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
+  l3guard: { src: 'assets/l3_guard.png',     h: 28, hitW: 0.55, hitH: 0.90, color: '#4a4ab0' },
+  l3sleepy:{ src: 'assets/l3_sleepy.png',    h: 30, hitW: 0.60, hitH: 0.90, color: '#d8d8e0' },
+  l3svani: { src: 'assets/l3_svani.png',     h: 32, hitW: 0.62, hitH: 0.88, color: '#a03040' },
+  l3bomb:  { src: 'assets/l3_bomb.png',      h: 31, hitW: 0.55, hitH: 0.90, color: '#e0e0d0',
              key: { minHolePct: Infinity } },
-  l2dard:  { src: 'assets/l2_dardubala.png', h: 40, hitW: 0.55, hitH: 0.90, color: '#c03030' },
-  l2foxrun:{ src: 'assets/l2_fox_run.png',   h: 26, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
-  l2foxsit:{ src: 'assets/l2_fox_sit.png',   h: 30, hitW: 0.60, hitH: 0.85, color: '#dde3ec' },
-  l2bg:    { src: 'assets/l2_bg.png',    h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
-  l2bg2:   { src: 'assets/l2_bg2.png',   h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
-  l2arena: { src: 'assets/l2_arena.png', h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
+  l3dard:  { src: 'assets/l3_dardubala.png', h: 40, hitW: 0.55, hitH: 0.90, color: '#c03030' },
+  l3foxrun:{ src: 'assets/l3_fox_run.png',   h: 26, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
+  l3foxsit:{ src: 'assets/l3_fox_sit.png',   h: 30, hitW: 0.60, hitH: 0.85, color: '#dde3ec' },
+  /* Act 2, the television company. Both backdrops are already dark interiors,
+     so the haze is gentle - NIGHT_HAZE on top of them turned the screens to
+     mud. Both tile: at LEVEL_H_PX they come out 320 wide, exactly VIEW_W, so
+     an anchored zone would have nothing left to drift into. */
+  l2hall:   { src: 'assets/l2_hall.png',   h: LEVEL_H_PX, raw: true,
+              haze: { amount: 0.20, tint: [18, 24, 52], desat: 0.16 } },
+  l2studio: { src: 'assets/l2_studio.png', h: LEVEL_H_PX, raw: true,
+              haze: { amount: 0.14, tint: [18, 24, 52], desat: 0.10 } },
+  l2girl:   { src: 'assets/l2_girl.png',   h: 27, hitW: 0.46, hitH: 0.90, color: '#7fb0d8' },
+  l2girl2:  { src: 'assets/l2_girl2.png',  h: 27, hitW: 0.46, hitH: 0.90, color: '#9a94a8' },
+  l2man:    { src: 'assets/l2_man.png',    h: 28, hitW: 0.50, hitH: 0.90, color: '#2b3a5e' },
+  l2anchor: { src: 'assets/l2_anchor.png', h: 34, hitW: 0.50, hitH: 0.90, color: '#1c2436' },
+
+  l3bg:    { src: 'assets/l3_bg.png',    h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
+  l3bg2:   { src: 'assets/l3_bg2.png',   h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
+  l3arena: { src: 'assets/l3_arena.png', h: LEVEL_H_PX, raw: true, haze: NIGHT_HAZE },
 };
 
 /* ---------------------------------------------------------- utils */
@@ -710,6 +723,108 @@ const LEVEL_1 = {
 
 /* ---------------------------------------------------------- level 2
 
+   The television company. A long interior: corridors and newsroom floor, then
+   the studio itself for the fight. Both backdrops tile - at LEVEL_H_PX they
+   come out exactly 320 wide, which is VIEW_W, so an anchored zone would have
+   no width left to drift into and would tear at the right edge.
+
+   No flagpoles indoors: LEVEL.smashKind puts studio monitors along the route
+   instead, same one-touch-each contract. */
+const LEVEL_2 = {
+  w: 196, h: LEVEL_H,
+  start: { x: 3, y: 11 },
+  finishX: null,            // beating the Anchor ends the act
+  finalGate: null,
+  voidColor: '#080a12',
+  subtitle: 'GAATAVISUPLE ETERI',
+  card: [
+    { t: 0.0, s: 'THEN THEY CAME',   c: '#e8e0d0', sc: 1 },
+    { t: 0.5, s: 'FOR THE NEWSROOM', c: '#e8e0d0', sc: 1 },
+    { t: 1.8, s: 'LIVE ON AIR:',     c: '#ffd85e', sc: 2 },
+  ],
+  invincibleLabel: 'ACHARULI',
+  smashKind: 'tv',
+  arenaX: 158,              // past here the Anchor commits
+  winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
+
+  backdrops: [
+    { art: 'l2hall',   fromX: 0,   par: 0.34, tile: true },
+    { art: 'l2studio', fromX: 152, par: 0.22, tile: true },
+  ],
+
+  ground: [[0, 46], [50, 92], [96, 140], [144, 196]],
+
+  blocks: [
+    { x: 10, y: 9,  w: 1, t: T.QUESTION },
+    { x: 16, y: 10, w: 3, t: T.PLATFORM },
+    { x: 24, y: 9,  w: 3, t: T.BRICK },
+    { x: 32, y: 10, w: 4, t: T.PLATFORM },
+    { x: 40, y: 9,  w: 1, t: T.QUESTION },
+
+    { x: 54, y: 10, w: 4, t: T.PLATFORM },
+    { x: 62, y: 9,  w: 3, t: T.BRICK },
+    { x: 64, y: 9,  w: 1, t: T.QUESTION },
+    { x: 72, y: 10, w: 3, t: T.PLATFORM },
+    { x: 80, y: 8,  w: 3, t: T.PLATFORM },
+
+    { x: 100, y: 10, w: 4, t: T.PLATFORM },
+    { x: 108, y: 9,  w: 3, t: T.BRICK },
+    { x: 118, y: 10, w: 3, t: T.PLATFORM },
+    { x: 126, y: 9,  w: 2, t: T.QUESTION },
+    { x: 133, y: 8,  w: 3, t: T.PLATFORM },
+
+    { x: 148, y: 10, w: 3, t: T.PLATFORM },
+    // the studio floor: a low riser he paces, reachable from either side
+    { x: 164, y: 11, w: 4, t: T.PLATFORM },
+    { x: 168, y: 10, w: 12, t: T.PLATFORM },
+    { x: 180, y: 11, w: 4, t: T.PLATFORM },
+  ],
+
+  pipes: [
+    { x: 28, y: 11, h: 2 },
+    { x: 88, y: 11, h: 2 },
+    { x: 130, y: 11, h: 2 },
+  ],
+
+  coinRuns: [
+    { x: 6,   y: 10, n: 4 }, { x: 17,  y: 8,  n: 3 },
+    { x: 33,  y: 8,  n: 4 }, { x: 46,  y: 9,  n: 4 },
+    { x: 55,  y: 8,  n: 4 }, { x: 73,  y: 8,  n: 3 },
+    { x: 92,  y: 9,  n: 4 }, { x: 101, y: 8,  n: 4 },
+    { x: 119, y: 8,  n: 3 }, { x: 140, y: 9,  n: 4 },
+    { x: 149, y: 8,  n: 3 }, { x: 170, y: 8,  n: 6 },
+  ],
+
+  enemies: [
+    { t: 'l2girl',  x: 14 }, { t: 'l2man',   x: 22 },
+    { t: 'l2girl2', x: 34 }, { t: 'l2girl',  x: 42 },
+    { t: 'l2man',   x: 58 }, { t: 'l2girl2', x: 66 },
+    { t: 'l2girl',  x: 76 }, { t: 'l2man',   x: 84 },
+    { t: 'l2girl2', x: 102 }, { t: 'l2girl', x: 110 },
+    { t: 'l2man',   x: 120 }, { t: 'l2girl2', x: 128 },
+    { t: 'l2girl',  x: 146 }, { t: 'l2man',  x: 154 },
+    { t: 'l2anchor', x: 174 },
+  ],
+
+  items: [
+    { x: 20,  y: 8,  t: 'rose' },
+    { x: 36,  y: 8,  t: 'khachapuri' },
+    { x: 56,  y: 8,  t: 'powder' },
+    { x: 74,  y: 8,  t: 'rose' },
+    { x: 102, y: 8,  t: 'powder' },
+    { x: 120, y: 8,  t: 'rose' },
+    { x: 134, y: 7,  t: 'khachapuri' },
+    { x: 150, y: 8,  t: 'powder' },
+    { x: 156, y: 10, t: 'rose' },
+  ],
+
+  flags: [8, 30, 60, 86, 112, 138, 160],   // televisions, see smashKind
+  charmers: [26, 70, 116],
+};
+
+
+/* ---------------------------------------------------------- level 3
+
    Rustaveli Avenue, November 2003. Three backdrop zones: two stretches of the
    avenue, then the Parliament for the final fight. Each intermediate boss
    holds a gate, same contract as level 1.
@@ -719,7 +834,7 @@ const LEVEL_1 = {
    layer drifts (3392-2816)*0.15 = 86px. The art must cover VIEW_W + drift =
    406px and l2_arena is 525 wide. At level 1's 0.34 it would need 516 and
    very nearly run off the right edge.                                     */
-const LEVEL_2 = {
+const LEVEL_3 = {
   w: 232, h: LEVEL_H,
   start: { x: 3, y: 11 },
   finishX: null,           // no flag: beating Dardubala is the finish
@@ -736,9 +851,9 @@ const LEVEL_2 = {
   winLines: [['REVOLUTSIA!', '#7ae07a']],
 
   backdrops: [
-    { art: 'l2bg',    fromX: 0,   par: 0.34, tile: true },
-    { art: 'l2bg2',   fromX: 84,  par: 0.34, tile: true },
-    { art: 'l2arena', fromX: 186, par: 0.15, tile: false, anchorX: 176 },
+    { art: 'l3bg',    fromX: 0,   par: 0.34, tile: true },
+    { art: 'l3bg2',   fromX: 84,  par: 0.34, tile: true },
+    { art: 'l3arena', fromX: 186, par: 0.15, tile: false, anchorX: 176 },
   ],
 
   ground: [[0, 58], [62, 104], [108, 152], [156, 232]],
@@ -786,16 +901,16 @@ const LEVEL_2 = {
   ],
 
   enemies: [
-    { t: 'l2guard', x: 16 }, { t: 'l2guard', x: 24 }, { t: 'l2guard', x: 31 },
-    { t: 'l2sleepy', x: 40, gate: 48 },
-    { t: 'l2guard', x: 54 }, { t: 'l2guard', x: 68 }, { t: 'l2guard', x: 76 },
-    { t: 'l2guard', x: 82 },
-    { t: 'l2svani', x: 92, gate: 98 },
-    { t: 'l2guard', x: 112 }, { t: 'l2guard', x: 120 }, { t: 'l2guard', x: 128 },
-    { t: 'l2guard', x: 134 },
-    { t: 'l2bomber', x: 140, gate: 146 },
-    { t: 'l2guard', x: 158 }, { t: 'l2guard', x: 170 }, { t: 'l2guard', x: 180 },
-    { t: 'l2dard', x: 207 },
+    { t: 'l3guard', x: 16 }, { t: 'l3guard', x: 24 }, { t: 'l3guard', x: 31 },
+    { t: 'l3sleepy', x: 40, gate: 48 },
+    { t: 'l3guard', x: 54 }, { t: 'l3guard', x: 68 }, { t: 'l3guard', x: 76 },
+    { t: 'l3guard', x: 82 },
+    { t: 'l3svani', x: 92, gate: 98 },
+    { t: 'l3guard', x: 112 }, { t: 'l3guard', x: 120 }, { t: 'l3guard', x: 128 },
+    { t: 'l3guard', x: 134 },
+    { t: 'l3bomber', x: 140, gate: 146 },
+    { t: 'l3guard', x: 158 }, { t: 'l3guard', x: 170 }, { t: 'l3guard', x: 180 },
+    { t: 'l3dard', x: 207 },
   ],
 
   items: [
@@ -818,7 +933,7 @@ const LEVEL_2 = {
 /* `LEVEL` is read from ~40 places and written from none, so two levels costs
    one keyword: a `let` plus a selector. Everything downstream keeps reading
    LEVEL.* and does not care which act it is in. */
-const LEVELS = [LEVEL_1, LEVEL_2];
+const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3];
 let LEVEL = LEVEL_1;
 
 /* Which class each `t` in LEVEL.enemies builds. Was a hardcoded ternary on
@@ -830,8 +945,9 @@ let LEVEL = LEVEL_1;
 function enemyKind(t) {
   return ({
     walker: Walker, mid: MidBoss,
-    l2guard: Guard, l2sleepy: Sleepy, l2svani: Svani,
-    l2bomber: Bomber, l2dard: Dardubala,
+    l2girl: PressGirl, l2girl2: PressGirl2, l2man: PressMan, l2anchor: Anchor,
+    l3guard: Guard, l3sleepy: Sleepy, l3svani: Svani,
+    l3bomber: Bomber, l3dard: Dardubala,
   })[t] || Walker;
 }
 
@@ -1685,7 +1801,7 @@ const GUARD = { speed: 26, surgeMul: 2.4, surgeT: 1.0, surgeCd: 2.4, alert: 58, 
    rather than walked into. Still one stomp each. */
 class Guard extends Entity {
   constructor(tx) {
-    const hb = hitboxFor('l2guard');
+    const hb = hitboxFor('l3guard');
     super(tx * TILE, 0, hb.w, hb.h);
     this.y = groundYAt(tx) - this.h;
     this.dir = -1; this.turnCd = 0; this.surge = 0; this.cd = 0; this.t = rand(0, 4);
@@ -1746,7 +1862,7 @@ const SLEEP = { range: 58, wake: 1.0, gain: 1.0, decay: 0.9, awake: 2.2, chase: 
    stompable; awake he is faster than you and cannot be touched. */
 class Sleepy extends Entity {
   constructor(tx, gate = null) {
-    const hb = hitboxFor('l2sleepy');
+    const hb = hitboxFor('l3sleepy');
     super(tx * TILE, 0, hb.w, hb.h);
     this.y = groundYAt(tx) - this.h;
     this.gate = gate;
@@ -1844,7 +1960,7 @@ const SVANI = { hp: 5, walk: 24, charge: 96, windup: 0.55, chargeT: 0.9, stun: 1
    chains straight from stun back into windup with no patrol in between. */
 class Svani extends Entity {
   constructor(tx, gate = null) {
-    const hb = hitboxFor('l2svani');
+    const hb = hitboxFor('l3svani');
     super(tx * TILE, 0, hb.w, hb.h);
     this.y = groundYAt(tx) - this.h;
     this.gate = gate;
@@ -2035,15 +2151,15 @@ class Debris {
 const BULLET = { speed: 96, ride: 25, w: 7, h: 5, life: 5.0 };
 
 class Bullet {
-  constructor(x, y, dir) {
+  constructor(x, y, dir, kind = 'shot', speed = BULLET.speed) {
     this.x = x; this.y = y; this.w = BULLET.w; this.h = BULLET.h;
-    this.dir = dir; this.t = 0; this.dead = false;
+    this.dir = dir; this.t = 0; this.dead = false; this.kind = kind; this.speed = speed;
   }
   get cx() { return this.x + this.w / 2; }
   get bottom() { return this.y + this.h; }
   update(dt) {
     this.t += dt;
-    this.x += this.dir * BULLET.speed * dt;          // level, always
+    this.x += this.dir * this.speed * dt;            // level, always
     if (this.t > BULLET.life) this.dead = true;
     if (this.cx < cam.x - 80 || this.cx > cam.x + VIEW_W + 80) this.dead = true;
     if (isSolid(tileAt(Math.floor(this.cx / TILE), Math.floor((this.y + this.h / 2) / TILE)))) {
@@ -2053,10 +2169,21 @@ class Bullet {
     }
     if (Math.random() < dt * 30)
       burst(this.cx, this.y + 2, 1,
-            { colors: ['#ff8a5c', '#ffd85e'], speed: 10, grav: -8, life: .35, size: 1 });
+            { colors: this.kind === 'speech' ? ['#f4f4f4', '#c8d8f0'] : ['#ff8a5c', '#ffd85e'],
+              speed: 10, grav: -8, life: .35, size: 1 });
   }
   draw() {
     const x = Math.round(this.x), y = Math.round(this.y);
+    if (this.kind === 'speech') {
+      // a little speech bubble - what the press actually shoot with
+      g.fillStyle = '#f4f4f4'; g.fillRect(x, y, BULLET.w, BULLET.h - 1);
+      g.fillStyle = '#f4f4f4'; g.fillRect(x + 1, y + BULLET.h - 1, 2, 1);   // the tail
+      g.fillStyle = '#2b3a5e';
+      g.fillRect(x + 1, y + 1, 1, 1); g.fillRect(x + 3, y + 1, 1, 1); g.fillRect(x + 5, y + 1, 1, 1);
+      g.fillStyle = 'rgba(244,244,244,.40)';
+      g.fillRect(this.dir > 0 ? x - 5 : x + BULLET.w, y + 1, 5, 2);
+      return;
+    }
     g.fillStyle = '#ffd85e'; g.fillRect(x, y, BULLET.w, BULLET.h);
     g.fillStyle = '#ff8a5c'; g.fillRect(x, y + 1, BULLET.w, 1);
     g.fillStyle = '#fff';    g.fillRect(this.dir > 0 ? x + BULLET.w - 2 : x, y + 1, 2, 2);
@@ -2065,6 +2192,211 @@ class Bullet {
     g.fillRect(this.dir > 0 ? x - 5 : x + BULLET.w, y + 1, 5, 3);
   }
 }
+
+/* ---------------------------------------------------------- act 2: the press
+
+   Three reporters who walk the building and fire FREE SPEECH at you. Same
+   Bullet, same head-height lane, so the crouch you learn here is the crouch
+   that keeps you alive against the Anchor at the end of the act - and against
+   Edika two acts later. Teaching it on ordinary walkers first is deliberate.
+
+   They telegraph with the word rather than a lane marker: at walker density a
+   dotted line per reporter would be visual soup, and one reporter's shot is
+   survivable in a way a boss volley is not. */
+const PRESS = { walk: 20, fireEvery: 3.4, aim: 0.55, range: 200, sight: 120 };
+
+class Journalist extends Entity {
+  constructor(tx, art) {
+    const hb = hitboxFor(art);
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.art = art;
+    this.y = groundYAt(tx) - this.h;
+    this.dir = -1; this.turnCd = 0; this.t = rand(0, 4);
+    this.fire = PRESS.fireEvery * rand(0.4, 1.2);
+    this.phase = 'walk'; this.phaseT = 0;
+  }
+  // safe to brush past while she is lining a shot up, same as every other tell
+  get harmless() { return this.phase === 'aim'; }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitWall = false;
+    const p = game.player;
+    const d = p.cx - this.cx;
+
+    if (this.phase === 'aim') {
+      this.vx *= Math.pow(0.02, dt);
+      if (this.phaseT > PRESS.aim) {
+        game.hazards.push(new Bullet(this.cx + this.aimDir * 7,
+                                     this.bottom - BULLET.ride, this.aimDir, 'speech'));
+        Sfx.bump();
+        this.fire = PRESS.fireEvery * rand(0.8, 1.4);
+        this.phase = 'walk'; this.phaseT = 0;
+      }
+    } else {
+      this.vx = this.dir * PRESS.walk;
+      this.fire -= dt;
+      // only when you are in front of her and close enough to have been seen
+      if (this.fire <= 0 && Math.abs(d) < PRESS.sight && Math.abs(p.bottom - this.bottom) < 24) {
+        this.phase = 'aim'; this.phaseT = 0;
+        this.aimDir = Math.sign(d) || this.dir;
+        this.dir = this.aimDir;
+        floatText(this.cx, this.y - 10, 'FREE SPEECH', '#f4f4f4');
+      }
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    this.face = this.dir;
+  }
+  onStomp(p) {
+    this.dead = true;
+    game.addCombo(p, this.cx, this.y, 250);
+    p.vy = CFG.stompBounce;
+    burst(this.cx, this.y + this.h / 2, 14,
+          { colors: ['#f4f4f4', '#7fb0d8', '#2b3a5e'], speed: 110, size: 2 });
+    shake = 2; freeze = 0.05; Sfx.stomp();
+  }
+  onBumped() {
+    this.dead = true;
+    game.score += 250;
+    floatText(this.cx, this.y, '+250', '#ffd85e');
+    burst(this.cx, this.y + this.h / 2, 12, { colors: ['#f4f4f4', '#7fb0d8'], speed: 90 });
+    Sfx.stomp();
+  }
+}
+
+/* The man whose building it is. Paces the studio floor and answers with
+   volleys instead of single shots - three in a row along the same lane, so a
+   crouch has to be HELD rather than tapped. The beat after a volley is the
+   only one he can be stomped on. */
+/* `rattled` matches Edika's 1.9s winded window rather than undercutting it.
+   This is the first real boss in the run, so its opening should not be tighter
+   than the last one's.
+
+   `speed` is per-shooter: the Anchor's volleys clear the screen faster than a
+   lone reporter's single shot. A crouch stops you moving, so a slow straggler
+   bullet still in the air while he paces back toward you means ducking one
+   threat into another - his shots outrun that overlap. */
+const ANCHOR = { hp: 3, pace: 36, cycle: 2.4, aim: 0.6, volley: 3, gap: 0.30,
+                 rattled: 1.9, speed: 150 };
+
+class Anchor extends Entity {
+  constructor(tx, gate = null) {
+    const hb = hitboxFor('l2anchor');
+    super(tx * TILE, 0, hb.w, hb.h);
+    this.gate = gate;
+    this.y = groundYAt(tx) - this.h;
+    this.dir = -1; this.turnCd = 0; this.hp = ANCHOR.hp; this.hitFlash = 0; this.t = 0;
+    this.phase = 'pace'; this.phaseT = 0; this.left = 0;
+    this.home = spanAround(tx);
+    this.greeted = false;
+  }
+  get bossGrade() { return true; }
+  get bossName() { return 'THE ANCHOR'; }
+  get maxHp() { return ANCHOR.hp; }
+  get harmless() { return this.phase === 'aim' || this.phase === 'rattled'; }
+  get engaged() {
+    if (game.player.cx > (LEVEL.arenaX ?? 0) * TILE &&
+        Math.abs(game.player.cx - this.cx) < 210) this.woke = true;
+    return this.woke === true;
+  }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.hitWall = false;
+    if (this.scriptedOut) { this.vx = 0; return; }
+
+    if (this.engaged && !this.greeted) {
+      this.greeted = true;
+      floatText(this.cx, this.y - 18, 'AND THE GUESTS HAVE ARRIVED...', '#ffd85e');
+      shake = 3; Sfx.deny();
+    }
+
+    switch (this.phase) {
+      case 'pace':
+        this.vx = this.dir * ANCHOR.pace;
+        if (this.engaged && this.phaseT > ANCHOR.cycle) {
+          this.phase = 'aim'; this.phaseT = 0;
+          this.aimDir = Math.sign(game.player.cx - this.cx) || this.dir;
+          this.dir = this.aimDir;
+          Sfx.deny();
+        }
+        break;
+      case 'aim':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > ANCHOR.aim) {
+          this.phase = 'volley'; this.phaseT = 0; this.left = ANCHOR.volley; this.gap = 0;
+        }
+        break;
+      case 'volley':
+        this.vx *= Math.pow(0.05, dt);
+        this.gap -= dt;
+        if (this.gap <= 0 && this.left > 0) {
+          game.hazards.push(new Bullet(this.cx + this.aimDir * 9,
+                                       this.bottom - BULLET.ride, this.aimDir,
+                                       'speech', ANCHOR.speed));
+          this.left--; this.gap = ANCHOR.gap;
+          shake = Math.max(shake, 2); Sfx.bump();
+        }
+        if (this.left <= 0 && this.gap <= 0) { this.phase = 'rattled'; this.phaseT = 0; }
+        break;
+      case 'rattled':
+        this.vx = 0;                       // the open beat holds still, as Edika's does
+        if (this.phaseT > ANCHOR.rattled) { this.phase = 'pace'; this.phaseT = 0; }
+        break;
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    this.face = this.dir;
+  }
+  onStomp(p) {
+    p.vy = CFG.stompBounce * 0.85;
+    if (this.phase !== 'rattled') {
+      floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff');
+      shake = 4; Sfx.deny();
+      return;
+    }
+    this.takeHit(p);
+  }
+  chip(p) { this.takeHit(p); }
+  takeHit(p) {
+    if (this.hp <= 0 || this.scriptedOut) return;
+    this.hp--; this.hitFlash = 0.4;
+    this.phase = 'pace'; this.phaseT = 0;
+    shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
+    burst(this.cx, this.y + this.h / 2, 24,
+          { colors: ['#f4f4f4', '#ffd85e', '#2b3a5e'], speed: 170, size: 3 });
+    if (this.hp <= 0) {
+      this.scriptedOut = true; this.dead = true;
+      game.addCombo(p, this.cx, this.y, 2500);
+      floatText(this.cx, this.y - 18, 'WE GO TO A BREAK', '#ffd85e');
+      shake = 14; flash = 0.8; freeze = 0.2;
+      if (this.gate != null) openGate(this.gate);
+      game.win();
+    } else {
+      game.addCombo(p, this.cx, this.y, 500);
+      floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
+    }
+  }
+}
+
+/* Only the artwork differs. Named classes rather than a factory because
+   reset() builds enemies with `new (enemyKind(t))(...)`. */
+class PressGirl  extends Journalist { constructor(tx) { super(tx, 'l2girl');  } }
+class PressGirl2 extends Journalist { constructor(tx) { super(tx, 'l2girl2'); } }
+class PressMan   extends Journalist { constructor(tx) { super(tx, 'l2man');   } }
 
 const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
@@ -2076,7 +2408,7 @@ const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
    bomb to punt it back the way you are facing and cut its fuse. */
 class Bomber extends Entity {
   constructor(tx, gate = null) {
-    const hb = hitboxFor('l2bomb');
+    const hb = hitboxFor('l3bomb');
     super(tx * TILE, 0, hb.w, hb.h);
     this.y = groundYAt(tx) - this.h;
     this.gate = gate;
@@ -2250,9 +2582,20 @@ class DecoyFox extends Entity {
    flip - a pilot that used to survive the whole fight died in six seconds
    without landing a hit. Fewer chunks, dropped from higher, falling slower,
    and each one paints where it will land before it gets there. */
-const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 1.9, quipEvery: 3.1,
-               foxRun: 150, foxLeap: -330, prowl: 1.15, pounce: 0.95, pant: 1.35,
-               debris: 3, doublePounce: 0.38,
+/* Loosened after playtest feedback that the fox was uncatchable - "jumps
+   around so much and is impossible to catch him vulnerable". That is the
+   version my own pilots scored 4/5 on, which says more about the pilots than
+   the fight: a bot reads e.phase directly and pounces on the exact frame the
+   window opens, so a 1.35s opening on a target moving at 150px/s looked fine
+   to it and was not fine for a person.
+
+   The fox is where the changes land. `pant` - the only beat he can be stomped
+   on - is now the longest window in the fight, he runs slower, and the chance
+   of a second pounce that carries him out of reach is roughly halved. The
+   man's window is nudged up to match. */
+const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 2.2, quipEvery: 3.1,
+               foxRun: 118, foxLeap: -330, prowl: 1.15, pounce: 0.95, pant: 2.2,
+               debris: 3, doublePounce: 0.20,
                /* Only the man shoots. It keeps the two forms asking for
                   different things: duck the man, jump the fox. */
                shootEvery: 2.1, aim: 0.5 };
@@ -2266,7 +2609,7 @@ const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
    after a slam, not about dodging him in the open. */
 class Dardubala extends Entity {
   constructor(tx) {
-    const hb = hitboxFor('l2dard');
+    const hb = hitboxFor('l3dard');
     super(tx * TILE, 0, hb.w, hb.h);
     this.y = groundYAt(tx) - this.h;
     this.hp = DARD.hp; this.dir = -1; this.turnCd = 0;
@@ -2356,7 +2699,10 @@ class Dardubala extends Entity {
           }
           break;
         case 'pant':
-          this.vx *= Math.pow(0.05, dt);
+          /* Dead stop, not a decay. Coasting through the one window he can be
+             stomped on meant lining up a landing on a moving target - which is
+             most of what "impossible to catch him vulnerable" was. */
+          this.vx = 0;
           if (this.phaseT > DARD.pant) { this.phase = 'prowl'; this.phaseT = 0; }
           break;
       }
@@ -2445,7 +2791,7 @@ class Dardubala extends Entity {
         }
         break;
       case 'winded':
-        this.vx *= Math.pow(0.05, dt);
+        this.vx = 0;                       // see 'pant': the open beat holds still
         if (this.phaseT > DARD.winded) { this.phase = 'pace'; this.phaseT = 0; }
         break;
     }
@@ -4363,8 +4709,14 @@ function drawFlagAchara(x, y, wave) {
 class LevelFlag extends Entity {
   constructor(tx) {
     const base = groundYAt(tx);
-    super(tx * TILE, base - 46, 18, 46);
+    /* Act 2 puts televisions along the route instead of flagpoles. Same
+       contract - one per column, touch it once, worth 300 - so it reuses this
+       whole path rather than growing a parallel array through reset, update,
+       draw and validate. Only the box and the artwork differ. */
+    const tv = (LEVEL.smashKind === 'tv');
+    super(tx * TILE, base - (tv ? 21 : 46), tv ? 20 : 18, tv ? 21 : 46);
     this.tx = tx; this.base = base; this.converted = false; this.pop = 0;
+    this.tv = tv;
   }
   convert() {
     this.converted = true;
@@ -4373,9 +4725,43 @@ class LevelFlag extends Entity {
     game.flagsConverted++;
     if (LEVEL.crowd) crowd.join(this.x);
     floatText(this.x + 9, this.y - 6, '+300', '#ffd85e');
-    burst(this.x + 9, this.y + 6, 18,
-          { colors: ['#d6263c', '#f4f4f4', '#ffd85e'], speed: 95, life: 0.8, size: 2 });
-    shake = 3; Sfx.gate();
+    if (this.tv) {
+      floatText(this.x + 9, this.y - 18, 'OFF AIR', '#7ec8f0');
+      burst(this.x + 10, this.y + 10, 26,
+            { colors: ['#9fd8ff', '#f4f4f4', '#3a4658', '#1c2436'], speed: 140, life: 0.9, size: 2 });
+      shake = 5; Sfx.brick();
+    } else {
+      burst(this.x + 9, this.y + 6, 18,
+            { colors: ['#d6263c', '#f4f4f4', '#ffd85e'], speed: 95, life: 0.8, size: 2 });
+      shake = 3; Sfx.gate();
+    }
+  }
+}
+
+/* A studio monitor on a stand. Live it shows a shifting test pattern; smashed
+   it is a cracked dead screen with the glass gone. */
+function drawTv(x, base, smashed, t, lift) {
+  const y = base - 21 + lift;
+  g.fillStyle = '#171c28'; g.fillRect(x + 7, y + 17, 6, 4);          // stand
+  g.fillStyle = '#0f131c'; g.fillRect(x + 4, y + 20, 12, 1);
+  g.fillStyle = '#3a4658'; g.fillRect(x, y, 20, 18);                 // casing
+  g.fillStyle = '#242c3a'; g.fillRect(x, y, 20, 1); g.fillRect(x, y + 17, 20, 1);
+  g.fillStyle = '#11151e'; g.fillRect(x + 2, y + 2, 16, 13);         // bezel
+  if (!smashed) {
+    const bar = Math.floor(t * 6) % 4;
+    const cols = ['#e8434f', '#ffd85e', '#3ad47a', '#41a6f0'];
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = cols[(i + bar) % 4];
+      g.fillRect(x + 3 + i * 4, y + 3, 4, 11);
+    }
+    g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(x + 3, y + 3, 14, 2);
+    if (Math.floor(t * 3) % 2 === 0) { g.fillStyle = '#e8434f'; g.fillRect(x + 15, y + 16, 2, 1); }
+  } else {
+    g.fillStyle = '#0a0d14'; g.fillRect(x + 3, y + 3, 14, 11);
+    g.fillStyle = '#2a3444';                                          // the crack
+    g.fillRect(x + 6, y + 4, 1, 4); g.fillRect(x + 7, y + 8, 1, 3);
+    g.fillRect(x + 8, y + 6, 4, 1); g.fillRect(x + 11, y + 9, 1, 4);
+    g.fillStyle = '#161c26'; g.fillRect(x + 4, y + 12, 3, 2);
   }
 }
 
@@ -4385,6 +4771,7 @@ function drawLevelFlags() {
     const wave = Math.round(Math.sin(game.time * 2.5 + f.tx) * 1);
     // Brief upward kick as it changes over.
     const lift = f.pop > 0 ? -Math.round(Math.sin((0.5 - f.pop) / 0.5 * Math.PI) * 4) : 0;
+    if (f.tv) { drawTv(px, f.base, f.converted, game.time + f.tx, lift); continue; }
     g.fillStyle = '#9aa0ad'; g.fillRect(px, f.base - 46, 2, 46);    // pole
     g.fillStyle = '#ffd85e'; g.fillRect(px - 1, f.base - 49, 4, 3); // finial
     const fy = f.base - 45 + wave + lift;
@@ -4475,10 +4862,10 @@ function drawEntities() {
       g.fillStyle = '#8a6a3a'; g.fillRect(x + 5, y - 2, 1, 3);
       g.fillStyle = Math.floor(e.t * 20) % 2 ? '#ffd85e' : '#ff8a5c'; g.fillRect(x + 5, y - 3, 1, 1);
     } else if (e instanceof Guard) {
-      drawSprite(ART.l2guard, e, { tint: e.surge > 0 && Math.floor(game.time * 12) % 2 === 0 ? 'rgba(255,90,90,.45)' : null });
+      drawSprite(ART.l3guard, e, { tint: e.surge > 0 && Math.floor(game.time * 12) % 2 === 0 ? 'rgba(255,90,90,.45)' : null });
     } else if (e instanceof Sleepy) {
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
-      drawSprite(ART.l2sleepy, e, {
+      drawSprite(ART.l3sleepy, e, {
         tint: flashing ? 'rgba(255,255,255,.85)'
             : e.harmless ? 'rgba(90,120,200,.35)' : null,
       });
@@ -4496,14 +4883,37 @@ function drawEntities() {
     } else if (e instanceof Svani) {
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
       const rage = e.stage === 3 ? 'rgba(255,45,85,.35)' : e.stage === 2 ? 'rgba(255,138,92,.25)' : null;
-      drawSprite(ART.l2svani, e, { tint: flashing ? 'rgba(255,255,255,.85)' : rage });
+      drawSprite(ART.l3svani, e, { tint: flashing ? 'rgba(255,255,255,.85)' : rage });
       if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)
         drawTextCentered(g, '!', e.cx, e.y - 11, '#ff8a5c', 2);
       if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
         drawTextCentered(g, 'HIT HIM', e.cx, e.y - 10, '#7ae07a', 1);
+    } else if (e instanceof Journalist) {
+      const flash = e.phase === 'aim' && Math.floor(game.time * 14) % 2 === 0;
+      drawSprite(ART[e.art], e, { tint: flash ? 'rgba(255,255,255,.65)' : null });
+    } else if (e instanceof Anchor) {
+      const flash = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
+      const open = e.phase === 'rattled' && Math.floor(game.time * 10) % 2 === 0;
+      drawSprite(ART.l2anchor, e, {
+        tint: flash ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.45)' : null,
+      });
+      if (e.phase === 'rattled' && Math.floor(game.time * 8) % 2 === 0)
+        drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
+      /* Same lane tell as Edika: the height is the point, so it is drawn along
+         the floor he is on rather than as a symbol over his head. */
+      if (e.phase === 'aim' || e.phase === 'volley') {
+        const fy = e.bottom - BULLET.ride;
+        const d = e.aimDir || 1;
+        if (Math.floor(game.time * 14) % 2 === 0) {
+          g.fillStyle = 'rgba(244,244,244,.55)';
+          for (let k = 1; k < 14; k++)
+            g.fillRect(Math.round(e.cx + d * (9 + k * 9)), Math.round(fy) + 2, 4, 1);
+        }
+        if (e.phase === 'aim') drawTextCentered(g, 'DUCK', e.cx, e.y - 12, '#ff8a5c', 1);
+      }
     } else if (e instanceof Bomber) {
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
-      drawSprite(ART.l2bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
+      drawSprite(ART.l3bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
       if (e.taunt > 0) drawTextCentered(g, 'ARMOURED', e.cx, e.y - 11, '#ff8a5c', 1);
     } else if (e instanceof DecoyFox) {
       /* Drawn as a phantom, not as a second fox. A 30% blue wash over the same
@@ -4514,7 +4924,7 @@ function drawEntities() {
       const shimmer = 0.42 + Math.sin(game.time * 9 + e.t * 3) * 0.12;
       g.save();
       g.globalAlpha = shimmer + 0.16;
-      drawSprite(ART.l2foxrun, e, { tint: 'rgba(90,170,235,.55)' });
+      drawSprite(ART.l3foxrun, e, { tint: 'rgba(90,170,235,.55)' });
       g.restore();
       if (Math.floor(game.time * 6) % 2 === 0)
         drawTextCentered(g, '?', e.cx, e.y - 12, '#7ec8f0', 1);
@@ -4537,7 +4947,7 @@ function drawEntities() {
       if (e.isFox && !e.scriptedOut) {
         // real art now: running while he hunts, sitting while he is open
         const sitting = e.phase === 'pant';
-        const art = sitting ? ART.l2foxsit : ART.l2foxrun;
+        const art = sitting ? ART.l3foxsit : ART.l3foxrun;
         const flash = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
         const open = sitting && Math.floor(game.time * 10) % 2 === 0;
         drawSprite(art, e, {
@@ -4551,7 +4961,7 @@ function drawEntities() {
       }
       const flashing = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
       const open = e.harmless && Math.floor(game.time * 10) % 2 === 0;
-      drawSprite(ART.l2dard, e, {
+      drawSprite(ART.l3dard, e, {
         tint: flashing ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.5)' : null,
       });
       if (e.phase === 'windup' && Math.floor(game.time * 14) % 2 === 0)

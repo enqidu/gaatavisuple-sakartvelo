@@ -441,6 +441,47 @@ feature being broken. `index.html` itself is served with `max-age=600`, so the
 new number reaches them within ten minutes and pulls the new script with it.
 
 
+## The acts
+
+| | | |
+|---|---|---|
+| 1 | GAATAVISUPLE ACHARA | Batumi, 2004. Aslan, the bridge, the ultra powder. |
+| 2 | GAATAVISUPLE ETERI | The television company. Reporters, smashable monitors, the Anchor. |
+| 3 | GAATAVISUPLE PARLAMENTI | Rustaveli, 2003. Was act 2 until act 2 was inserted ahead of it. |
+
+**Asset prefixes follow the act number**: `l2_*` is the television company,
+`l3_*` is Parliament. When Parliament moved from 2 to 3 its files and sprite
+keys were renamed with it rather than left stale — the boot-time placeholder
+report is what makes that rename safe to do, since any file it fails to find
+shows up there immediately.
+
+
+## Act 2: the television company
+
+Reporters (`l2girl`, `l2girl2`, `l2man`) walk the building and fire **FREE
+SPEECH** at head height. Same `Bullet`, same lane as Edika's shots, so the
+crouch taught here is the crouch that keeps you alive against the Anchor at the
+end of the act and against Edika an act later. Teaching it on ordinary walkers
+first is deliberate. They telegraph with the word rather than a lane marker: at
+walker density a dotted line each would be visual soup.
+
+No flagpoles indoors. `LEVEL.smashKind = 'tv'` puts studio monitors along the
+route instead — same one-touch-each contract and the same `LevelFlag` path, so
+it costs a box and some artwork rather than a parallel array threaded through
+reset, update, draw and validate. Live they show a shifting test pattern;
+smashed they are cracked and dark, and say OFF AIR.
+
+**The Anchor** paces the studio and answers in volleys of three down one lane,
+so the crouch has to be *held* rather than tapped. `rattled` afterwards is the
+only beat he can be stomped on. He greets you once, on arrival:
+*AND THE GUESTS HAVE ARRIVED...*
+
+Every vulnerable window in the game — his `rattled`, Edika's `winded` and
+`pant` — now sets `vx = 0` outright instead of decaying. Coasting through the
+one beat you can be stomped on means asking the player to land on a moving
+target, which was most of what made Edika feel uncatchable.
+
+
 ## Act cards
 
 Each act opens on a typed card over its own backdrop — the act is loaded first,
