@@ -573,7 +573,21 @@ megabyte of load time and buys nothing.
 
 ### The soundtrack
 
-**Act 3 plays `assets/music.m4a`; acts 1 and 2 are synthesised** — `LEVEL.music = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
+`ChipTune` holds named loops and `LEVEL.music` picks one; anything it does not
+recognise falls back to `assets/music.m4a`.
+
+| act | track | |
+|---|---|---|
+| 1 | `dark` | D minor, 84bpm, i–VI–III–VII. Something closing in. |
+| 2 | `chase` | G major, 168bpm, I–vi–IV–V. Offbeat bass, snare backbeat, syncopated lead over a thin 12.5% pulse arpeggio. |
+| 3 | file | `assets/music.m4a` |
+
+Web Audio has no pulse-width control, so the thin arpeggio pulse is faked by
+detuning a second square 0.5% against the first — close enough at this size.
+
+
+
+Older note, kept for the detail below: **act 3 plays `assets/music.m4a`; acts 1 and 2 are synthesised** — `LEVEL.music = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
 84bpm over i–VI–III–VII: a square bass on the root, a sparse triangle line that
 leaves most of the bar empty, and a noise tick on the offbeat. One recorded track looping across three acts had worn thin, so the synth
 carries the two earlier ones and the recording is saved for the finale.

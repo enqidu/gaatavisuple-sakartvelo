@@ -490,94 +490,158 @@ const Sfx = (() => {
    browsers refuse audio until a real user gesture, and a play() call on page
    load just throws and leaves the track silently dead. */
 
-/* ---------------------------------------------------------- act 3's music
+/* ---------------------------------------------------------- chiptune
 
-   Synthesised rather than a second audio file: the one track looping across
-   three acts had worn thin by the time you reach Rustaveli, and this is the
-   act that should feel like something is closing in.
+   Two synthesised loops, so acts do not have to share one recorded track.
+   `LEVEL.music` names one; anything else falls back to assets/music.m4a.
 
-   D natural minor, 84bpm, i - VI - III - VII, which is about as bleak as four
-   chords get without being funny about it. Three voices: a square bass on the
-   root, a sparse triangle line above it that leaves most of the bar empty, and
-   a noise tick on the offbeat for pulse.
+     dark  - D natural minor, 84bpm, i-VI-III-VII. Square bass, a sparse
+             triangle line that leaves most of the bar empty, a noise tick on
+             the offbeat. Something closing in.
+     chase - G major, 168bpm, I-vi-IV-V. Offbeat bass, snare backbeat, a
+             syncopated lead over a thin 12.5% pulse arpeggio. Momentum.
 
-   Scheduled with lookahead against actx.currentTime rather than setTimeout -
-   setTimeout drifts by tens of milliseconds under load, which on a loop this
-   slow turns into an audible stagger. */
-const DarkTune = (() => {
-  const BPM = 84, SIXTEENTH = 60 / BPM / 4, LOOKAHEAD = 0.18;
-  const N = { D2: 73.42, F2: 87.31, A2: 110.00, Bb1: 58.27, C2: 65.41,
-              D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00,
-              Bb4: 466.16, C5: 523.25, D5: 587.33 };
-  // four bars of sixteenths; null is a rest
-  const BASS = [
-    N.D2,null,null,null, N.D2,null,null,null, N.A2,null,null,null, N.D2,null,null,null,
-    N.Bb1,null,null,null, N.Bb1,null,null,null, N.F2,null,null,null, N.Bb1,null,null,null,
-    N.F2,null,null,null, N.F2,null,null,null, N.C2,null,null,null, N.F2,null,null,null,
-    N.C2,null,null,null, N.C2,null,null,null, N.Bb1,null,null,null, N.A2,null,null,null,
-  ];
-  const LEAD = [
-    N.D4,null,null,N.F4, null,null,N.A4,null, null,null,null,null, N.G4,null,N.F4,null,
-    N.D4,null,null,null, N.Bb4,null,null,null, null,null,N.A4,null, null,null,null,null,
-    N.C5,null,null,N.A4, null,null,N.F4,null, null,null,null,null, N.E4,null,N.D4,null,
-    null,null,null,null, N.E4,null,N.F4,null, null,null,N.G4,null, N.A4,null,null,null,
-  ];
+   Both are four bars of sixteenths; null is a rest. Scheduled with lookahead
+   against actx.currentTime rather than setTimeout, which drifts tens of
+   milliseconds under load and turns a loop into a stagger. */
+const NOTE = {
+  C2: 65.41, D2: 73.42, E2: 82.41, F2: 87.31, G2: 98.00, A2: 110.00, Bb1: 58.27,
+  C3: 130.81, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, B3: 246.94, Fs3: 185.00,
+  D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
+  Bb4: 466.16, C5: 523.25, D5: 587.33,
+};
+const _ = null;
 
-  let actx = null, out = null, timer = null, step = 0, next = 0, on = false;
+const TUNES = {
+  dark: {
+    bpm: 84, bassType: 'square', bassGain: 0.075, leadGain: 0.055,
+    bass: [
+      NOTE.D2,_,_,_, NOTE.D2,_,_,_, NOTE.A2,_,_,_, NOTE.D2,_,_,_,
+      NOTE.Bb1,_,_,_, NOTE.Bb1,_,_,_, NOTE.F2,_,_,_, NOTE.Bb1,_,_,_,
+      NOTE.F2,_,_,_, NOTE.F2,_,_,_, NOTE.C2,_,_,_, NOTE.F2,_,_,_,
+      NOTE.C2,_,_,_, NOTE.C2,_,_,_, NOTE.Bb1,_,_,_, NOTE.A2,_,_,_,
+    ],
+    lead: [
+      NOTE.D4,_,_,NOTE.F4, _,_,NOTE.A4,_, _,_,_,_, NOTE.G4,_,NOTE.F4,_,
+      NOTE.D4,_,_,_, NOTE.Bb4,_,_,_, _,_,NOTE.A4,_, _,_,_,_,
+      NOTE.C5,_,_,NOTE.A4, _,_,NOTE.F4,_, _,_,_,_, NOTE.E4,_,NOTE.D4,_,
+      _,_,_,_, NOTE.E4,_,NOTE.F4,_, _,_,NOTE.G4,_, NOTE.A4,_,_,_,
+    ],
+    hat: i => i % 4 === 2, hatGain: 0.020,
+  },
+  chase: {
+    bpm: 168, bassType: 'triangle', bassGain: 0.090, leadGain: 0.062,
+    // offbeat bass: the 2nd and 4th sixteenth of every beat
+    bass: (() => {
+      const roots = [NOTE.G2, NOTE.E2, NOTE.C2, NOTE.D2];
+      const out = new Array(64).fill(null);
+      for (let bar = 0; bar < 4; bar++)
+        for (let b = 0; b < 4; b++) {
+          out[bar * 16 + b * 4 + 1] = roots[bar];
+          out[bar * 16 + b * 4 + 3] = roots[bar];
+        }
+      return out;
+    })(),
+    lead: [
+      NOTE.G4,_,_,_, NOTE.B4,_,NOTE.D5,_, _,_,NOTE.B4,_, NOTE.A4,_,_,_,
+      NOTE.E4,_,_,_, NOTE.G4,_,NOTE.B4,_, _,_,NOTE.A4,_, NOTE.G4,_,_,_,
+      NOTE.C5,_,_,_, NOTE.B4,_,NOTE.G4,_, _,_,NOTE.E4,_, NOTE.G4,_,_,_,
+      NOTE.A4,_,NOTE.B4,_, NOTE.C5,_,NOTE.D5,_, NOTE.B4,_,_,_, NOTE.G4,_,_,_,
+    ],
+    // NES-style arpeggio: the chord as fast alternating notes, every sixteenth
+    arp: (() => {
+      const ch = [[NOTE.G3,NOTE.B3,NOTE.D4], [NOTE.E3,NOTE.G3,NOTE.B3],
+                  [NOTE.C3,NOTE.E3,NOTE.G3], [NOTE.D4,NOTE.Fs3,NOTE.A3]];
+      return Array.from({ length: 64 }, (_v, i) => ch[(i / 16) | 0][i % 3]);
+    })(),
+    arpGain: 0.030, arpDuty: 0.125,
+    kick: i => i % 4 === 0,
+    hat: i => i % 8 === 4 || i % 4 === 2,
+    hatGain: 0.026,
+  },
+};
 
-  function blip(freq, t, dur, type, gain) {
-    const o = actx.createOscillator(), g = actx.createGain();
-    o.type = type; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(out);
-    o.start(t); o.stop(t + dur + 0.02);
+const ChipTune = (() => {
+  const LOOKAHEAD = 0.18;
+  let actx = null, out = null, timer = null, step = 0, next = 0, cur = null, name = null;
+
+  function blip(freq, t, dur, type, gain, duty) {
+    // Web Audio has no pulse-width control, so a thin pulse is faked by
+    // detuning a second square against the first - close enough at this size.
+    const mk = (det) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq * det, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(out);
+      o.start(t); o.stop(t + dur + 0.02);
+    };
+    mk(1);
+    if (duty && duty < 0.3) mk(1.005);
   }
-  function tick(t) {                       // a short noise burst for the offbeat
-    const len = Math.floor(actx.sampleRate * 0.03);
+  function noise(t, gain, dur) {
+    const len = Math.max(1, Math.floor(actx.sampleRate * dur));
     const buf = actx.createBuffer(1, len, actx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
     const src = actx.createBufferSource(); src.buffer = buf;
-    const g = actx.createGain(); g.gain.setValueAtTime(0.020, t);
+    const g = actx.createGain(); g.gain.setValueAtTime(gain, t);
     src.connect(g).connect(out); src.start(t);
   }
+  function thump(t) {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(46, t + 0.09);
+    g.gain.setValueAtTime(0.16, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    o.connect(g).connect(out);
+    o.start(t); o.stop(t + 0.15);
+  }
   function schedule() {
+    const T = cur, SIXTEENTH = 60 / T.bpm / 4;
     while (next < actx.currentTime + LOOKAHEAD) {
-      const i = step % BASS.length;
-      if (BASS[i]) blip(BASS[i], next, SIXTEENTH * 3.4, 'square', 0.075);
-      if (LEAD[i]) blip(LEAD[i], next, SIXTEENTH * 2.2, 'triangle', 0.055);
-      if (i % 4 === 2) tick(next);
+      const i = step % T.bass.length;
+      if (T.bass[i]) blip(T.bass[i], next, SIXTEENTH * (T.arp ? 1.4 : 3.4), T.bassType, T.bassGain);
+      if (T.lead[i]) blip(T.lead[i], next, SIXTEENTH * 2.2, 'square', T.leadGain);
+      if (T.arp && T.arp[i]) blip(T.arp[i], next, SIXTEENTH * 0.85, 'square', T.arpGain, T.arpDuty);
+      if (T.kick && T.kick(i)) thump(next);
+      if (T.hat && T.hat(i)) noise(next, T.hatGain, 0.03);
       next += SIXTEENTH; step++;
     }
   }
   return {
-    start() {
-      if (on) return;
+    play(which) {
+      if (name === which) return;
+      const T = TUNES[which];
+      if (!T) { this.stop(); return; }
+      this.stop();
       try {
         actx = Sfx.context;
         if (!actx) return;
         if (actx.state === 'suspended') actx.resume();
-        out = actx.createGain();
-        out.gain.value = 0.6;
+        out = actx.createGain(); out.gain.value = 0.6;
         out.connect(actx.destination);
-        step = 0; next = actx.currentTime + 0.08; on = true;
+        cur = T; name = which;
+        step = 0; next = actx.currentTime + 0.08;
         timer = setInterval(schedule, 25);
         schedule();
       } catch (e) { /* no audio device */ }
     },
     stop() {
-      if (!on) return;
-      on = false;
+      if (!name) return;
+      name = null; cur = null;
       clearInterval(timer); timer = null;
+      if (!out) return;
       try { out.gain.setTargetAtTime(0.0001, actx.currentTime, 0.05); } catch (e) {}
       const dead = out;
       setTimeout(() => { try { dead.disconnect(); } catch (e) {} }, 400);
       out = null;
     },
     setMuted(m) { try { if (out) out.gain.value = m ? 0 : 0.6; } catch (e) {} },
-    get playing() { return on; },
+    get playing() { return !!name; },
+    get current() { return name; },
   };
 })();
 
@@ -592,7 +656,7 @@ const Music = (() => {
     return el;
   };
   // which source an act wants; LEVEL.music === 'dark' takes the synth
-  const wantsSynth = () => typeof LEVEL !== 'undefined' && LEVEL && LEVEL.music === 'dark';
+  const tuneFor = () => (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
   /* Nothing plays until the first start(), which only happens on a real
      keypress - browsers will not let audio begin without one. `armed` is what
      lets retune() re-pick the source on later act changes without ever being
@@ -600,12 +664,13 @@ const Music = (() => {
   let armed = false;
 
   function pick() {
-    if (wantsSynth()) {
+    const tune = tuneFor();
+    if (tune) {
       if (el) el.pause();
-      DarkTune.start(); DarkTune.setMuted(muted);
+      ChipTune.play(tune); ChipTune.setMuted(muted);
       return;
     }
-    DarkTune.stop();                      // unconditional: leaving act 3 silences it
+    ChipTune.stop();                      // unconditional: leaving a synth act silences it
     const a = ensure();
     if (!a) return;
     a.muted = muted;
@@ -620,10 +685,10 @@ const Music = (() => {
        under act 1. Switching to a source that is already the live one is a
        no-op, so restarting an act does not re-cue from the top. */
     retune() {
-      if (!armed) { DarkTune.stop(); return; }
-      const synth = wantsSynth();
-      if (synth && DarkTune.playing) return;
-      if (!synth && el && !el.paused && !DarkTune.playing) return;
+      if (!armed) { ChipTune.stop(); return; }
+      const tune = tuneFor();
+      if (tune && ChipTune.current === tune) return;
+      if (!tune && el && !el.paused && !ChipTune.playing) return;
       pick();
     },
     // Independent of the effects mute: the track is the loud one, and wanting
@@ -631,11 +696,11 @@ const Music = (() => {
     toggle() {
       muted = !muted;
       if (el) el.muted = muted;
-      DarkTune.setMuted(muted);
+      ChipTune.setMuted(muted);
       return muted;
     },
     get muted() { return muted; },
-    get playing() { return DarkTune.playing || (!!el && !el.paused); },
+    get playing() { return ChipTune.playing || (!!el && !el.paused); },
     get element() { return el; },
   };
 })();
@@ -883,7 +948,7 @@ const LEVEL_2 = {
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
   finalBoss: 'THE ANCHOR',
-  music: 'dark',
+  music: 'chase',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -2880,7 +2945,11 @@ const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 2.2, quipE
                debris: 3, doublePounce: 0.20,
                /* Only the man shoots. It keeps the two forms asking for
                   different things: duck the man, jump the fox. */
-               shootEvery: 2.1, aim: 0.5 };
+               shootEvery: 2.1, aim: 0.5,
+               /* Harmless for this long after every hit. Long enough to hop
+                  off and reposition before a fox that was a man a moment ago
+                  starts hunting. */
+               grace: 0.9 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -2898,6 +2967,7 @@ class Dardubala extends Entity {
     this.phase = 'pace'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
     this.home = spanAround(tx);
     this.quip = 1.4; this.quipN = 0;
+    this.grace = 0;
     this.shoot = DARD.shootEvery; this.slam = DARD.slamEvery;
   }
   get bossGrade() { return true; }
@@ -2911,7 +2981,13 @@ class Dardubala extends Entity {
      Telegraphing and striking should not both be lethal. Note onStomp still
      only accepts a hit during 'winded' - windup is safe, not open. */
   get harmless() {
-    return this.phase === 'winded' || this.phase === 'windup' ||
+    /* `grace` covers the moment right after a hit. Landing on the man turns
+       him into a fox underneath you, and 'prowl' is not a safe phase - so the
+       stomp you just earned handed you a fast hostile animal in the same
+       pixel you were standing on, with no time to get clear. The transform is
+       a beat to watch, not a punish. */
+    return this.grace > 0 ||
+           this.phase === 'winded' || this.phase === 'windup' ||
            this.phase === 'pant'   || this.phase === 'aim';
   }
   /* Latches. Without it, retreating back past the arena line switched his
@@ -2931,6 +3007,7 @@ class Dardubala extends Entity {
     this.t += dt; this.phaseT += dt;
     this.turnCd = Math.max(0, this.turnCd - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.grace = Math.max(0, this.grace - dt);
     this.hitWall = false;
     if (this.scriptedOut) { this.vx = 0; return; }
 
@@ -3109,6 +3186,9 @@ class Dardubala extends Entity {
        zero and drove his health bar negative. */
     if (this.hp <= 0 || this.scriptedOut) return;
     this.hp--; this.hitFlash = 0.4;
+    // he also stands still through it, so the new form does not close the
+    // gap while it is still untouchable
+    this.grace = DARD.grace; this.vx = 0;
     this.phase = this.isFox ? 'prowl' : 'pace'; this.phaseT = 0;
     shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
     burst(this.cx, this.y + this.h / 2, 26,
