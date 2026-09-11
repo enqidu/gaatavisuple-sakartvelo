@@ -5217,17 +5217,28 @@ function drawEntities() {
     const airborne = !p.onGround && !p.crouching;
     const art = p.crouching ? ART.squat : airborne ? ART.jump : ART.hero;
     // the jump art is a pose, not a stretch: squashing it too reads as rubber
-    drawSprite(art, p, { squash: (p.crouching || airborne) ? 1 : sq, tint });
+    const sqUsed = (p.crouching || airborne) ? 1 : sq;
+    drawSprite(art, p, { squash: sqUsed, tint });
 
-    const dw = Math.round(art.w / sq), dh = Math.round(art.h * sq);
-    /* The rose is an overlay, not part of any of the three poses, so it has to
-       be put back in the right hand for each of them. The jump pose throws a
-       fist up and forward, so it rides higher and further out than the
-       standing one - otherwise it floats by his hip while his arm is over his
-       head. */
-    drawMiniRose(p.face > 0 ? p.cx + dw * (airborne ? 0.30 : 0.26)
-                            : p.cx - dw * (airborne ? 0.30 : 0.26) - 4,
-                 p.bottom - dh * (airborne ? 0.76 : 0.54));
+    // sqUsed, not sq: the pose frames are drawn unsquashed, and measuring them
+    // with sq put the rose a couple of pixels off on every airborne frame
+    const dw = Math.round(art.w / sqUsed), dh = Math.round(art.h * sqUsed);
+
+    /* The rose is an overlay rather than part of any pose, so it has to be put
+       back into whichever hand that pose is holding it in.
+
+       HAND_X is measured, not guessed: keying out jump.png and finding the
+       skin-coloured blobs puts the raised fist at 0.902 across the sprite and
+       0.739 of its height up from the feet. Guessing 0.30/0.76 left it short
+       of his fist by about two pixels, which at 4x is very visible. The offset
+       from centre is therefore (0.902 - 0.5). */
+    const HAND = airborne ? { x: 0.902 - 0.5, y: 0.739 } : { x: 0.26, y: 0.54 };
+    // the fist grips the stem near its base, and drawMiniRose's stem runs from
+    // y+3 to y+7 with a 4-wide bloom on top, so back off by half a bloom and
+    // most of a stem to land the grip on the hand rather than the flower
+    const rx = p.face > 0 ? p.cx + dw * HAND.x - (airborne ? 2 : 0)
+                          : p.cx - dw * HAND.x - (airborne ? 2 : 4);
+    drawMiniRose(rx, p.bottom - dh * HAND.y - (airborne ? 5 : 0));
 
     // Hearts orbiting his head while he is stuck staring.
     if (p.charmed > 0)
