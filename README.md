@@ -446,7 +446,7 @@ new number reaches them within ten minutes and pulls the new script with it.
 | | | |
 |---|---|---|
 | 1 | GAATAVISUPLE ACHARA | Batumi, 2004. Aslan, the bridge, the ultra powder. |
-| 2 | GAATAVISUPLE ETERI | The television company. Reporters, smashable monitors, the Anchor. |
+| 2 | GAATAVISUPLE MEDIA | The television company. Reporters, smashable monitors, the Anchor. |
 | 3 | GAATAVISUPLE PARLAMENTI | Rustaveli, 2003. Was act 2 until act 2 was inserted ahead of it. |
 
 **Asset prefixes follow the act number**: `l2_*` is the television company,
@@ -457,6 +457,17 @@ shows up there immediately.
 
 
 ## Act 2: the television company
+
+`l3_fox_run.png` was re-extracted from `fox1.png`. The first pass keyed the
+checkerboard by colour, but the dark checker grey (126) is the same value as
+the fox's own outline, so the flood leaked through gaps in the silhouette and
+ate the white *inside* the legs — at 26px tall it came out hollow-legged with a
+detached tail, which on Act 3's night backdrop read as no fox at all. The
+working recipe is tight bands (205-234 light, 108-148 dark, 150-200 for the
+antialiased seams so the flood can cross square boundaries) with the fox's
+240+ white deliberately excluded, then keeping only the largest connected
+blob to drop the speckle the flood could not reach. Both poses are confirmed
+on screen: 998 run frames to 798 sit frames over 30s.
 
 Reporters (`l2girl`, `l2girl2`, `l2man`) walk the building and fire **FREE
 SPEECH** at head height. Same `Bullet`, same lane as Edika's shots, so the

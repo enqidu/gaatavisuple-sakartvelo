@@ -736,7 +736,7 @@ const LEVEL_2 = {
   finishX: null,            // beating the Anchor ends the act
   finalGate: null,
   voidColor: '#080a12',
-  subtitle: 'GAATAVISUPLE ETERI',
+  subtitle: 'GAATAVISUPLE MEDIA',
   card: [
     { t: 0.0, s: 'THEN THEY CAME',   c: '#e8e0d0', sc: 1 },
     { t: 0.5, s: 'FOR THE NEWSROOM', c: '#e8e0d0', sc: 1 },
@@ -927,7 +927,9 @@ const LEVEL_3 = {
   ],
 
   flags: [10, 50, 80, 126, 175, 200],
-  charmers: [28, 72, 124, 178],
+  // cut to a third on playtest feedback: four of them along one avenue was
+  // more interruption than hazard
+  charmers: [124],
 };
 
 /* `LEVEL` is read from ~40 places and written from none, so two levels costs
