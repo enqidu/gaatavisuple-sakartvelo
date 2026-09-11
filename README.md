@@ -50,7 +50,8 @@ Named on-screen on two lines, because "ACHARULI KHACHAPURI" on one line is
 | **Acharuli khachapuri** (Act 1) | 7s invincibility: touching an enemy destroys it for 400 with the combo multiplier. Also immunity to the distraction. The boss is exempt — he is only ever damaged by a stomp in his vulnerable window. A gold HUD bar counts it down and the sprite flickers for the last 1.6s. |
 | **White powder** | Double jump for 18 seconds, then it wears off (`POWDER_TIME`). Placed ahead of every boss so a death is never a walk back in without it. |
 | **Ultra white powder** (Act 1) | **One** charge, no clock. The next jump off the ground launches at `ultraJumpVel` and raises the air speed cap to `ultraAirMax` until he lands, and `jumpCut` does not apply. It only exists to cross the blown bridge — see *The bridge*. Only the first one scores. |
-| **Hot tea** (Act 2) | Act 2's version of the same 9s invincibility. |
+| **Hot tea** (Act 3) | Act 2's version of the same 9s invincibility. |
+| **Matsoni** (Act 2) | Act 2's invincibility. A clay bowl, deliberately not the tea cup — each act's pickup should be recognisable from its silhouette alone. |
 | **Rose** | Heals a heart. At full health it grants a **temporary 4th heart** instead (22s, up to 2 stacked, pink in the HUD). Temporary hearts are spent before real ones and wither one at a time. |
 
 The second jump is a flat velocity set, not an add, so hammering it mid-rise
@@ -482,15 +483,44 @@ it costs a box and some artwork rather than a parallel array threaded through
 reset, update, draw and validate. Live they show a shifting test pattern;
 smashed they are cracked and dark, and say OFF AIR.
 
-**The Anchor** paces the studio and answers in volleys of three down one lane,
-so the crouch has to be *held* rather than tapped. `rattled` afterwards is the
-only beat he can be stomped on. He greets you once, on arrival:
+### Three reporters, three questions
+
+One `Journalist` class, three styles — the walking and stomping are identical
+and only the answer to *what does this one do when it sees you* differs.
+
+| | cry | attack | answer |
+|---|---|---|---|
+| `l2girl` | FREE SPEECH | shot at head height | **duck** |
+| `l2man` | FREE PRESS | shot along the floor (`BULLET.lowRide`) | **jump** — ducking is no help |
+| `l2girl2` | NO COMMENT? | no projectile: she charges you | **get out of the way** |
+
+The low shot rides 9–4px above the feet, which is inside *both* a standing box
+and a crouching one. That is deliberate: the same enemy family asks for
+opposite inputs depending on who is holding the microphone. Measured with both
+pinned: the high shot takes 0 of 4 while ducking and 3 of 3 standing; the low
+shot takes 0 of 4 when jumped on cue and 3 of 3 when ducked.
+
+Each telegraphs its own lane at the height it will arrive at, and the charger
+gets an arrow instead, because there is no lane — she *is* the projectile.
+
+### The Anchor
+
+**Deliberately not another timing window.** He is never stompable while he is
+broadcasting: three cameras cover the studio, and while any tally light is lit,
+landing on him only says ON AIR. The fight is killing the feeds. Timing a
+window is the entirety of the Edika fight and would have been the entirety of
+this one too.
+
+The health bar counts cameras plus him — 4 — so cutting a feed reads as
+progress immediately, and each one lost makes him quicker to answer. With the
+last camera gone he loses the room: bolts at nearly triple pace, stops
+shooting, and is run down and stomped once. He greets you on arrival, once:
 *AND THE GUESTS HAVE ARRIVED...*
 
-Every vulnerable window in the game — his `rattled`, Edika's `winded` and
-`pant` — now sets `vx = 0` outright instead of decaying. Coasting through the
-one beat you can be stomped on means asking the player to land on a moving
-target, which was most of what made Edika feel uncatchable.
+Every vulnerable window in the game — Edika's `winded` and `pant` — sets
+`vx = 0` outright instead of decaying. Coasting through the one beat you can be
+stomped on means asking the player to land on a moving target, which was most
+of what made Edika feel uncatchable.
 
 
 ## Act cards

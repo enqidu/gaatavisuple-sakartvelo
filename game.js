@@ -742,7 +742,7 @@ const LEVEL_2 = {
     { t: 0.5, s: 'FOR THE NEWSROOM', c: '#e8e0d0', sc: 1 },
     { t: 1.8, s: 'LIVE ON AIR:',     c: '#ffd85e', sc: 2 },
   ],
-  invincibleLabel: 'ACHARULI',
+  invincibleLabel: 'MATSONI',
   smashKind: 'tv',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
@@ -803,17 +803,20 @@ const LEVEL_2 = {
     { t: 'l2girl2', x: 102 }, { t: 'l2girl', x: 110 },
     { t: 'l2man',   x: 120 }, { t: 'l2girl2', x: 128 },
     { t: 'l2girl',  x: 146 }, { t: 'l2man',  x: 154 },
+    // the three feeds. Spread across the studio so none can be reached
+    // without crossing his fire.
+    { t: 'l2camera', x: 165 }, { t: 'l2camera', x: 178 }, { t: 'l2camera', x: 188 },
     { t: 'l2anchor', x: 174 },
   ],
 
   items: [
     { x: 20,  y: 8,  t: 'rose' },
-    { x: 36,  y: 8,  t: 'khachapuri' },
+    { x: 36,  y: 8,  t: 'matsoni' },
     { x: 56,  y: 8,  t: 'powder' },
     { x: 74,  y: 8,  t: 'rose' },
     { x: 102, y: 8,  t: 'powder' },
     { x: 120, y: 8,  t: 'rose' },
-    { x: 134, y: 7,  t: 'khachapuri' },
+    { x: 134, y: 7,  t: 'matsoni' },
     { x: 150, y: 8,  t: 'powder' },
     { x: 156, y: 10, t: 'rose' },
   ],
@@ -947,7 +950,8 @@ let LEVEL = LEVEL_1;
 function enemyKind(t) {
   return ({
     walker: Walker, mid: MidBoss,
-    l2girl: PressGirl, l2girl2: PressGirl2, l2man: PressMan, l2anchor: Anchor,
+    l2girl: PressGirl, l2girl2: PressGirl2, l2man: PressMan,
+    l2anchor: Anchor, l2camera: StudioCamera,
     l3guard: Guard, l3sleepy: Sleepy, l3svani: Svani,
     l3bomber: Bomber, l3dard: Dardubala,
   })[t] || Walker;
@@ -2150,7 +2154,13 @@ class Debris {
    standing hitbox (feet-28 to feet) and clear of a crouching one (feet-17 to
    feet) by 3px. Retune the squat hitbox and this has to move with it - which
    is asserted at boot, see the crouch-band check in validateLevel. */
-const BULLET = { speed: 96, ride: 25, w: 7, h: 5, life: 5.0 };
+const BULLET = { speed: 96, ride: 25, w: 7, h: 5, life: 5.0,
+                 /* A shot at ankle height. 9 down to 4 above the feet sits
+                    inside BOTH a standing box and a crouching one, so ducking
+                    is no answer to it - you have to leave the ground. That is
+                    the point: the same enemy family asks for opposite inputs
+                    depending on who is holding the microphone. */
+                 lowRide: 9 };
 
 class Bullet {
   constructor(x, y, dir, kind = 'shot', speed = BULLET.speed) {
@@ -2205,19 +2215,35 @@ class Bullet {
    They telegraph with the word rather than a lane marker: at walker density a
    dotted line per reporter would be visual soup, and one reporter's shot is
    survivable in a way a boss volley is not. */
-const PRESS = { walk: 20, fireEvery: 3.4, aim: 0.55, range: 200, sight: 120 };
+/* Three reporters, three different questions.
+
+     high   - a shot at head height.  DUCK it.
+     low    - a shot along the floor.  JUMP it; crouching is no help.
+     charge - no projectile at all: she shoulders the microphone and runs you
+              down. Get out of the way or get on top of her.
+
+   One class, because the walking, ledge-turning and stomping are identical and
+   only the answer to "what does this one do when it sees you" differs. */
+const PRESS = {
+  walk: 20, sight: 120,
+  high:   { fireEvery: 3.4, aim: 0.55, cry: 'FREE SPEECH' },
+  low:    { fireEvery: 3.8, aim: 0.70, cry: 'FREE PRESS'  },
+  charge: { fireEvery: 3.0, aim: 0.50, cry: 'NO COMMENT?', dash: 132, dashT: 0.85 },
+};
 
 class Journalist extends Entity {
-  constructor(tx, art) {
+  constructor(tx, art, style) {
     const hb = hitboxFor(art);
     super(tx * TILE, 0, hb.w, hb.h);
-    this.art = art;
+    this.art = art; this.style = style;
+    this.cfg = PRESS[style];
     this.y = groundYAt(tx) - this.h;
     this.dir = -1; this.turnCd = 0; this.t = rand(0, 4);
-    this.fire = PRESS.fireEvery * rand(0.4, 1.2);
+    this.fire = this.cfg.fireEvery * rand(0.4, 1.2);
     this.phase = 'walk'; this.phaseT = 0;
   }
-  // safe to brush past while she is lining a shot up, same as every other tell
+  // safe to brush past while lining up, same as every other tell in the game.
+  // NOT safe once a charger is actually moving - that is the whole attack.
   get harmless() { return this.phase === 'aim'; }
   update(dt) {
     this.t += dt; this.phaseT += dt;
@@ -2228,22 +2254,34 @@ class Journalist extends Entity {
 
     if (this.phase === 'aim') {
       this.vx *= Math.pow(0.02, dt);
-      if (this.phaseT > PRESS.aim) {
-        game.hazards.push(new Bullet(this.cx + this.aimDir * 7,
-                                     this.bottom - BULLET.ride, this.aimDir, 'speech'));
-        Sfx.bump();
-        this.fire = PRESS.fireEvery * rand(0.8, 1.4);
+      if (this.phaseT > this.cfg.aim) {
+        if (this.style === 'charge') {
+          this.phase = 'dash'; this.phaseT = 0;
+        } else {
+          const ride = this.style === 'low' ? BULLET.lowRide : BULLET.ride;
+          game.hazards.push(new Bullet(this.cx + this.aimDir * 7,
+                                       this.bottom - ride, this.aimDir, 'speech'));
+          Sfx.bump();
+          this.fire = this.cfg.fireEvery * rand(0.8, 1.4);
+          this.phase = 'walk'; this.phaseT = 0;
+        }
+      }
+    } else if (this.phase === 'dash') {
+      this.vx = this.aimDir * this.cfg.dash;
+      this.dir = this.aimDir;
+      if (this.phaseT > this.cfg.dashT || this.hitWall) {
+        this.fire = this.cfg.fireEvery * rand(0.8, 1.4);
         this.phase = 'walk'; this.phaseT = 0;
       }
     } else {
       this.vx = this.dir * PRESS.walk;
       this.fire -= dt;
-      // only when you are in front of her and close enough to have been seen
+      // only when you are in front of them and close enough to have been seen
       if (this.fire <= 0 && Math.abs(d) < PRESS.sight && Math.abs(p.bottom - this.bottom) < 24) {
         this.phase = 'aim'; this.phaseT = 0;
         this.aimDir = Math.sign(d) || this.dir;
         this.dir = this.aimDir;
-        floatText(this.cx, this.y - 10, 'FREE SPEECH', '#f4f4f4');
+        floatText(this.cx, this.y - 10, this.cfg.cry, '#f4f4f4');
       }
     }
 
@@ -2252,7 +2290,9 @@ class Journalist extends Entity {
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
-    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    // a charger commits: it will run off a ledge rather than politely turn
+    const turn = this.hitWall || (ledge && this.phase !== 'dash');
+    if (turn && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
     this.face = this.dir;
   }
   onStomp(p) {
@@ -2272,20 +2312,64 @@ class Journalist extends Entity {
   }
 }
 
-/* The man whose building it is. Paces the studio floor and answers with
-   volleys instead of single shots - three in a row along the same lane, so a
-   crouch has to be HELD rather than tapped. The beat after a volley is the
-   only one he can be stomped on. */
-/* `rattled` matches Edika's 1.9s winded window rather than undercutting it.
-   This is the first real boss in the run, so its opening should not be tighter
-   than the last one's.
+/* A camera on a tripod. Three cover the studio, and while any one is still
+   live the Anchor cannot be touched. They are the fight. */
+class StudioCamera extends Entity {
+  constructor(tx) {
+    super(tx * TILE + 2, 0, 12, 20);
+    this.y = groundYAt(tx) - this.h;
+    this.t = rand(0, 4); this.settled = false;
+  }
+  get harmless() { return true; }           // it films you, it does not hit you
+  update(dt) {
+    this.t += dt;
+    if (this.settled) return;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    if (this.onGround) { this.settled = true; this.vx = 0; this.vy = 0; }
+  }
+  onStomp(p) { p.vy = CFG.stompBounce; this.smash(p); }
+  onBumped() { this.smash(null); }
+  smash(p) {
+    if (this.dead) return;
+    this.dead = true;
+    if (p) game.addCombo(p, this.cx, this.y, 400);
+    else { game.score += 400; floatText(this.cx, this.y, '+400', '#ffd85e'); }
+    floatText(this.cx, this.y - 12, 'FEED CUT', '#7ec8f0');
+    burst(this.cx, this.y + 8, 22,
+          { colors: ['#9fd8ff', '#f4f4f4', '#3a4658', '#e8434f'], speed: 140, life: .9, size: 2 });
+    shake = 6; flash = 0.25; Sfx.brick();
+    const a = game.enemies.find(e => e instanceof Anchor && !e.dead);
+    if (a) a.feedCut();
+  }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#2b3442'; g.fillRect(x + 5, y + 8, 2, 12);           // column
+    g.fillStyle = '#1a212c';
+    g.fillRect(x + 1, y + 18, 4, 2); g.fillRect(x + 7, y + 18, 4, 2);   // legs
+    g.fillStyle = '#3a4658'; g.fillRect(x, y, 12, 9);                   // body
+    g.fillStyle = '#242c3a'; g.fillRect(x, y, 12, 1); g.fillRect(x, y + 8, 12, 1);
+    g.fillStyle = '#11151e'; g.fillRect(x + 9, y + 2, 3, 5);            // lens
+    g.fillStyle = '#7ec8f0'; g.fillRect(x + 10, y + 3, 1, 2);
+    if (Math.floor(this.t * 4) % 2 === 0) {                             // tally light
+      g.fillStyle = '#e8434f'; g.fillRect(x + 1, y + 2, 3, 3);
+    }
+  }
+}
 
-   `speed` is per-shooter: the Anchor's volleys clear the screen faster than a
-   lone reporter's single shot. A crouch stops you moving, so a slow straggler
-   bullet still in the air while he paces back toward you means ducking one
-   threat into another - his shots outrun that overlap. */
-const ANCHOR = { hp: 3, pace: 36, cycle: 2.4, aim: 0.6, volley: 3, gap: 0.30,
-                 rattled: 1.9, speed: 150 };
+/* The man whose building it is, and a different fight from Edika on purpose.
+
+   He is never stompable while he is broadcasting. Three cameras cover the
+   studio; while any tally light is lit, landing on him only says ON AIR. This
+   fight is about killing the feeds, not about timing a window - timing a
+   window is the entirety of the Edika fight and would have been the entirety
+   of this one too.
+
+   With the last camera gone he loses the room: bolts back and forth at nearly
+   triple pace, stops shooting, and can be run down and stomped once. The
+   health bar counts cameras plus him, so smashing one reads as progress. */
+const ANCHOR = { pace: 36, cycle: 2.4, aim: 0.6, volley: 3, gap: 0.30,
+                 speed: 150, panic: 96, cameras: 3 };
 
 class Anchor extends Entity {
   constructor(tx, gate = null) {
@@ -2293,15 +2377,29 @@ class Anchor extends Entity {
     super(tx * TILE, 0, hb.w, hb.h);
     this.gate = gate;
     this.y = groundYAt(tx) - this.h;
-    this.dir = -1; this.turnCd = 0; this.hp = ANCHOR.hp; this.hitFlash = 0; this.t = 0;
+    this.dir = -1; this.turnCd = 0; this.hitFlash = 0; this.t = 0;
+    // cameras + himself: the bar counts feeds, so cutting one reads as progress
+    this.hp = ANCHOR.cameras + 1;
     this.phase = 'pace'; this.phaseT = 0; this.left = 0;
     this.home = spanAround(tx);
     this.greeted = false;
   }
   get bossGrade() { return true; }
   get bossName() { return 'THE ANCHOR'; }
-  get maxHp() { return ANCHOR.hp; }
-  get harmless() { return this.phase === 'aim' || this.phase === 'rattled'; }
+  get maxHp() { return ANCHOR.cameras + 1; }
+  get onAir() { return game.enemies.some(e => e instanceof StudioCamera && !e.dead); }
+  get harmless() { return this.phase === 'aim' || this.phase === 'offair'; }
+  feedCut() {
+    this.hp = Math.max(1, this.hp - 1);
+    this.hitFlash = 0.3;
+    if (!this.onAir) {
+      this.phase = 'offair'; this.phaseT = 0;
+      floatText(this.cx, this.y - 18, 'WE HAVE LOST THE FEED', '#ff8a5c');
+      shake = 9; flash = 0.4;
+    } else {
+      floatText(this.cx, this.y - 16, `${this.hp - 1} CAMERAS LEFT`, '#7ec8f0');
+    }
+  }
   get engaged() {
     if (game.player.cx > (LEVEL.arenaX ?? 0) * TILE &&
         Math.abs(game.player.cx - this.cx) < 210) this.woke = true;
@@ -2321,14 +2419,22 @@ class Anchor extends Entity {
     }
 
     switch (this.phase) {
-      case 'pace':
+      case 'pace': {
         this.vx = this.dir * ANCHOR.pace;
-        if (this.engaged && this.phaseT > ANCHOR.cycle) {
+        // each feed he loses makes him quicker to answer
+        const urgency = 1 - (ANCHOR.cameras + 1 - this.hp) * 0.22;
+        if (this.engaged && this.phaseT > ANCHOR.cycle * urgency) {
           this.phase = 'aim'; this.phaseT = 0;
           this.aimDir = Math.sign(game.player.cx - this.cx) || this.dir;
           this.dir = this.aimDir;
           Sfx.deny();
         }
+        break;
+      }
+      case 'offair':
+        // no more shooting: he just wants out of the room
+        this.vx = this.dir * ANCHOR.panic;
+        if (this.onGround && Math.random() < dt * 1.6) this.vy = -180;
         break;
       case 'aim':
         this.vx *= Math.pow(0.02, dt);
@@ -2346,11 +2452,7 @@ class Anchor extends Entity {
           this.left--; this.gap = ANCHOR.gap;
           shake = Math.max(shake, 2); Sfx.bump();
         }
-        if (this.left <= 0 && this.gap <= 0) { this.phase = 'rattled'; this.phaseT = 0; }
-        break;
-      case 'rattled':
-        this.vx = 0;                       // the open beat holds still, as Edika's does
-        if (this.phaseT > ANCHOR.rattled) { this.phase = 'pace'; this.phaseT = 0; }
+        if (this.left <= 0 && this.gap <= 0) { this.phase = 'pace'; this.phaseT = 0; }
         break;
     }
 
@@ -2365,40 +2467,37 @@ class Anchor extends Entity {
   }
   onStomp(p) {
     p.vy = CFG.stompBounce * 0.85;
-    if (this.phase !== 'rattled') {
-      floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff');
+    /* Not a timing window. While one camera is still rolling he is simply not
+       a target, and the game says why rather than "NOT NOW" - the player needs
+       to be told where to look. */
+    if (this.onAir) {
+      floatText(this.cx, this.y - 8, 'ON AIR', '#e8434f');
       shake = 4; Sfx.deny();
       return;
     }
     this.takeHit(p);
   }
-  chip(p) { this.takeHit(p); }
+  // the khachapuri/matsoni one-shot still has to go through the cameras
+  chip(p) { if (!this.onAir) this.takeHit(p); }
   takeHit(p) {
-    if (this.hp <= 0 || this.scriptedOut) return;
-    this.hp--; this.hitFlash = 0.4;
-    this.phase = 'pace'; this.phaseT = 0;
-    shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
-    burst(this.cx, this.y + this.h / 2, 24,
-          { colors: ['#f4f4f4', '#ffd85e', '#2b3a5e'], speed: 170, size: 3 });
-    if (this.hp <= 0) {
-      this.scriptedOut = true; this.dead = true;
-      game.addCombo(p, this.cx, this.y, 2500);
-      floatText(this.cx, this.y - 18, 'WE GO TO A BREAK', '#ffd85e');
-      shake = 14; flash = 0.8; freeze = 0.2;
-      if (this.gate != null) openGate(this.gate);
-      game.win();
-    } else {
-      game.addCombo(p, this.cx, this.y, 500);
-      floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
-    }
+    if (this.hp <= 0 || this.scriptedOut || this.onAir) return;
+    this.hp = 0; this.hitFlash = 0.4;
+    this.scriptedOut = true; this.dead = true;
+    game.addCombo(p, this.cx, this.y, 2500);
+    floatText(this.cx, this.y - 18, 'WE GO TO A BREAK', '#ffd85e');
+    shake = 14; flash = 0.8; freeze = 0.2; Sfx.stomp();
+    burst(this.cx, this.y + this.h / 2, 30,
+          { colors: ['#f4f4f4', '#ffd85e', '#2b3a5e'], speed: 190, size: 3 });
+    if (this.gate != null) openGate(this.gate);
+    game.win();
   }
 }
 
 /* Only the artwork differs. Named classes rather than a factory because
    reset() builds enemies with `new (enemyKind(t))(...)`. */
-class PressGirl  extends Journalist { constructor(tx) { super(tx, 'l2girl');  } }
-class PressGirl2 extends Journalist { constructor(tx) { super(tx, 'l2girl2'); } }
-class PressMan   extends Journalist { constructor(tx) { super(tx, 'l2man');   } }
+class PressGirl  extends Journalist { constructor(tx) { super(tx, 'l2girl',  'high');   } }
+class PressGirl2 extends Journalist { constructor(tx) { super(tx, 'l2girl2', 'charge'); } }
+class PressMan   extends Journalist { constructor(tx) { super(tx, 'l2man',   'low');    } }
 
 const BOMBER = { hp: 2, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
@@ -3186,12 +3285,14 @@ class Coin extends Entity {
   update(dt) { this.t += dt * 7; }
 }
 
-const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12], ultra: [12, 12], tea: [13, 10] };
+const ITEM_SIZE = { khachapuri: [14, 10], rose: [9, 12], powder: [12, 12], ultra: [12, 12],
+                    tea: [13, 10], matsoni: [13, 11] };
 
 // [line 1, line 2, colour] — drawn above the pickup so it names itself.
 const ITEM_LABEL = {
   khachapuri: ['ACHARULI', 'KHACHAPURI', '#ffd85e'],
   tea:        ['HOT', 'TEA', '#e8c07a'],
+  matsoni:    ['COLD', 'MATSONI', '#dff0f6'],
   powder:     ['WHITE', 'POWDER', '#9ee8ff'],
   ultra:      ['ULTRA WHITE', 'POWDER', '#ffd85e'],
 };
@@ -3208,6 +3309,9 @@ class Item extends Entity {
     if (this.kind === 'khachapuri' && Math.random() < dt * 6)
       burst(this.cx + rand(-6, 6), this.y + 2, 1,
             { colors: ['#ffd85e', '#fff2c0'], speed: 10, grav: -25, life: 0.7, size: 1 });
+    if (this.kind === 'matsoni' && Math.random() < dt * 4)
+      burst(this.cx + rand(-5, 5), this.y + 2, 1,
+            { colors: ['#fff', '#dff0f6'], speed: 8, grav: -14, life: .8, size: 1 });
     if (this.kind === 'tea' && Math.random() < dt * 5)
       burst(this.cx, this.y, 1, { colors: ['#fff', '#e8c07a'], speed: 7, grav: -18, life: .9, size: 1 });
     if (this.kind === 'powder' && Math.random() < dt * 7)
@@ -3927,14 +4031,16 @@ function resolveItems() {
   for (const it of game.items) {
     if (it.dead || !aabb(p, it)) continue;
     it.dead = true;
-    if (it.kind === 'tea') {
-      // same effect as the khachapuri, act 2's own flavour of it
+    if (it.kind === 'tea' || it.kind === 'matsoni') {
+      const mats = it.kind === 'matsoni';
+      // same effect as the khachapuri; each act has its own flavour of it
       p.invincible = KHACHAPURI_TIME;
       game.score += 500;
-      floatText(p.cx, p.y - 14, 'HOT TEA!', '#e8c07a');
+      floatText(p.cx, p.y - 14, mats ? 'MATSONI!' : 'HOT TEA!', mats ? '#dff0f6' : '#e8c07a');
       floatText(p.cx, p.y - 26, 'INVINCIBLE', '#ff5ec4');
       shake = 4; flash = 0.5; Sfx.win();
-      burst(it.cx, it.y + 5, 26, { colors: ['#e8e4dc', '#8a5a2a', '#ffd85e'], speed: 130, size: 3 });
+      burst(it.cx, it.y + 5, 26, { colors: mats ? ['#ffffff', '#dff0f6', '#b8cdd8']
+                                              : ['#e8e4dc', '#8a5a2a', '#ffd85e'], speed: 130, size: 3 });
     } else if (it.kind === 'powder') {
       // Lasts for the rest of the life, not on a timer: it exists so you can
       // reach places, and a countdown would just mean rushing the platforming.
@@ -4598,6 +4704,18 @@ function drawCoin(c) {
 /* Acharuli khachapuri: boat-shaped bread, cheese pool, egg yolk, butter.
    14x10, drawn from rects — at this resolution hand-placed pixels beat any
    downscaled photo. */
+/* A clay bowl of matsoni: act 2's invincibility. Deliberately not the tea cup
+   - each act's pickup should be recognisable from its silhouette alone. */
+function drawMatsoni(x, y) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = '#ffffff'; g.fillRect(x + 2, y + 1, 9, 4);        // the surface
+  g.fillStyle = '#dff0f6'; g.fillRect(x + 3, y + 2, 7, 2);
+  g.fillStyle = '#9a6a44'; g.fillRect(x + 1, y + 4, 11, 5);       // bowl
+  g.fillStyle = '#7d5433'; g.fillRect(x + 1, y + 8, 11, 2);
+  g.fillStyle = '#b98457'; g.fillRect(x + 2, y + 5, 2, 3);        // highlight
+  g.fillStyle = '#5f3f26'; g.fillRect(x, y + 4, 1, 4); g.fillRect(x + 12, y + 4, 1, 4);
+}
+
 function drawKhachapuri(x, y) {
   x = Math.round(x); y = Math.round(y);
   const crust = '#8a5418', bread = '#d19340', cheese = '#f7e6a8',
@@ -4824,6 +4942,7 @@ function drawEntities() {
   for (const it of game.items) {
     if (it.kind === 'khachapuri') drawKhachapuri(it.x, it.y);
     else if (it.kind === 'tea') drawCup(it.x + 2, it.y, game.time);
+    else if (it.kind === 'matsoni') drawMatsoni(it.x, it.y);
     else if (it.kind === 'powder') drawSprite(ART.powder, it);
     else if (it.kind === 'ultra')
       drawSprite(ART.powder, it, { tint: `rgba(255,196,60,${0.42 + Math.sin(game.time * 6) * 0.16})` });
@@ -4891,16 +5010,44 @@ function drawEntities() {
       if (e.harmless && Math.floor(game.time * 8) % 2 === 0)
         drawTextCentered(g, 'HIT HIM', e.cx, e.y - 10, '#7ae07a', 1);
     } else if (e instanceof Journalist) {
-      const flash = e.phase === 'aim' && Math.floor(game.time * 14) % 2 === 0;
-      drawSprite(ART[e.art], e, { tint: flash ? 'rgba(255,255,255,.65)' : null });
+      const aiming = e.phase === 'aim';
+      const flash = aiming && Math.floor(game.time * 14) % 2 === 0;
+      drawSprite(ART[e.art], e, {
+        tint: flash ? 'rgba(255,255,255,.65)'
+            : e.phase === 'dash' ? 'rgba(255,138,92,.40)' : null,
+      });
+      /* The three read apart at a glance: the lane the shot will take is drawn
+         at the height it will come at, and the charger gets an arrow instead
+         because there is no lane - she is the projectile. */
+      if (aiming && Math.floor(game.time * 14) % 2 === 0) {
+        const d = e.aimDir || 1;
+        if (e.style === 'charge') {
+          g.fillStyle = 'rgba(255,138,92,.75)';
+          for (let k = 1; k < 6; k++)
+            g.fillRect(Math.round(e.cx + d * (8 + k * 7)), Math.round(e.y + e.h * 0.5), 3, 2);
+        } else {
+          const ride = e.style === 'low' ? BULLET.lowRide : BULLET.ride;
+          const fy = Math.round(e.bottom - ride) + 2;
+          g.fillStyle = e.style === 'low' ? 'rgba(126,200,240,.60)' : 'rgba(244,244,244,.55)';
+          for (let k = 1; k < 11; k++) g.fillRect(Math.round(e.cx + d * (7 + k * 9)), fy, 4, 1);
+        }
+      }
+      if (aiming && Math.floor(game.time * 8) % 2 === 0) {
+        const say = e.style === 'low' ? 'JUMP' : e.style === 'charge' ? 'MOVE' : 'DUCK';
+        drawTextCentered(g, say, e.cx, e.y - 10, '#ff8a5c', 1);
+      }
+    } else if (e instanceof StudioCamera) {
+      e.draw();
     } else if (e instanceof Anchor) {
       const flash = e.hitFlash > 0 && Math.floor(e.hitFlash * 24) % 2 === 0;
-      const open = e.phase === 'rattled' && Math.floor(game.time * 10) % 2 === 0;
+      const open = e.phase === 'offair' && Math.floor(game.time * 10) % 2 === 0;
       drawSprite(ART.l2anchor, e, {
         tint: flash ? 'rgba(255,255,255,.9)' : open ? 'rgba(255,216,94,.45)' : null,
       });
-      if (e.phase === 'rattled' && Math.floor(game.time * 8) % 2 === 0)
-        drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
+      if (e.phase === 'offair' && Math.floor(game.time * 8) % 2 === 0)
+        drawTextCentered(g, 'OFF AIR - STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
+      else if (e.onAir && Math.floor(game.time * 3) % 2 === 0)
+        drawTextCentered(g, 'ON AIR', e.cx, e.y - 12, '#e8434f', 1);
       /* Same lane tell as Edika: the height is the point, so it is drawn along
          the floor he is on rather than as a symbol over his head. */
       if (e.phase === 'aim' || e.phase === 'volley') {
