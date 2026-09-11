@@ -414,6 +414,23 @@ Firebase/Supabase, or a small serverless function — plus some abuse handling,
 since a client-side score can be posted by anyone.
 
 
+## What validateLevel checks
+
+Run once at boot, prints to the console. Beyond the original placement rules
+(charmers and items clear of pit edges, gates off pit edges) it now also
+catches:
+
+- **A brick or `?` with no headroom under it.** It needs at least the player's
+  own height of clear space below to be bumped at all. Anything flat on a pipe
+  cap is unbumpable, and a `?` there is a pickup nobody can reach. This was
+  caught the hard way: moving the pipe back to 165 to give the ravine a run-up
+  dropped it under an existing brick row, which bricked up its own `?` block.
+- **Coins or items spawned inside solid tiles.** Two coin runs had been nudged
+  into the masonry beside them and were silently uncollectable.
+- **Card lines wider than the screen** — the font is fixed-width, so breaks are
+  hand-placed.
+
+
 ## Deploying
 
 `index.html` loads the script as `game.js?v=N`. **Bump that number on every push

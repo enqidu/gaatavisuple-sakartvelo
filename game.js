@@ -601,8 +601,13 @@ const LEVEL_1 = {
 
     { x: 150, y: 9,  w: 3, t: T.PLATFORM },
     { x: 157, y: 7,  w: 3, t: T.PLATFORM },
-    { x: 164, y: 9,  w: 4, t: T.BRICK },
-    { x: 166, y: 9,  w: 1, t: T.QUESTION },
+    /* Split around the pipe at 165-166. The run used to span 164-167, which
+       put two of its tiles flat on the pipe cap with zero headroom under
+       them - unbumpable, and the ? among them was uncollectable. Moving that
+       pipe back to 165 for the ravine run-up is what put it there. */
+    { x: 164, y: 9,  w: 1, t: T.BRICK },
+    { x: 167, y: 9,  w: 3, t: T.BRICK },
+    { x: 169, y: 9,  w: 1, t: T.QUESTION },
     { x: 173, y: 10, w: 3, t: T.PLATFORM },
 
     { x: 196, y: 10, w: 4, t: T.PLATFORM },
@@ -629,8 +634,10 @@ const LEVEL_1 = {
     { x: 79,  y: 4,  n: 3 }, { x: 90,  y: 9,  n: 4 },
     { x: 105, y: 8,  n: 5 }, { x: 114, y: 5,  n: 4 },
     { x: 132, y: 8,  n: 4 }, { x: 140, y: 9,  n: 4 },
-    { x: 158, y: 5,  n: 3 }, { x: 166, y: 9,  n: 4 },
-    { x: 195, y: 9,  n: 4 }, { x: 201, y: 8,  n: 4 },
+    // 170 not 166, and 200 not 201: both used to run into the masonry beside
+    // them and spawn coins inside solid tiles, where they cannot be collected
+    { x: 158, y: 5,  n: 3 }, { x: 170, y: 9,  n: 4 },
+    { x: 195, y: 9,  n: 4 }, { x: 200, y: 8,  n: 4 },
     { x: 215, y: 8,  n: 3 },
   ],
 
@@ -894,6 +901,34 @@ function validateLevel() {
     if (e.gate != null && nearPit(e.gate, 1)) warn.push(`gate at ${e.gate} is on a pit edge`);
   if (LEVEL.finalGate != null && nearPit(LEVEL.finalGate, 1))
     warn.push(`final gate at ${LEVEL.finalGate} is on a pit edge`);
+
+  /* A brick or ? needs room underneath for the player to stand and jump into
+     it. Anything flat on a pipe cap or on the ground can never be bumped, and
+     a ? there is a pickup nobody can reach. Caught after a pipe was moved
+     under an existing brick row and quietly bricked up its own ? block. */
+  const HEAD = hitboxFor('hero').h;
+  for (let ty = 0; ty < LEVEL.h; ty++)
+    for (let tx = 0; tx < LEVEL.w; tx++) {
+      const t = grid[ty * LEVEL.w + tx];
+      if (t !== T.BRICK && t !== T.QUESTION) continue;
+      let air = 0;
+      for (let k = ty + 1; k < LEVEL.h; k++) {
+        const u = grid[k * LEVEL.w + tx];
+        if (isSolid(u) || isOneWay(u)) break;
+        air++;
+      }
+      if (air * TILE < HEAD)
+        warn.push(`${t === T.BRICK ? 'brick' : '?'} at ${tx},${ty} has ${air * TILE}px under it — cannot be bumped`);
+    }
+
+  // ...and nothing collectable should be spawned inside a solid tile
+  for (const r of LEVEL.coinRuns || [])
+    for (let k = 0; k < r.n; k++)
+      if (isSolid(grid[r.y * LEVEL.w + (r.x + k)]))
+        warn.push(`coin at ${r.x + k},${r.y} is inside a solid tile`);
+  for (const it of LEVEL.items)
+    if (isSolid(grid[it.y * LEVEL.w + it.x]))
+      warn.push(`item '${it.t}' at ${it.x},${it.y} is inside a solid tile`);
 
   for (const L of (LEVEL.card || [])) {
     const w = textWidth(L.s, L.sc);
