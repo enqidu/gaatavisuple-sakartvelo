@@ -70,6 +70,31 @@ leaves the title screen, never at load: browsers refuse audio until a real user
 gesture, so a `play()` on page load just throws and leaves the track silently
 dead.
 
+## Tile art
+
+Three things were rebuilt after the brick/`?`/pipe cluster read badly against
+the photographic backdrops:
+
+- **Pipes are shaded across the whole pipe, not per tile.** Every tile used to
+  draw its own highlight at `+2` and its own shadow at `+13`, so a two-tile pipe
+  came out `light|dark|light|dark` — it read as two thin pipes shoved together
+  rather than one round one. Which half a tile is gets read off its neighbours,
+  and the cap only overhangs on the pipe's actual outer edges. Note this merges
+  two pipes placed in adjacent columns into one wide one; nothing in either act
+  does that, and the check is in the test sweep.
+- **The `?` block pulses with a glint, not a full recolour.** Swapping the whole
+  face to `qLite` washed it out to a pale cream square once a second and took
+  the glyph with it — caught mid-blink it read as a blank tile with a smudge.
+  The glyph is now embossed with a light offset underneath.
+- **Bricks get a dark rim on the outside of a run.** Without it the masonry
+  dissolved into the backdrop and a platform stopped reading as something you
+  could stand on. Outer faces only, so a run still looks like one wall.
+
+The pipe green also came down off pure saturation (`#28b028` → `#2f9e34`). At
+full saturation it shouted over the photographic backdrop instead of sitting
+on it.
+
+
 ## Why it looks 8-bit
 
 The whole game renders into a **320×180 buffer** that is scaled up 4× with

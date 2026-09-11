@@ -3644,7 +3644,9 @@ const PAL = {
   dirt: '#a05a20', dirtDark: '#7a3d10', grass: '#3ac13a', grassLite: '#7ae07a',
   brick: '#c2703a', brickDark: '#7a3d10',
   qBlock: '#e8a020', qLite: '#ffd85e', qDark: '#8a5a00',
-  pipe: '#28b028', pipeLite: '#68e068', pipeDark: '#106810',
+  /* Deepened off pure green. #28b028 is almost fully saturated and it shouted
+     over the photographic backdrop instead of sitting on it. */
+  pipe: '#2f9e34', pipeLite: '#6ed06a', pipeDark: '#14691c', pipeEdge: '#0a3d10',
   stone: '#9098a8', stoneDark: '#585e6c',
 };
 
@@ -3824,16 +3826,32 @@ function drawTile(t, px, py, tx, ty) {
       g.fillRect(px + 11, py + 8, 1, 8);
       g.fillStyle = 'rgba(255,255,255,.16)';
       g.fillRect(px, py + 1, TILE, 1); g.fillRect(px, py + 8, TILE, 1);
+      /* A dark rim on the outside of a run. Without it the masonry dissolved
+         into the photographic backdrop and the platform stopped reading as an
+         object you could stand on. Only on the outer faces, so a run of bricks
+         still looks like one wall. */
+      g.fillStyle = 'rgba(38,18,4,.55)';
+      if (tileAt(tx - 1, ty) !== T.BRICK) g.fillRect(px, py, 1, TILE);
+      if (tileAt(tx + 1, ty) !== T.BRICK) g.fillRect(px + TILE - 1, py, 1, TILE);
+      if (!isSolid(tileAt(tx, ty + 1))) g.fillRect(px, py + TILE - 1, TILE, 1);
       break;
     }
     case T.QUESTION: {
+      /* The pulse is a glint travelling across the face, not a full recolour.
+         Swapping the whole block to qLite washed it out to a pale cream square
+         once a second and the glyph went with it - caught mid-blink it read as
+         a blank tile with a smudge on it. */
       const blink = Math.floor(game.time * 6 + tx) % 6 === 0;
-      g.fillStyle = blink ? PAL.qLite : PAL.qBlock; g.fillRect(px, py, TILE, TILE);
+      g.fillStyle = PAL.qBlock; g.fillRect(px, py, TILE, TILE);
+      g.fillStyle = PAL.qLite;  g.fillRect(px + 1, py + 1, TILE - 2, 2);   // bevel
+      if (blink) { g.fillStyle = PAL.qLite; g.fillRect(px + 1, py + 3, TILE - 2, 3); }
       g.fillStyle = PAL.qDark;
       g.fillRect(px, py, TILE, 1); g.fillRect(px, py + TILE - 1, TILE, 1);
       g.fillRect(px, py, 1, TILE); g.fillRect(px + TILE - 1, py, 1, TILE);
       g.fillRect(px + 1, py + 1, 1, 1); g.fillRect(px + TILE - 2, py + 1, 1, 1);
       g.fillRect(px + 1, py + TILE - 2, 1, 1); g.fillRect(px + TILE - 2, py + TILE - 2, 1, 1);
+      // embossed: a light offset under the glyph so it reads at 5x7
+      drawText(g, '?', px + 6, py + 6, PAL.qLite, 1, null);
       drawText(g, '?', px + 6, py + 5, PAL.qDark, 1, null);
       break;
     }
@@ -3873,14 +3891,37 @@ function drawTile(t, px, py, tx, ty) {
       break;
     }
     case T.PIPE: {
+      /* Shaded across the WHOLE pipe, not per tile. Every tile used to draw its
+         own highlight at +2 and its own shadow at +13, so a two-tile pipe came
+         out as light|dark|light|dark - it read as two thin pipes shoved
+         together rather than one round one. Which half we are is read off the
+         neighbours. */
       const top = !isSolid(tileAt(tx, ty - 1));
-      g.fillStyle = PAL.pipe;     g.fillRect(px, py, TILE, TILE);
-      g.fillStyle = PAL.pipeLite; g.fillRect(px + 2, py, 3, TILE);
-      g.fillStyle = PAL.pipeDark; g.fillRect(px + TILE - 3, py, 2, TILE);
+      const L = tileAt(tx - 1, ty) !== T.PIPE;      // left edge of this pipe
+      const R = tileAt(tx + 1, ty) !== T.PIPE;      // right edge
+
+      g.fillStyle = PAL.pipe; g.fillRect(px, py, TILE, TILE);
+      if (L) {
+        g.fillStyle = PAL.pipeLite; g.fillRect(px + 2, py, 4, TILE);
+        g.fillStyle = PAL.pipeEdge; g.fillRect(px, py, 1, TILE);
+      }
+      if (R) {
+        g.fillStyle = PAL.pipeDark; g.fillRect(px + TILE - 4, py, 3, TILE);
+        g.fillStyle = PAL.pipeEdge; g.fillRect(px + TILE - 1, py, 1, TILE);
+      }
+
       if (top) {
-        g.fillStyle = PAL.pipe;     g.fillRect(px - 2, py, TILE + 4, 6);
-        g.fillStyle = PAL.pipeLite; g.fillRect(px, py + 1, 3, 4);
-        g.fillStyle = PAL.pipeDark; g.fillRect(px - 2, py + 5, TILE + 4, 1);
+        // the lip only overhangs on the pipe's actual outer edges
+        const x0 = px - (L ? 2 : 0);
+        const w  = TILE + (L ? 2 : 0) + (R ? 2 : 0);
+        g.fillStyle = PAL.pipe; g.fillRect(x0, py, w, 6);
+        if (L) g.fillStyle = PAL.pipeLite, g.fillRect(x0 + 1, py + 1, 4, 4);
+        if (R) g.fillStyle = PAL.pipeDark, g.fillRect(x0 + w - 4, py + 1, 3, 4);
+        g.fillStyle = PAL.pipeEdge;
+        g.fillRect(x0, py, w, 1);                   // top edge
+        g.fillRect(x0, py + 5, w, 1);               // underside of the lip
+        if (L) g.fillRect(x0, py, 1, 6);
+        if (R) g.fillRect(x0 + w - 1, py, 1, 6);
       }
       break;
     }
