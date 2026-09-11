@@ -585,8 +585,14 @@ entering an act, and restarting one after a death. `Music.cue()` does that from
 including the boot loop that validates all three acts, and re-cueing there
 would fight itself.
 
+**The end credits take the `chase` loop.** `Music.force('chase')` from
+`game.win()` when the run is actually over — not on an act that advances — and
+`cue()` clears it, so restarting hands the soundtrack straight back to the act.
+That is what `forced` is for: a moment outside the levels claiming the music
+without pretending to be one.
+
 Unused but kept, in case an act wants its own again: the `misha` track and the
-two synth loops `dark` and `chase`. None costs anything at runtime — audio
+`dark` synth loop. None costs anything at runtime — audio
 elements are only built when an act names them.
 
 Nothing is fetched until the first `Music.start()`, which only fires on a real

@@ -668,8 +668,16 @@ const Music = (() => {
     }
     return els[name];
   }
-  const tuneFor  = () => (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
+  /* `forced` lets a moment outside the levels - the end credits - claim the
+     soundtrack without pretending to be an act. Cleared by cue(), which
+     reset() calls, so starting anything at all puts the act back in charge. */
+  let forced = null;
+  const tuneFor  = () => {
+    if (forced && TUNES[forced]) return forced;
+    return (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
+  };
   const trackFor = () => {
+    if (forced && TRACKS[forced]) return forced;
     const m = typeof LEVEL !== 'undefined' && LEVEL ? LEVEL.music : null;
     return TRACKS[m] ? m : 'main';
   };
@@ -705,7 +713,14 @@ const Music = (() => {
        entering an act, and restarting one after a death. Deliberately not in
        retune(): retune fires on any loadLevel, including the boot loop that
        validates all three acts, and re-cueing there would fight itself. */
-    cue() { if (armed) pick(true); },
+    cue() { forced = null; if (armed) pick(true); },
+    /* Hand the soundtrack to a named tune or track until the next cue(). Does
+       nothing before the first keypress, like everything else here. */
+    force(name) {
+      if (forced === name) return;
+      forced = name;
+      if (armed) pick(true);
+    },
     /* Called on every level load. Stopping the synth and the other tracks is
        unconditional, so leaving an act always silences whatever it was
        playing - an earlier version returned early when the file element did
@@ -4112,7 +4127,11 @@ game.win = function () {
   // more acts to come? then this is an interlude, not the end of the run
   this.advance = this.levelIndex < LEVELS.length - 1;
   Sfx.win();
-  if (!this.advance) Stinger.laugh();
+  if (!this.advance) {
+    Stinger.laugh();
+    // the run is over: the credits get their own music, not the act's
+    Music.force('chase');
+  }
   for (let i = 0; i < 70; i++)
     burst(this.player.cx + rand(-70, 70), this.player.y - rand(0, 90), 1,
           { colors: ['#ffd85e', '#e8434f', '#3ad47a', '#41a6f0', '#fff'], speed: 80, life: 1.8, size: 2, grav: 170 });
