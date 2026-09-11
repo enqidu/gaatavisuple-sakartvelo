@@ -645,63 +645,90 @@ const ChipTune = (() => {
   };
 })();
 
+/* Recorded tracks, by name. An act names either one of these or one of the
+   TUNES above; anything unrecognised falls back to `main`. Elements are made
+   on demand and kept, so switching acts does not re-download. */
+const TRACKS = {
+  misha: 'assets/misha_magaria.mp3',
+  main:  'assets/music.m4a',            // AAC: about a third the size of the mp3
+};
+
 const Music = (() => {
-  let el = null, failed = false, muted = false;
-  const ensure = () => {
-    if (el || failed) return el;
-    el = new Audio('assets/music.m4a');   // AAC: about a third the size of the mp3
-    el.loop = true;
-    el.volume = 0.4;
-    el.addEventListener('error', () => { failed = true; console.warn('music: assets/music.m4a failed to load'); });
-    return el;
+  const els = {};
+  let muted = false, armed = false, liveTrack = null;
+
+  function element(name) {
+    if (els[name] === undefined) {
+      const src = TRACKS[name];
+      if (!src) return (els[name] = null);
+      const a = new Audio(src);
+      a.loop = true; a.volume = 0.4;
+      a.addEventListener('error', () => console.warn(`music: ${src} failed to load`));
+      els[name] = a;
+    }
+    return els[name];
+  }
+  const tuneFor  = () => (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
+  const trackFor = () => {
+    const m = typeof LEVEL !== 'undefined' && LEVEL ? LEVEL.music : null;
+    return TRACKS[m] ? m : 'main';
   };
-  // which source an act wants; LEVEL.music === 'dark' takes the synth
-  const tuneFor = () => (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
+  function silenceTracks(except) {
+    for (const [k, a] of Object.entries(els)) if (a && k !== except) a.pause();
+  }
+
   /* Nothing plays until the first start(), which only happens on a real
      keypress - browsers will not let audio begin without one. `armed` is what
      lets retune() re-pick the source on later act changes without ever being
      the thing that starts audio in the first place. */
-  let armed = false;
-
   function pick() {
     const tune = tuneFor();
     if (tune) {
-      if (el) el.pause();
+      silenceTracks(null); liveTrack = null;
       ChipTune.play(tune); ChipTune.setMuted(muted);
       return;
     }
-    ChipTune.stop();                      // unconditional: leaving a synth act silences it
-    const a = ensure();
+    ChipTune.stop();                    // unconditional: leaving a synth act silences it
+    const name = trackFor();
+    silenceTracks(name);
+    const a = element(name);
     if (!a) return;
+    liveTrack = name;
     a.muted = muted;
     a.play().catch(e => console.warn('music: autoplay blocked —', e.name));
   }
 
   return {
     start() { armed = true; pick(); },
-    /* Called on every level load. Stopping the synth is unconditional so that
-       leaving act 3 always silences it - an earlier version returned early
-       when the file element did not exist yet and left the synth running
-       under act 1. Switching to a source that is already the live one is a
-       no-op, so restarting an act does not re-cue from the top. */
+    /* Called on every level load. Stopping the synth and the other tracks is
+       unconditional, so leaving an act always silences whatever it was
+       playing - an earlier version returned early when the file element did
+       not exist yet and left the synth running under act 1. Switching to a
+       source that is already live is a no-op, so restarting an act does not
+       re-cue from the top. */
     retune() {
       if (!armed) { ChipTune.stop(); return; }
       const tune = tuneFor();
-      if (tune && ChipTune.current === tune) return;
-      if (!tune && el && !el.paused && !ChipTune.playing) return;
+      if (tune) { if (ChipTune.current !== tune) pick(); return; }
+      const name = trackFor();
+      const a = els[name];
+      if (liveTrack === name && a && !a.paused && !ChipTune.playing) return;
       pick();
     },
     // Independent of the effects mute: the track is the loud one, and wanting
     // it off is not the same as wanting the coin blips off.
     toggle() {
       muted = !muted;
-      if (el) el.muted = muted;
+      for (const a of Object.values(els)) if (a) a.muted = muted;
       ChipTune.setMuted(muted);
       return muted;
     },
     get muted() { return muted; },
-    get playing() { return ChipTune.playing || (!!el && !el.paused); },
-    get element() { return el; },
+    get playing() {
+      return ChipTune.playing || Object.values(els).some(a => a && !a.paused);
+    },
+    get current() { return ChipTune.current || liveTrack; },
+    get element() { return liveTrack ? els[liveTrack] : null; },
   };
 })();
 
@@ -782,7 +809,7 @@ const LEVEL_1 = {
        226  final gate — opens when Aslan is beaten
        231  flag                                                            */
   finalBoss: 'ASLAN',
-  music: 'dark',           // the synth; act 3 takes the recorded track
+  music: 'misha',          // Misha Magaria, 8-bit
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
   bossArenaX: 208,     // only past here does he commit to dives you can punish
 
@@ -948,7 +975,7 @@ const LEVEL_2 = {
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
   finalBoss: 'THE ANCHOR',
-  music: 'chase',
+  music: 'misha',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [

@@ -576,11 +576,22 @@ megabyte of load time and buys nothing.
 `ChipTune` holds named loops and `LEVEL.music` picks one; anything it does not
 recognise falls back to `assets/music.m4a`.
 
-| act | track | |
+`TRACKS` holds recorded files by name and `TUNES` holds synthesised loops;
+`LEVEL.music` names either, and anything unrecognised falls back to `main`.
+
+| act | `LEVEL.music` | |
 |---|---|---|
-| 1 | `dark` | D minor, 84bpm, i–VI–III–VII. Something closing in. |
-| 2 | `chase` | G major, 168bpm, I–vi–IV–V. Offbeat bass, snare backbeat, syncopated lead over a thin 12.5% pulse arpeggio. |
-| 3 | file | `assets/music.m4a` |
+| 1 | `misha` | `assets/misha_magaria.mp3` |
+| 2 | `misha` | same file, and it **does not restart** crossing from act 1 |
+| 3 | *(default)* | `assets/music.m4a` |
+
+The two synth loops (`dark`, `chase`) are still there and still work; no act
+currently asks for them.
+
+Audio elements are built on demand and kept, so switching acts never
+re-downloads, and nothing is fetched until the first `Music.start()` — which
+only fires on a real keypress. That keeps both tracks out of the boot payload,
+which stays ~1.6MB.
 
 Web Audio has no pulse-width control, so the thin arpeggio pulse is faked by
 detuning a second square 0.5% against the first — close enough at this size.
