@@ -2270,7 +2270,10 @@ class Dardubala extends Entity {
         floatText(this.cx, this.y - 30, 'TWO OF THEM', '#ff5ec4');
       }
       game.addCombo(p, this.cx, this.y, 600);
-      floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
+      // not on the split: 'TWO OF THEM' and the combo already land here, and a
+      // fourth line on the same spot came out as unreadable overlap
+      if (!(this.hp === 1 && this.split))
+        floatText(this.cx, this.y - 10, `${this.hp} LEFT`, '#ffd85e');
     }
   }
 }
@@ -3191,6 +3194,17 @@ game.teaOutro = function () {
   const p = this.player;
   const d = this.enemies.find(e => e instanceof Dardubala);
   if (d) d.scriptedOut = true;
+  /* The phantom has no source any more, so it drops with him. It used to
+     survive: the second fox went on hunting and leaping over the hero through
+     the entire tea scene and the win screen behind it, which read as "I killed
+     him and the thing is still after me". */
+  for (const e of this.enemies) {
+    if (!(e instanceof DecoyFox) || e.dead) continue;
+    e.dead = true;
+    burst(e.cx, e.y + 6, 20,
+          { colors: ['#7ec8f0', '#dde3ec', '#fff'], speed: 110, grav: -30, life: .8, size: 2 });
+  }
+  this.enemies = this.enemies.filter(e => !e.dead);
   this.state = 'escape';
   this.endT = 0;
   this.script = updateTea;
@@ -4210,7 +4224,18 @@ function drawEntities() {
       drawSprite(ART.l2bomb, e, { tint: flashing ? 'rgba(255,255,255,.9)' : null });
       if (e.taunt > 0) drawTextCentered(g, 'ARMOURED', e.cx, e.y - 11, '#ff8a5c', 1);
     } else if (e instanceof DecoyFox) {
-      drawSprite(ART.l2foxrun, e, { tint: 'rgba(120,150,210,.30)' });   // the decoy, tinted cooler
+      /* Drawn as a phantom, not as a second fox. A 30% blue wash over the same
+         sprite was invisible at this size - the two were indistinguishable, so
+         picking the real one was a coin flip rather than a read. Translucent
+         and cold, with a shimmer, it is still something you have to look at,
+         but you can tell. */
+      const shimmer = 0.42 + Math.sin(game.time * 9 + e.t * 3) * 0.12;
+      g.save();
+      g.globalAlpha = shimmer + 0.16;
+      drawSprite(ART.l2foxrun, e, { tint: 'rgba(90,170,235,.55)' });
+      g.restore();
+      if (Math.floor(game.time * 6) % 2 === 0)
+        drawTextCentered(g, '?', e.cx, e.y - 12, '#7ec8f0', 1);
     } else if (e instanceof Dardubala) {
       if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
       if (e.isFox && !e.scriptedOut) {
