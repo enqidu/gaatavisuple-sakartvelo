@@ -904,6 +904,34 @@ fingers at once (hold right, hold sprint, time the jump), and the tight windows
 touch d-pad is worst at.
 
 
+## The walk cycle
+
+The hero art is one static frame, so the stride is made by cutting the sprite
+at the waist and sliding the two halves of the leg band past each other — front
+leg forward, back leg back. Two pixels at this size is a whole stride.
+
+`phase` comes from **distance travelled**, not from time. An earlier walk cycle
+was time-based at 18Hz and read as the character vibrating rather than walking,
+which is why the animation got pulled entirely. Distance also makes the cadence
+match the speed for free: sprinting steps faster.
+
+`spriteSrc` exists because `drawSprite` scales as it tints and so cannot hand
+back a native-size source to blit sub-rectangles from.
+
+
+## The camera
+
+Feeding raw `p.vx` into the lead was the instability. `vx` changes every frame
+as he accelerates, brakes, lands and turns, so the point the camera aimed at
+jittered constantly and the view swam — worst when tapping left and right,
+where the lead flips sign. The lead is now smoothed on its own before it
+reaches the target, the target is chased more slowly, and vertical has a 26px
+dead zone so small hops do not pump the view.
+
+Measured max frame-to-frame camera movement: tapping **4.38px → 1.70px**,
+running **2.68px → 0.74px**.
+
+
 ## The bridge (Act 1)
 
 Tiles 179–192 used to be a four-tile pit. 179–194 is now a **fifteen-tile
@@ -929,8 +957,15 @@ the tile under him is `T.BRIDGE`), not an x line. An x line could be tripped in
 mid-air by a jump that cleared the whole span, dropping the bridge under nobody
 and stranding the pickup behind you.
 
-The deck then goes **from the far end back toward you** over 0.9s
-(`BRIDGE_FALL`), dropping decorative `Plank`s — deliberately kept out of
+The deck then goes **from the near end, chasing you across**, over 2.1s
+(`BRIDGE_FALL`) after a 0.35s `BRIDGE_LEAD` so stepping on does not drop the
+tile under your own feet. It used to sweep the other way, which made crossing
+impossible by construction — the far end was always gone before you arrived, so
+the only move was retreat. Now it is a race you can win: the front travels
+114px/s against a 148px/s sprint. Measured: sprinting crosses in 1.68s, walking
+in 2.15s (marginal, walk speed is 115), hesitating 0.6s drops you, and standing
+still drops you. Falling still costs one heart and leaves the ultra on the near
+lip. It drops decorative `Plank`s — deliberately kept out of
 `game.hazards`, because the collapse is a thing you are made to watch, not a
 thing that hits you.
 

@@ -38,14 +38,21 @@ const CFG = {
      have to rise thirteen tiles, which is taller than the level. The horizontal
      surge is what actually crosses the gap; the big rise is what sells it.
      Both last only until he lands. */
-  ultraJumpVel: -470,
-  ultraAirMax:  235,
+  /* Sized for a STANDING start at the lip, not for a run-up. The powder drops
+     on the edge and that is where the player is when they take it, so needing
+     to walk back and build speed was the difference between "it crosses" in a
+     test and "it does not" in play. */
+  ultraJumpVel: -505,
+  ultraAirMax:  290,
   crouchMax:     52,    // crouch-shuffle: enough to reposition, not to travel
   jumpCut:     0.42,
   coyote:      0.10,
   jumpBuffer:  0.12,
   stompBounce: -208,
-  hurtInvuln:  1.4,
+  /* Long enough to actually get out of whatever hit you. At 1.4s a bad spot
+     could take a second heart before you had moved. drawEntities blinks him
+     through it, so the window reads as being briefly a ghost. */
+  hurtInvuln:  2.6,
   // The death pop runs on its own, lighter gravity so it hangs and reads as a
   // beat rather than a blink. Roughly 1.9s from hit to off-screen.
   deathVel:    -215,
@@ -1576,6 +1583,7 @@ class Player extends Entity {
     /* Crouching swaps the hitbox height only - never the width. A narrower box
        mid-crouch would let him slide into gaps he cannot stand up out of. */
     this.crouching = false; this.dropT = 0;
+    this.strideT = 0;                    // distance walked, drives the stride
     this.standH = hb.h;
     this.crouchH = hitboxFor('squat').h;
     this.extra = 0; this.extraT = 0;
@@ -1685,7 +1693,7 @@ class Player extends Entity {
          the tile rather than Math.random so a given block is always the same
          one - a block that paid out ammo last run still does. */
       if ((tx * 7 + ty * 13) % 3 === 0) {
-        this.roses = Math.min(this.roses + 3, 9);
+        this.roses = Math.min(this.roses + 5, 15);
         if (!this.hasThrown) this.throwHint = 6;   // prompt until they use one
         bumps.push({ tx, ty, t: 0 });
         floatText(tx * TILE + 8, ty * TILE - 6, 'ROSES +3', '#ff8fd0');
@@ -1799,6 +1807,7 @@ class Player extends Entity {
       this.vy *= Math.pow(CFG.jumpCut, dt * 60);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
 
+    if (this.onGround) this.strideT += Math.abs(this.vx) * dt;
     const wasAir = !this.onGround;
     moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
 
@@ -3965,7 +3974,8 @@ class Plank {
    Afterwards the ultra powder sits on the near lip, and comes back if he ever
    ends up over there without a charge, so a bad jump can strand him a heart
    but never the run. */
-const BRIDGE_FALL = 0.85;
+const BRIDGE_FALL = 2.1;   // seconds for the whole span, once it starts
+const BRIDGE_LEAD = 0.35;  // a beat before the first plank goes
 
 const bridgeRun = {
   state: 'none', t: 0, cut: 0,
@@ -4006,23 +4016,19 @@ const bridgeRun = {
     if (this.state === 'falling') {
       this.t += dt;
       const span = b.to - b.from;
-      const want = Math.min(span, Math.ceil(this.t / BRIDGE_FALL * span));
-      /* The front stops at his feet. It eats the deck right to left and never
-         takes the plank he is on or anything left of it, so the way back is
-         always still there and the collapse follows him out rather than racing
-         him. Walk right instead, into the part that has already gone, and that
-         is a fall he chose.
+      /* It eats the deck LEFT TO RIGHT, from the near end, chasing you across.
+         It used to go the other way, which made crossing impossible by
+         construction - the far end was always gone before you arrived, so the
+         only move was to retreat. This way the bridge is a race you can win:
+         sprint and you make it, dawdle and you drop.
 
-         Sparing only the single tile under him was not enough: the front then
-         cut the tile he was about to step onto, so a 0.6s reaction - an
-         ordinary human beat - still cost a heart with nothing he could have
-         done. Capping the front at his column is what makes a retreat always
-         work. It cannot be abused in the other direction either, because the
-         far end goes first: there is never any deck left to run across. */
-      const standing = p.onGround ? Math.floor(p.cx / TILE) : null;
-      const onDeck = standing != null && standing >= b.from && standing < b.to;
-      const capped = onDeck ? Math.min(want, b.to - 1 - standing) : want;
-      while (this.cut < capped) this.drop(b.to - 1 - this.cut++);
+         The front travels span/BRIDGE_FALL = 114px/s against a 148px/s sprint,
+         so sprinting clears it with room and even a 115px/s walk is marginal.
+         BRIDGE_LEAD holds the first plank for a beat, so stepping on does not
+         drop the tile under your own feet. */
+      const front = this.t - BRIDGE_LEAD;
+      const want = front <= 0 ? 0 : Math.min(span, Math.ceil(front / BRIDGE_FALL * span));
+      while (this.cut < want) this.drop(b.from + this.cut++);
       shake = Math.max(shake, 4);
       if (this.cut >= span) { this.state = 'down'; this.dropUltra(true); Sfx.pit(); }
       return;
@@ -4372,15 +4378,30 @@ function updateTea(dt) {
 
 /* ---------------------------------------------------------- camera */
 
-const cam = { x: 0, y: 0 };
+const cam = { x: 0, y: 0, lead: 0 };
+
+/* The lead is smoothed on its own before it reaches the target, and the target
+   is only then chased. Feeding raw p.vx straight in was the instability: vx
+   changes every frame as he accelerates, brakes, lands and turns, so the point
+   the camera was aiming at jittered constantly and the whole view swam - most
+   obvious when tapping left and right, where the lead flips sign.
+
+   Vertical is slower still and has a dead zone. Small hops should not move the
+   view at all; without one, every jump pumped the camera up and down. */
+const CAM = { lead: 0.42, leadMax: 60, leadEase: 0.10, xEase: 0.004,
+              yEase: 0.06, yDead: 26 };
 
 function updateCamera(dt) {
   const p = game.player;
-  const lead = clamp(p.vx * 0.42, -60, 60);
-  const tx = clamp(p.cx + lead - VIEW_W / 2, 0, LEVEL.w * TILE - VIEW_W);
-  const ty = clamp(p.y - VIEW_H * 0.55, 0, LEVEL_H_PX - VIEW_H);
-  cam.x = lerp(cam.x, tx, 1 - Math.pow(0.0006, dt));
-  cam.y = lerp(cam.y, ty, 1 - Math.pow(0.02, dt));
+  const want = clamp(p.vx * CAM.lead, -CAM.leadMax, CAM.leadMax);
+  cam.lead = lerp(cam.lead ?? want, want, 1 - Math.pow(CAM.leadEase, dt));
+
+  const tx = clamp(p.cx + cam.lead - VIEW_W / 2, 0, LEVEL.w * TILE - VIEW_W);
+  cam.x = lerp(cam.x, tx, 1 - Math.pow(CAM.xEase, dt));
+
+  let ty = clamp(p.y - VIEW_H * 0.55, 0, LEVEL_H_PX - VIEW_H);
+  if (Math.abs(ty - cam.y) < CAM.yDead) ty = cam.y;     // ignore small hops
+  cam.y = lerp(cam.y, ty, 1 - Math.pow(CAM.yEase, dt));
 }
 
 /* ---------------------------------------------------------- update */
@@ -5076,6 +5097,59 @@ function drawTiles() {
 const tintCv = document.createElement('canvas');
 const tintCx = tintCv.getContext('2d');
 
+/* Tinted copy at the art's NATIVE size, so callers can blit sub-rectangles of
+   it in source coordinates. drawSprite scales as it tints and cannot. */
+function spriteSrc(art, tint) {
+  if (!tint) return art.canvas;
+  if (tintCv.width < art.w || tintCv.height < art.h) {
+    tintCv.width = Math.max(art.w, tintCv.width, 64);
+    tintCv.height = Math.max(art.h, tintCv.height, 64);
+  }
+  tintCx.imageSmoothingEnabled = false;
+  tintCx.clearRect(0, 0, tintCv.width, tintCv.height);
+  tintCx.drawImage(art.canvas, 0, 0);
+  tintCx.save();
+  tintCx.globalCompositeOperation = 'source-atop';
+  tintCx.fillStyle = tint;
+  tintCx.fillRect(0, 0, art.w, art.h);
+  tintCx.restore();
+  return tintCv;
+}
+
+/* The hero walking. The art is one static frame, so the stride is made by
+   cutting it below the waist and sliding the two halves of the leg band past
+   each other - front leg forward, back leg back. Two pixels at this size is a
+   whole stride.
+
+   `phase` is driven by DISTANCE travelled, not by time. An earlier walk cycle
+   was time-based at 18Hz and read as the character vibrating rather than
+   walking, which is the bug that got the whole animation pulled. Distance also
+   means the cadence matches the speed for free: sprinting steps faster. */
+function drawStriding(art, e, { squash = 1, tint = null } = {}, phase) {
+  const dw = Math.max(1, Math.round(art.w / squash));
+  const dh = Math.max(1, Math.round(art.h * squash));
+  const x = Math.round(e.cx - dw / 2);
+  const y = Math.round(e.bottom - dh);
+  const src = spriteSrc(art, tint);
+
+  const WAIST = 0.66;
+  const sCut = Math.round(art.h * WAIST), dCut = Math.round(dh * WAIST);
+  const sHalf = Math.floor(art.w / 2), dHalf = Math.floor(dw / 2);
+  const off = Math.round(Math.sin(phase) * 2);
+
+  g.save();
+  if (e.face < 0) { g.translate(x + dw, y); g.scale(-1, 1); }
+  else g.translate(x, y);
+  // torso, unchanged
+  g.drawImage(src, 0, 0, art.w, sCut, 0, 0, dw, dCut);
+  // legs, sliding past each other
+  g.drawImage(src, 0, sCut, sHalf, art.h - sCut,
+              off, dCut, dHalf, dh - dCut);
+  g.drawImage(src, sHalf, sCut, art.w - sHalf, art.h - sCut,
+              dHalf - off, dCut, dw - dHalf, dh - dCut);
+  g.restore();
+}
+
 function drawSprite(art, e, { bob = 0, squash = 1, tint = null } = {}) {
   // squash > 1 is taller and correspondingly narrower — volume preserving,
   // so the character doesn't appear to gain mass mid-animation.
@@ -5615,7 +5689,9 @@ function drawEntities() {
     const art = p.crouching ? ART.squat : airborne ? ART.jump : ART.hero;
     // the jump art is a pose, not a stretch: squashing it too reads as rubber
     const sqUsed = (p.crouching || airborne) ? 1 : sq;
-    drawSprite(art, p, { squash: sqUsed, tint });
+    const walking = p.onGround && !p.crouching && Math.abs(p.vx) > 8;
+    if (walking) drawStriding(art, p, { squash: sqUsed, tint }, p.strideT / 7);
+    else drawSprite(art, p, { squash: sqUsed, tint });
 
     // sqUsed, not sq: the pose frames are drawn unsquashed, and measuring them
     // with sq put the rose a couple of pixels off on every airborne frame
