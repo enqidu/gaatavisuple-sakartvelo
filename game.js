@@ -5116,37 +5116,49 @@ function spriteSrc(art, tint) {
   return tintCv;
 }
 
-/* The hero walking. The art is one static frame, so the stride is made by
-   cutting it below the waist and sliding the two halves of the leg band past
-   each other - front leg forward, back leg back. Two pixels at this size is a
-   whole stride.
+/* The hero walking, from a single frame of art.
 
-   `phase` is driven by DISTANCE travelled, not by time. An earlier walk cycle
-   was time-based at 18Hz and read as the character vibrating rather than
-   walking, which is the bug that got the whole animation pulled. Distance also
-   means the cadence matches the speed for free: sprinting steps faster. */
+   The art is already a mid-stride pose: legs apart, one forward, one back. So
+   the second frame of the cycle is the PASSING position - legs together, body
+   a pixel higher - and that is made by pulling each leg one pixel toward the
+   centre and lifting the whole sprite by one. Two frames, alternating.
+
+   LEG_TOP is measured, not guessed. Scanning the keyed 20x30 sprite for the
+   first row that contains two separate runs of pixels puts the split at row 25
+   of 30 - the legs are runs [3,8] and [11,15] there. An earlier version cut at
+   0.66, which is up through the coat and the swinging arms, and sliding THAT
+   sheared the whole body sideways. Anything above the crotch must not move.
+
+   The cadence comes from distance travelled rather than time, so it matches
+   whatever speed he is going and never turns into the 18Hz vibration that got
+   the first attempt at this pulled. */
+const LEG_TOP = 25 / 30;        // measured: where the two legs separate
+const STRIDE_PX = 16;           // distance per footfall
+
 function drawStriding(art, e, { squash = 1, tint = null } = {}, phase) {
   const dw = Math.max(1, Math.round(art.w / squash));
   const dh = Math.max(1, Math.round(art.h * squash));
   const x = Math.round(e.cx - dw / 2);
-  const y = Math.round(e.bottom - dh);
   const src = spriteSrc(art, tint);
 
-  const WAIST = 0.66;
-  const sCut = Math.round(art.h * WAIST), dCut = Math.round(dh * WAIST);
+  const passing = phase % 2 === 1;              // legs together on every other step
+  const lift = passing ? 1 : 0;
+  const close = passing ? 1 : 0;
+  const y = Math.round(e.bottom - dh) - lift;
+
+  const sCut = Math.round(art.h * LEG_TOP), dCut = Math.round(dh * LEG_TOP);
   const sHalf = Math.floor(art.w / 2), dHalf = Math.floor(dw / 2);
-  const off = Math.round(Math.sin(phase) * 2);
 
   g.save();
   if (e.face < 0) { g.translate(x + dw, y); g.scale(-1, 1); }
   else g.translate(x, y);
-  // torso, unchanged
+  // everything above the crotch is untouched
   g.drawImage(src, 0, 0, art.w, sCut, 0, 0, dw, dCut);
-  // legs, sliding past each other
+  // each leg pulled a pixel toward the middle
   g.drawImage(src, 0, sCut, sHalf, art.h - sCut,
-              off, dCut, dHalf, dh - dCut);
+              close, dCut, dHalf, dh - dCut);
   g.drawImage(src, sHalf, sCut, art.w - sHalf, art.h - sCut,
-              dHalf - off, dCut, dw - dHalf, dh - dCut);
+              dHalf - close, dCut, dw - dHalf, dh - dCut);
   g.restore();
 }
 
@@ -5690,7 +5702,7 @@ function drawEntities() {
     // the jump art is a pose, not a stretch: squashing it too reads as rubber
     const sqUsed = (p.crouching || airborne) ? 1 : sq;
     const walking = p.onGround && !p.crouching && Math.abs(p.vx) > 8;
-    if (walking) drawStriding(art, p, { squash: sqUsed, tint }, p.strideT / 7);
+    if (walking) drawStriding(art, p, { squash: sqUsed, tint }, Math.floor(p.strideT / STRIDE_PX));
     else drawSprite(art, p, { squash: sqUsed, tint });
 
     // sqUsed, not sq: the pose frames are drawn unsquashed, and measuring them

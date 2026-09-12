@@ -906,9 +906,16 @@ touch d-pad is worst at.
 
 ## The walk cycle
 
-The hero art is one static frame, so the stride is made by cutting the sprite
-at the waist and sliding the two halves of the leg band past each other — front
-leg forward, back leg back. Two pixels at this size is a whole stride.
+The hero art is already a **mid-stride pose** — legs apart, one forward, one
+back. So the second frame of the cycle is the *passing* position: legs
+together, body a pixel higher. That is made by pulling each leg one pixel
+toward the centre and lifting the whole sprite by one. Two frames, alternating.
+
+**`LEG_TOP` is measured, not guessed.** Scanning the keyed 20×30 sprite for the
+first row containing two separate runs of pixels puts the split at row 25 of 30
+— the legs are runs `[3,8]` and `[11,15]` there. A first attempt cut at 0.66,
+which is up through the coat and the swinging arms, and sliding *that* sheared
+the whole body sideways. Nothing above the crotch may move.
 
 `phase` comes from **distance travelled**, not from time. An earlier walk cycle
 was time-based at 18Hz and read as the character vibrating rather than walking,
