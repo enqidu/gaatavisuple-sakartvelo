@@ -70,10 +70,18 @@ const NIGHT_HAZE = { amount: 0.36, tint: [26, 34, 66], desat: 0.30 };
 
 const SPRITES = {
   hero:   { src: 'assets/hero.png',   h: 30, hitW: 0.55, hitH: 0.92, color: '#2b3a5e' },
-  /* hitH is deliberately mean. The crouch only earns its keep if the box
-     shrinks far enough to open a band a bullet can pass through, and 0.78 of
-     22px gives 17 against the standing 28 - an 11px window. See BULLET.ride. */
-  squat:  { src: 'assets/squat.png',  h: 22, hitW: 0.62, hitH: 0.78, color: '#2b3a5e' },
+  /* The source art draws the whole crouching figure at a smaller scale than
+     hero.png draws the standing one - same head-to-body proportion, just a
+     smaller man - so rendering it at its own natural height shrank his SKULL
+     when he ducked. Measured on the raw files: the head is 43/93 of hero.png
+     and 34/63 of squat.png, so 26px is the height at which the two heads come
+     out the same width. He still loses 4px off the top, which is the crouch.
+
+     hitW/hitH are then pulled in to hold the box where it was at h:22 (10x17).
+     The crouch only earns its keep if the box shrinks far enough to open a band
+     a bullet can pass through: 17 against the standing 28 is an 11px window.
+     See BULLET.ride, and the crouch-band assert in validateLevel. */
+  squat:  { src: 'assets/squat.png',  h: 26, hitW: 0.53, hitH: 0.65, color: '#2b3a5e' },
   /* Airborne pose. Its hitW/hitH are never read - the collision box only ever
      comes from 'hero' and 'squat', so swapping the art mid-jump cannot change
      what he collides with. */
@@ -3288,10 +3296,12 @@ class Dardubala extends Entity {
     if (this.hp <= 0) {
       game.addCombo(p, this.cx, this.y, 3000);
       /* His last word, and the punchline of the whole act - at scale 1 for
-         0.9s it went by in a blink. Scale 2 for 2.6s, held still, and kept
-         clear of the top of the buffer. 166px wide at that scale, so it
-         fits. */
-      floatText(this.cx, this.y - 26, 'SAXLSHIIIIIIII', '#ffd85e', 2, 2.6);
+         0.9s it went by in a blink. Scale 2, held still, 166px wide so it
+         fits the buffer. It now rides out the whole tea scene (5.6s) rather
+         than dying before it, which means it has to clear the two lines the
+         outro drops on the player at y-16 and y-28: hence -40 rather than
+         -26. */
+      floatText(this.cx, this.y - 40, 'SAXLSHIIIIIIII', '#ffd85e', 2, 5.4);
       shake = 14; flash = 0.8; freeze = 0.2;
       game.teaOutro();
     } else {

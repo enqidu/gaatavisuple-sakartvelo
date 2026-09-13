@@ -552,7 +552,7 @@ looks different.
 Nothing was wrong with the pipeline: decode + key-out + haze across every
 sprite measured ~470ms warm. The whole delay was download, and the cause was
 assets shipping at whatever resolution they arrived in. `squat.png` was a
-1254×1254 PNG — 1.1MB — for a sprite drawn **22 pixels tall**. Two backdrops
+1254×1254 PNG — 1.1MB — for a sprite drawn **26 pixels tall**. Two backdrops
 were 2.2MB each.
 
 The rule now:
@@ -728,7 +728,7 @@ getter at all — and it spawned two tiles from a player who had just landed a
 stomp, which is what was still killing on sight. It now spawns on the far side
 of Edika from you and holds still through the same grace.
 
-He goes out shouting SAXLSHIIIIIIII - at scale 2 for 2.6s and held still, because at scale 1 for 0.9s the punchline of the whole act went by in a blink. `floatText` takes a life now, and only short-lived ones drift upward; a held line would walk off the top of the buffer. Slams also shake masonry down onto **his own step**, because once you had climbed up there nothing could reach you. The falling chunks paint their landing spot before they arrive — the first pass dropped four of them from 46px up, which is 0.3s of warning and a coin flip rather than a dodge, and a pilot that used to survive the whole fight died in six seconds without landing a hit. |
+He goes out shouting SAXLSHIIIIIIII - at scale 2 for 5.4s and held still, because at scale 1 for 0.9s the punchline of the whole act went by in a blink. 5.4s is the whole tea scene: it now stands through the exit, the drink and HE GOT AWAY and expires just as the flag gate opens, rather than dying before any of it. It sits at `y - 40` so the outro's own lines have room. `floatText` takes a life now, and only short-lived ones drift upward; a held line would walk off the top of the buffer. Slams also shake masonry down onto **his own step**, because once you had climbed up there nothing could reach you. The falling chunks paint their landing spot before they arrive — the first pass dropped four of them from 46px up, which is 0.3s of warning and a coin flip rather than a dodge, and a pilot that used to survive the whole fight died in six seconds without landing a hit. |
 
 Every one of those was found broken by testing and fixed: Sleepy's hearing
 range equalled the jump reach so the intended approach was impossible; Svani
@@ -798,6 +798,20 @@ without any boss knowing the mechanic exists.
 shrinking from the feet so the box never moves out from under him, and the
 crouch-walk is capped at `CFG.crouchMax` (52) — a shuffle, so you can reposition
 under fire without the dodge pinning you in place.
+
+**The crouch art is drawn at 26px, not at its own natural size.** `squat.png`
+draws the whole crouching figure at a smaller scale than `hero.png` draws the
+standing one — same head-to-body proportion, just a smaller man — so rendering
+it at its own height shrank his *skull* when he ducked, which is the one thing
+a crouch must not do. Measured on the raw files: the head is 43/93 of
+`hero.png` and 34/63 of `squat.png`, so 26px is the height at which both heads
+come out 14px wide. He still loses 4px off the top, which is the crouch.
+
+`hitW`/`hitH` were pulled in from 0.62/0.78 to **0.53/0.65** at the same time,
+so the box stays exactly 10×17 where it was. That is not cosmetic: `crouchH`
+comes from `hitboxFor('squat')`, and `BULLET.ride` is calibrated against the
+28/17 band. Rescaling the art without rescaling those ratios would have opened
+the crouch box back up and made the ankle shot unduckable.
 
 Standing back up is **refused when there is no room**. Without that check,
 releasing crouch in a one-tile gap warps his head into the tile above and the
