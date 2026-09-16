@@ -381,6 +381,7 @@ aligned. 240 tiles wide, 15 tall, ground on rows 13–14.
 - `blocks` — `{x, y, w, t}` runs, where `t` is `T.BRICK`, `T.QUESTION`, or
   `T.PLATFORM` (one-way: jump up through it, land on top).
 - `pipes`, `coinRuns`, `enemies` — same idea, all tile coordinates.
+- An enemy spec may carry **`up: true`** — see *Enemies on the second floor*.
 - `bossTriggerX` — tile where the flying boss appears. He never leaves.
 - `finishX` — the flag, and the escape trigger.
 
@@ -740,6 +741,205 @@ watching it commit suicide.
 
 `bossGrade` marks anything a khachapuri must not delete. The exemption used to
 be `instanceof FlyingBoss`, so invincibility one-shot every Act 2 boss.
+
+
+## Enemies on the second floor
+
+Every act had its whole roster standing on the street. The platforms were pure
+decoration — coins up there and nothing else, so there was never a reason to be
+careful on one. An enemy spec can now carry **`up: true`**:
+
+```js
+{ t: 'l3guard', x: 116, up: true },   // the 114-117 ledge
+```
+
+Two things change, in `post()`:
+
+- **`en.upper = true`**, and every walking enemy's `moveAndCollide` now passes
+  `oneWay: this.upper === true`. Without that the enemy drops through the ledge
+  on frame one: one-way platforms are *one way*, and every ground enemy has
+  always been given `oneWay: false` deliberately so it cannot climb the level.
+- **the leash becomes the ledge.** `spanAround` clamps to a `ground` span, which
+  for a platform enemy is the whole avenue underneath him — no leash at all. The
+  new `runAround(tx, ty)` walks row `ty` outward from `tx` and returns the
+  contiguous standable run.
+
+Nothing else is needed: every constructor already seats the enemy with
+`groundYAt(tx)`, which returns the *topmost* surface in the column.
+
+The shared stun path in `updateWorld` had to learn `upper` too — it does its own
+`moveAndCollide`, so a rose in the face dropped a ledge guard through the ledge,
+and a stun that kills reads as a bug. It is not only the posted guards: **Edika,
+the decoy fox and the studio cameras** all stand on one-way tiles under their own
+collision rules, and that path moves them while they are stunned. They set
+`upper` in their constructors for exactly this line. (The cameras were the oldest
+casualty: `settled` stops their own update after they land, so a rose through the
+gantry dropped one to the floor *permanently*, and took the forced
+floor→desk→gantry route through the studio with it.)
+
+`post()` also narrows the leash, and `leash(this)` had to be **added** to Walker,
+Guard and Journalist — none of the three classes the seventeen spawns use ever
+called it, so the narrowed `home` was doing nothing at all. It matters most for
+the Guard: his surge overwrites `dir` every frame it is up, so a posted guard
+could charge off his ledge before the turn got a look in.
+
+Seventeen of them across the three acts, on runs three tiles and wider (a
+15px-wide enemy still gets 33px of pacing on a 48px run). The boss arenas are
+left alone; so is anything at row 8 or above, which the player's 72px apex
+cannot reach from the floor.
+
+## Walls a chaser cannot get past
+
+Act 3's Sleepy sits two tiles from the pipe at tile 44, and a playtester found
+him **buzzing against it, going nowhere**. The mechanism is general and worth
+naming, because three other enemies had it:
+
+> A chaser re-targets `this.dir` at the *top* of `update` and the wall-turn
+> flips it at the *bottom*. Nothing between the flip and the next re-target ever
+> reads `dir`, so the flip produces **zero pixels of motion**. He snaps flush to
+> the tile and stays there, frame after frame, at the same x.
+
+`hopWall(e, vel)` is the answer, and it refuses more often than it fires:
+
+- **It measures the stack.** The lowest solid tile his own box is pressed
+  against, then the top of that column, compared to the launch velocity's apex.
+  `-300` is an apex of 51.7px, which takes the two-tile pipes (32px) with 20px
+  to spare and refuses anything taller. Starting the scan at his feet regardless
+  would read a rise of zero off an overhang his head clipped and hop him for
+  nothing.
+- **A column solid all the way up has no top.** That is a **gate**, and a gate
+  is meant to be a wall. Without the check the horizontal grind just becomes a
+  pogo against the same tile.
+- **The hop has to go somewhere.** Stand on the street one pixel past the end of
+  the pipe and you are inside his 8px chase deadzone, so `dir` stops being
+  re-derived and keeps pointing into the stone — he pogoed beside you, thirteen
+  hops in ten seconds, having already arrived. He hops only when you are up *on*
+  the stack or out beyond it.
+
+The **wall turn is now gated on `onGround`** everywhere hopWall is used, because
+the hop and the turn fight each other otherwise: `vx` is applied before the
+y-move, so the frame after a hop the x-sweep re-hits the same tile and sets
+`hitWall` while he is airborne, and the turn flips him back into the air he came
+from. Sleepy, the decoy fox and fox-Edika survived that only because they
+re-derive `dir` from the player every frame.
+
+**The Bomber does not hop at all**, deliberately. He walks at 26px/s, so a
+-300 hop holds him above a pipe cap for 0.43s — 11px of travel. He lands *on*
+the two-tile pipe and then paces its 32px cap forever: a new stall in place of
+the old one. He is a pacer, not a chaser, and turning at a pipe is the right
+answer for him. What he needed instead was `walledIn(e, dir)`: his flee rule
+points him straight away from you, and away from you at his own gate is *into*
+it — at exactly the spot you have to stand in to punt a bomb back. Testing the
+tile at head height before he commits keeps backing off a retreat rather than a
+corner. Measured: from a permanent pin he now roams 86–448px and is wall-pressed
+at most 4% of frames.
+
+## Edika fights on all three floors
+
+The Parliament arena is a step pyramid: the street, the 196-201 and 214-219
+landings at row 11, and his stage at row 9. He used to spend the entire fight on
+the street, because he fell straight through the one-way steps like every other
+enemy — so you could stand on the top step and watch him pace underneath you,
+harmless, forever. A playtester put it plainly: *"easy cause edika is always on
+first floor"*.
+
+He now collides with the steps and follows you between them. `tierChase()`
+compares the tile row under his feet with the one under yours:
+
+- **you are above him** — he leaps. `DARD.climb` is `-430`, an apex of 106px,
+  which takes both tiers at once (64px) with room for the horizontal carry at
+  `climbRun` 96px/s.
+- **you are below him** — he drops *through* the step he is standing on, which
+  is the same move duck+jump gives the player. The drop ends as soon as he is
+  clear of the tile he let go of, **not** after a fixed time: 0.3s of free fall
+  is 39px and the tiers are 32px apart, so a timed drop from his stage sailed
+  straight through the middle landing every time.
+
+He only chases a tier you are **standing** on. `floorRow` is a raw
+bottom-edge-to-row conversion, so a player at the top of an ordinary jump reads
+as two floors up — and he counter-leapt at every hop, which looks random rather
+than like pursuit. Measured over a minute of a hopping, pacing player on his
+stage: zero spurious leaps, and he was on a different grounded floor for 15
+frames out of 3,600.
+
+Measured with the player teleporting between tiers every four seconds: he is on
+the player's own tier **57% of the time**, and **92–100%** when the player picks
+one tier and stays on it. He visits all three rows from every starting position
+and stays inside tiles 196-219. The stompable window is unchanged at 35% (man)
+and 53% (fox) — he is harder to get away from, not harder to hit.
+
+The decoy fox gets the same treatment, or it spawns on whatever step Edika was
+standing on and immediately falls off it.
+
+### The fox had the man's hitbox
+
+He wore a 14×36 man-shaped box while drawing 38×30 of fox: a column of empty air
+over his back that hurt on contact, and a tail and a snout that a stomp went
+straight through. `wearForm()` now swaps the box with the form — `DARD.foxW`/
+`foxH` are 20×24, measured off the sprite — anchored on his feet and his centre
+so the resize never teleports him or buries him in the step he is on.
+
+### Re-keying the foxes
+
+`assets/l3_fox_run.png` was a holey blob. The source art
+(`assets/level 3 (parliament)/fox1.png`) is a white fox on a two-tone grey
+**checkerboard**, 216 light and 126 dark — and the fox's own tail shades through
+213–222. No colour key can separate those: a threshold tight enough to keep the
+tail cannot cross the anti-aliased seams between checker squares, and one loose
+enough to cross them eats a hole straight through the tail. Which is exactly
+what shipped.
+
+`tools/extract_fox.py` keys on **structure** instead. The fox has a closed black
+outline; close it by 2px, flood the background in from the border, and
+everything the flood cannot reach is the fox, whatever colour it happens to be.
+The 2px is measured, not guessed: the silhouette jumps from 6,955px (leaking) to
+18,647px (sealed) at radius 2 and is then stable out to radius 6.
+
+The sitting fox sits on grass and dirt instead, where the outline trick would
+weld the whole meadow onto it — that one keys on **saturation**, since the fox is
+neutral grey and the scenery is not. Both are resized with the alpha
+premultiplied, or LANCZOS drags the background's own green and grey into every
+edge pixel.
+
+15KB and 23KB of broken sprite became 2.6KB and 2.1KB of correct one.
+
+## The Bomber's bombs
+
+Three complaints in one: *"it should be able to return the bomb to him, so when
+you jump on the bomb and it goes its direction if it hits the villain it should
+stop, and he shouldn't throw his bombs so close to him"*.
+
+**A punt used to sail straight through him.** Nothing in this game makes an
+entity collide with another entity, so the bomb you kicked back passed out the
+far side and went off in empty street. The one case that matters now has its own
+check: his own ordnance, punted, stops dead on him and detonates. Verified from
+60px to 300px out — it lands on him every time and takes a heart.
+
+**The throw scales with the range.** `reach = clamp(|d|, throwMin 72, throwMax
+150)` and the launch speed is `reach / BOMBER.carry`, where `carry` (0.93) is the
+0.40s arc plus the friction slide. A bomb that comes to rest at his feet is not
+a weapon you can use — to stomp it you have to stand inside his contact box and
+eat a heart for the privilege.
+
+**And he steps away from what he just threw** (`BOMBER.backOff`), rather than
+pacing straight back onto it, and will not throw a second one while the first is
+still lying within `throwMin` of him. Measured bomb-to-Bomber gap over a full
+fuse: 54px at 0.7s, 89px at 1.3s, 129px at 2.7s, from a throw that starts inside
+him.
+
+**Only a blast the player set off hurts him.** He was beating himself: left
+alone with the player standing still and never touching a bomb, he paced back
+over his own ordnance and went from three hearts to zero in **32 seconds**.
+Backing off was not enough on its own — driven to the left end of his leash he
+could not step away from a bomb at all, and detonated one at 19px three times in
+a row. Walking him away from his own throws just marched him into that corner
+faster. So `explode()` only calls `blastHit` when the bomb was punted, and a
+chain off a punt inherits the flag. Punting one back into him is meant to *be*
+the kill; now it is the only thing that is.
+
+Verified: he survives two minutes at seven different player standoffs without
+losing a heart, throwing on his 2.7s clock throughout; three punts from 90–300px
+put him down and open his gate.
 
 
 ## Dying

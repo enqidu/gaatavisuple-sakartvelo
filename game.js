@@ -109,8 +109,15 @@ const SPRITES = {
      contrast lift. The extraction had eaten its outline - the checkerboard's
      dark grey and the fox's own were the same value - and next to the sitting
      pose it read as a pale flat slab rather than the same animal. */
-  l3foxrun:{ src: 'assets/l3_fox_run.png',   h: 28, hitW: 0.80, hitH: 0.80, color: '#dde3ec' },
-  l3foxsit:{ src: 'assets/l3_fox_sit.png',   h: 30, hitW: 0.60, hitH: 0.85, color: '#dde3ec' },
+  /* Both re-keyed from the originals in 'assets/level 3 (parliament)/' by
+     tools/extract_fox.py, which is worth keeping: the run fox sits on a grey
+     CHECKERBOARD whose light squares are the same tone as the fox's own tail,
+     so a colour key eats a hole straight through it - which is exactly what
+     the shipped sprite was. That one is keyed on the closed black outline
+     instead. Collision for the fox form comes from DARD.foxW/foxH, not from
+     these hitW/hitH. */
+  l3foxrun:{ src: 'assets/l3_fox_run.png',   h: 30, hitW: 0.62, hitH: 0.73, color: '#dde3ec' },
+  l3foxsit:{ src: 'assets/l3_fox_sit.png',   h: 30, hitW: 0.70, hitH: 0.90, color: '#dde3ec' },
   /* Act 2, the television company. Both backdrops are already dark interiors,
      so the haze is gentle - NIGHT_HAZE on top of them turned the screens to
      mud. Both tile: at LEVEL_H_PX they come out 320 wide, exactly VIEW_W, so
@@ -964,16 +971,27 @@ const LEVEL_1 = {
      other geometry; each is full height so it cannot be jumped or platformed
      over (a gate 5 tiles proud of the floor would still lose to a 3.9-tile
      jump off a nearby platform). */
+  /* `up: true` posts one on the ledge instead of the street - see post().
+     Every act had its whole roster standing on the floor, which made the
+     platforms pure decoration: nothing up there but coins, so there was never
+     a reason to be careful on them. */
   enemies: [
     { t: 'walker', x: 22 },  { t: 'walker', x: 34 },
+    { t: 'walker', x: 38, up: true },     // the 36-39 ledge
     { t: 'walker', x: 46 },  { t: 'walker', x: 54 },
     { t: 'walker', x: 70 },  { t: 'walker', x: 80 },
+    /* NOT 86, and not that brick run at all: groundYAt(86) is the top of the
+       84-87 bricks, which is where the mid boss already stands. */
+    { t: 'walker', x: 67, up: true },     // the 66-68 ledge
     { t: 'mid',    x: 86,  gate: 101 },   // clear of the pit at 90-94; landing room first
     { t: 'walker', x: 100 }, { t: 'walker', x: 118 },
+    { t: 'walker', x: 106, up: true },    // the wide 104-108 ledge
     { t: 'walker', x: 126 }, { t: 'walker', x: 134 },
+    { t: 'walker', x: 133, up: true },    // the 131-134 ledge
     { t: 'mid',    x: 152, gate: 161 },
     { t: 'walker', x: 162 }, { t: 'walker', x: 170 },
     { t: 'walker', x: 172 },
+    { t: 'walker', x: 174, up: true },    // the 173-175 ledge, last one before the bridge
     { t: 'mid',    x: 200, gate: 206 },
     { t: 'walker', x: 208 },
   ],
@@ -1082,11 +1100,16 @@ const LEVEL_2 = {
   enemies: [
     { t: 'l2girl',  x: 14 }, { t: 'l2man',   x: 22 },
     { t: 'l2girl2', x: 34 }, { t: 'l2girl',  x: 42 },
+    { t: 'l2girl',  x: 34, up: true },    // the 32-35 ledge
     { t: 'l2man',   x: 58 }, { t: 'l2girl2', x: 66 },
+    { t: 'l2man',   x: 56, up: true },    // the 54-57 ledge
     { t: 'l2girl',  x: 76 }, { t: 'l2man',   x: 84 },
+    { t: 'l2girl',  x: 81, up: true },    // the high 80-82 ledge
     { t: 'l2girl2', x: 102 }, { t: 'l2girl', x: 110 },
+    { t: 'l2man',   x: 102, up: true },   // the 100-103 ledge
     { t: 'l2man',   x: 120 }, { t: 'l2girl2', x: 128 },
     { t: 'l2girl',  x: 146 }, { t: 'l2man',  x: 154 },
+    { t: 'l2girl',  x: 149, up: true },   // the 148-150 ledge, last before the studio
     /* One feed per level of the room: his floor, the desk, the high gantry.
        Each is a different traversal problem, which is the point of the space. */
     { t: 'l2camera', x: 159 },    // on the floor, in his fire
@@ -1197,19 +1220,28 @@ const LEVEL_3 = {
     { x: 104, y: 9,  n: 4 }, { x: 115, y: 8,  n: 4 },
     { x: 131, y: 8,  n: 3 }, { x: 152, y: 9,  n: 4 },
     { x: 161, y: 8,  n: 4 }, { x: 177, y: 8,  n: 3 },
-    { x: 197, y: 9,  n: 5 }, { x: 215, y: 9,  n: 5 },
+    // n:3, not 5 - the stage {x:200,y:9,w:14} is painted over row 9 from tile
+    // 200, so the last two of a five-run sat inside the platform
+    { x: 197, y: 9,  n: 3 }, { x: 215, y: 9,  n: 5 },
   ],
 
   enemies: [
     { t: 'l3guard', x: 16 }, { t: 'l3guard', x: 24 }, { t: 'l3guard', x: 31 },
+    { t: 'l3guard', x: 19, up: true },    // the 18-20 ledge
     { t: 'l3sleepy', x: 40, gate: 48 },
     { t: 'l3guard', x: 54 }, { t: 'l3guard', x: 68 }, { t: 'l3guard', x: 76 },
     { t: 'l3guard', x: 82 },
+    { t: 'l3guard', x: 68, up: true },    // the 66-69 ledge
+    { t: 'l3guard', x: 75, up: true },    // the 74-76 brick run
     { t: 'l3svani', x: 92, gate: 98 },
     { t: 'l3guard', x: 112 }, { t: 'l3guard', x: 120 }, { t: 'l3guard', x: 128 },
     { t: 'l3guard', x: 134 },
+    { t: 'l3guard', x: 116, up: true },   // the 114-117 ledge
+    { t: 'l3guard', x: 123, up: true },   // the 122-124 brick run
     { t: 'l3bomber', x: 140, gate: 146 },
     { t: 'l3guard', x: 158 }, { t: 'l3guard', x: 170 }, { t: 'l3guard', x: 180 },
+    { t: 'l3guard', x: 162, up: true },   // the 160-163 ledge
+    { t: 'l3guard', x: 177, up: true },   // the 176-178 ledge, last before the arena
     { t: 'l3dard', x: 207 },
   ],
 
@@ -1883,12 +1915,13 @@ class Walker extends Entity {
     this.hitWall = false;
     this.vx = this.dir * this.speed;
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
 
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
     if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);        // no-op unless post() gave him a ledge to stay on
     this.face = this.dir;
   }
   onStomp(p) {
@@ -1920,7 +1953,7 @@ class Dog extends Entity {
     this.hitWall = false;
     this.vx = this.dir * this.speed;
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
@@ -2021,7 +2054,7 @@ class MidBoss extends Entity {
     }
 
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
 
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
@@ -2108,6 +2141,108 @@ function leash(e) {
   else if (e.x + e.w > e.home.hi) { e.x = e.home.hi - e.w; if (e.dir > 0) e.dir = -1; e.vx = -Math.abs(e.vx); }
 }
 
+/* The contiguous standable run through (tx, ty), for an enemy posted on a
+   ledge rather than on the street. spanAround clamps to a GROUND span, which
+   for a platform enemy is the whole avenue underneath him and therefore no
+   leash at all. */
+function runAround(tx, ty) {
+  const walkable = x => { const t = tileAt(x, ty); return isSolid(t) || isOneWay(t); };
+  if (!walkable(tx)) return null;
+  let a = tx, b = tx;
+  while (a > 0 && walkable(a - 1)) a--;
+  while (b < LEVEL.w - 1 && walkable(b + 1)) b++;
+  return { lo: a * TILE, hi: (b + 1) * TILE };
+}
+
+/* The floor an entity is standing on, as a tile row. */
+function floorRow(e) { return Math.floor((e.bottom + 1) / TILE); }
+
+/* A chaser that walks into a wall it could step over does not turn around: the
+   turn is overwritten the next frame by the chase vector, which points back at
+   the wall. So it grinds there, buzzing against the tile, and never arrives -
+   which is what act 3's Sleepy did against the pipe at tile 44, two tiles from
+   where he spawns.
+
+   Hop it - but only if it is actually hoppable. The gates these bosses are
+   penned in by are solid from row 12 to row 0, and a hop that cannot clear one
+   just turns a horizontal grind into a pogo against the same tile. So measure
+   the stack first: find the top of the column he is pressed against and
+   compare it to his own apex. No top (solid to the sky) means a gate, and a
+   gate is meant to be a wall.
+
+   -300 is an apex of 51.7px, which takes the two-tile pipes (32px) with 20px
+   to spare and refuses anything taller. */
+function hopWall(e, vel = -300) {
+  if (!e.hitWall || !e.onGround || (e.hopCd ?? 0) > 0) return false;
+  const tx = Math.floor((e.dir > 0 ? e.x + e.w + 2 : e.x - 2) / TILE);
+  // the lowest solid tile his own box is pressed against, then the top of that
+  // stack. Starting the scan at his feet regardless would read a rise of zero
+  // off an overhang his head clipped, and hop him for nothing.
+  const y0 = Math.floor(e.y / TILE), y1 = Math.floor((e.bottom - 1) / TILE);
+  let low = null;
+  for (let ty = y1; ty >= y0; ty--) if (isSolid(tileAt(tx, ty))) { low = ty; break; }
+  if (low == null) return false;
+  let top = null;
+  for (let ty = low; ty >= 0; ty--) if (!isSolid(tileAt(tx, ty))) { top = (ty + 1) * TILE; break; }
+  if (top == null) return false;
+  if (e.bottom - top > (vel * vel) / (2 * CFG.gravity) - 8) return false;
+  /* ...and only when the hop goes somewhere. The player standing on the street
+     a pixel past the end of the pipe sits inside the chase deadzone, so `dir`
+     stops being re-derived and keeps pointing into the stone: he pogoed beside
+     you, thirteen hops in ten seconds, having already arrived. Hop when you are
+     up ON the stack or out beyond it, and not otherwise. */
+  const p = game.player;
+  const beyond = e.dir > 0 ? p.cx > (tx + 1) * TILE : p.cx < tx * TILE;
+  if (p.bottom > top + 2 && !beyond) return false;
+  e.vy = vel;
+  e.hopCd = 0.55;
+  burst(e.cx, e.bottom, 5, { colors: ['#c9c9d8', '#fff'], speed: 50, grav: 260, life: .35, size: 1 });
+  return true;
+}
+
+/* A wall at head height in that direction. For deciding where NOT to retreat:
+   the Bomber's flee rule points him straight away from you, and away from you
+   at his own gate is into it - which is the same grind as Sleepy's, at exactly
+   the spot you have to stand in to punt a bomb back at him. */
+function walledIn(e, dir) {
+  const tx = Math.floor((dir > 0 ? e.x + e.w + 2 : e.x - 2) / TILE);
+  return isSolid(tileAt(tx, Math.floor((e.bottom - 1) / TILE)));
+}
+
+/* Follows the player up and down a stepped arena instead of pacing the bottom
+   of it forever. `climb` is sized for two tiers at once (apex 106px against a
+   64px rise); going DOWN is a drop through the one-way step he is stood on,
+   which is the same move the player makes with duck+jump. */
+function tierChase(e, dt, { climb = -430, run = 96, every = 1.6, reach = 240 } = {}) {
+  e.tierT = Math.max(0, (e.tierT ?? 0) - dt);
+  /* The drop ends as soon as he is clear of the step he let go of, not after a
+     fixed time. 0.3s of free fall is 39px and the tiers are 32px apart, so a
+     timed drop from his stage sailed through the middle landing every time and
+     he could only ever reach it the long way round, from the street. */
+  if ((e.dropT ?? 0) > 0) {
+    e.dropT -= dt;
+    if (e.bottom > (e.dropFrom ?? -Infinity) + TILE + 2) e.dropT = 0;
+  }
+  if (e.leapT > 0) { e.leapT -= dt; e.vx = e.dir * run; }
+  if (!e.onGround || e.tierT > 0) return;
+  const p = game.player;
+  /* Only chase a tier the player is actually STANDING on. floorRow is a raw
+     bottom-edge-to-row conversion, so a player at the top of an ordinary jump
+     reads as two floors up and he counter-leaps at every hop - which looks
+     random rather than like pursuit. He reacts to where you land. */
+  if (!p.onGround) return;
+  if (Math.abs(p.cx - e.cx) > reach) return;
+  const mine = floorRow(e), theirs = floorRow(p);
+  if (theirs < mine - 1) {
+    e.dir = Math.sign(p.cx - e.cx) || e.dir;
+    e.vx = e.dir * run; e.vy = climb;
+    e.leapT = 0.9; e.tierT = every;
+    Sfx.bump();
+  } else if (theirs > mine + 1 && onOneWayOnly(e)) {
+    e.dropT = 0.3; e.dropFrom = e.bottom; e.tierT = every;
+  }
+}
+
 const GUARD = { speed: 26, surgeMul: 2.4, surgeT: 1.0, surgeCd: 2.4, alert: 58, link: 46 };
 
 /* A cordon, not a Goomba. Walking into one guard's eyeline breaks the whole
@@ -2143,12 +2278,15 @@ class Guard extends Entity {
 
     this.vx = this.dir * GUARD.speed * (this.surge > 0 ? GUARD.surgeMul : 1);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
 
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
     if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    /* The surge overrides `dir` every frame it is up, so a posted guard
+       could charge off his ledge before the turn got a look in. */
+    leash(this);
     this.face = this.dir;
   }
   die(p) {
@@ -2168,7 +2306,8 @@ class Guard extends Entity {
    scripted player using the intended approach landed zero hits in a minute.
    At 58 a single jump covers the whole range, and the slower noise gain also
    leaves a careful walk-in viable as a second answer. */
-const SLEEP = { range: 58, wake: 1.0, gain: 1.0, decay: 0.9, awake: 2.2, chase: 70, hp: 3 };
+const SLEEP = { range: 58, wake: 1.0, gain: 1.0, decay: 0.9, awake: 2.2, chase: 70, hp: 3,
+                hop: -300 };   // clears the two-tile pipe he shares his corridor with
 
 /* Asleep on his feet until you make noise. Noise only accrues while you are
    ON THE GROUND and actually moving near him - walking him down slowly, or
@@ -2222,12 +2361,18 @@ class Sleepy extends Entity {
       }
     }
 
+    this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
-    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    /* He spawns two tiles from a pipe and the gate that pens him in is two
+       tiles the other way, so a chase that cannot climb is a chase that stands
+       still and buzzes against stone. Awake, he goes over it; asleep or
+       reeling he is not chasing anything, so the ordinary turn is right. */
+    if (this.phase === 'awake' && hopWall(this, SLEEP.hop)) { /* over it */ }
+    else if (this.onGround && (this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
     leash(this);
     this.face = this.dir;
 
@@ -2333,7 +2478,7 @@ class Svani extends Entity {
     }
 
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
@@ -2605,13 +2750,16 @@ class Journalist extends Entity {
     }
 
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
     // a charger commits: it will run off a ledge rather than politely turn
     const turn = this.hitWall || (ledge && this.phase !== 'dash');
     if (turn && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    // a charger commits through a ledge; the leash is what stops a posted
+    // one committing straight off the building
+    leash(this);
     this.face = this.dir;
   }
   onStomp(p) {
@@ -2638,6 +2786,11 @@ class StudioCamera extends Entity {
     super(tx * TILE + 2, 0, 12, 20);
     this.y = groundYAt(tx) - this.h;
     this.t = rand(0, 4); this.settled = false;
+    /* Two of the three are set down on gantries. `settled` stops its own
+       update after it lands, so a rose that knocked it through the gantry
+       dropped it to the floor permanently - and the forced floor-desk-gantry
+       route through the studio with it. */
+    this.upper = true;
   }
   get harmless() { return true; }           // it films you, it does not hit you
   update(dt) {
@@ -2778,7 +2931,7 @@ class Anchor extends Entity {
     }
 
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
@@ -2829,7 +2982,19 @@ class PressMan   extends Journalist { constructor(tx) { super(tx, 'l2man',   'lo
 const BOMBER = { hp: 3, walk: 26, throwEvery: 2.7, range: 165,
                  blast: 44,        // radius that catches HIM
                  blastP: 26,       // ...and the smaller one that catches YOU
-                 fuse: 2.9, puntFuse: 1.15, puntVel: 245, flee: 38 };
+                 fuse: 2.9, puntFuse: 1.15, puntVel: 245, flee: 38,
+                 /* Where the bomb comes to REST, measured from his own centre.
+                    A bomb that stops at his feet is not a weapon you can use:
+                    to stomp it you have to stand inside his contact box and eat
+                    a heart for the privilege. So he throws it away from himself
+                    - never nearer than four tiles - and then backs off from his
+                    own throw instead of pacing straight back onto it. */
+                 throwMin: 72, throwMax: 150,
+                 /* A thrown bomb travels vx * this before it stops: 0.40s of
+                    arc plus the friction slide (1 / ln(1/0.15)). Measured, not
+                    guessed - see the test at the bottom of this file. */
+                 carry: 0.93,
+                 backOff: 1.3 };
 
 /* Armoured: stomping him does nothing. The only thing that hurts him is his
    own ordnance, so the fight is about the bombs, not about him. Stomp a live
@@ -2858,20 +3023,45 @@ class Bomber extends Entity {
 
     // backs away from you so you cannot simply corner him
     // backs off less than he used to, or he simply outranges you forever
-    if (Math.abs(d) < BOMBER.flee) this.dir = -Math.sign(d) || this.dir;
+    this.back = Math.max(0, (this.back ?? 0) - dt);
+    this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
+    if (this.back <= 0 && Math.abs(d) < BOMBER.flee) {
+      const away = -Math.sign(d) || this.dir;
+      // ...but not into his own gate. Backing off is a retreat, not a corner.
+      if (!walledIn(this, away)) this.dir = away;
+    }
     this.vx = this.dir * BOMBER.walk;
 
-    if (this.cool <= 0 && Math.abs(d) < BOMBER.range) {
+    /* Never drop one on his own boots, and never a second one while the first
+       is still lying next to him - both of those force the player into contact
+       range to reach the bomb, which is the opposite of what the bomb is for. */
+    // throwMin - 8: the measured carry is 0.914, not the 0.93 the speed is
+    // sized with, so the shortest throw rests at 71px and would sit inside its
+    // own guard radius and cost him a throw cycle
+    const crowded = game.enemies.some(e =>
+      e instanceof Bomb && !e.dead && e.owner === this &&
+      Math.abs(e.cx - this.cx) < BOMBER.throwMin - 8);
+    if (this.cool <= 0 && Math.abs(d) < BOMBER.range && !crowded) {
       this.cool = BOMBER.throwEvery;
-      game.enemies.push(new Bomb(this.cx, this.y + 6, Math.sign(d) || 1, this));
+      const away = Math.sign(d) || 1;
+      const reach = clamp(Math.abs(d), BOMBER.throwMin, BOMBER.throwMax);
+      game.enemies.push(new Bomb(this.cx, this.y + 6, away, this, reach / BOMBER.carry));
+      // and get away from where he just put it
+      this.dir = -away; this.back = BOMBER.backOff;
       Sfx.bump();
     }
 
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.upper === true });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    /* No hopWall here, deliberately. He walks at 26px/s: a -300 hop holds him
+       above a pipe cap for 0.43s, which is 11px of travel, so he lands ON the
+       two-tile pipe and then paces its 32px cap forever - a new stall in place
+       of the old one. He is a pacer, not a chaser; turning at a pipe is the
+       right answer for him, and walledIn() above is what keeps the flee rule
+       from backing him into his own gate. */
     if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
     leash(this);
   }
@@ -2903,9 +3093,9 @@ class Bomber extends Entity {
 /* Lives in game.enemies so the existing stomp path can punt it. `harmless`
    so touching it costs nothing - the blast is the danger, not the casing. */
 class Bomb extends Entity {
-  constructor(x, y, dir, owner) {
+  constructor(x, y, dir, owner, speed = 74) {
     super(x - 6, y, 12, 12);      // a bigger target: you have to land on it
-    this.vx = dir * 74; this.vy = -150;
+    this.vx = dir * speed; this.vy = -150;
     this.owner = owner; this.fuse = BOMBER.fuse; this.t = 0;
   }
   get bossGrade() { return true; }   // never vaporised: punting is the mechanic
@@ -2921,6 +3111,20 @@ class Bomb extends Entity {
        away, so the return shot never reached him and the fight was
        unwinnable. */
     if (this.onGround && !this.punted) this.vx *= Math.pow(0.15, dt);
+    /* ...and a punt that sails straight THROUGH him is not a return shot
+       either. Nothing in this game makes an entity collide with another
+       entity, so the bomb you kicked back used to pass out the far side of him
+       and go off in empty street. Give the one case that matters its own
+       check: his own ordnance, kicked back, stops on him and detonates. */
+    if (this.punted && !this.dead) {
+      const b = this.owner;
+      if (b && !b.dead && aabb(this, b)) {
+        this.x = b.cx - this.w / 2; this.vx = 0; this.vy = 0;
+        floatText(this.cx, this.y - 10, 'RETURNED', '#ff8a5c');
+        this.explode();
+        return;
+      }
+    }
     if (this.fuse <= 0) this.explode();
     if (Math.random() < dt * 26)
       burst(this.cx, this.y, 1, { colors: ['#ffd85e', '#ff8a5c'], speed: 14, grav: -40, life: .4, size: 1 });
@@ -2938,8 +3142,18 @@ class Bomb extends Entity {
     for (const e of game.enemies) {
       if (e.dead || e === this) continue;
       if (!aabb(box, e)) continue;
-      if (e instanceof Bomber) e.blastHit(p);
-      else if (e instanceof Bomb) e.fuse = Math.min(e.fuse, 0.2);   // chains
+      /* Only a blast the PLAYER set off hurts the man who threw it. Left to
+         himself he paced back over his own ordnance and went from three hearts
+         to zero in 32 seconds with nobody touching a bomb - and driven to the
+         left end of his leash he could not step away from one at all, so he
+         detonated it at 19px three times in a row and the fight was over
+         before it started. Punting one back into him is meant to BE the kill,
+         so that is the only thing that counts. */
+      if (e instanceof Bomber) { if (this.punted) e.blastHit(p); }
+      else if (e instanceof Bomb) {                                  // chains
+        e.fuse = Math.min(e.fuse, 0.2);
+        e.punted = e.punted || this.punted;    // a chain off a punt is still yours
+      }
       else if (e.onBumped) e.onBumped();
     }
   }
@@ -2971,9 +3185,11 @@ class Bomb extends Entity {
    but stomping it only pops it - the real one still owes you a hit. */
 class DecoyFox extends Entity {
   constructor(x, y, dir) {
-    super(x, y, 14, 12);
+    super(x, y, DARD.foxW, DARD.foxH);
     this.dir = dir; this.turnCd = 0; this.t = rand(0, 3); this.phase = 'prowl'; this.phaseT = 0;
     this.grace = DARD.grace;
+    this.dropT = 0; this.tierT = DARD.tierEvery; this.leapT = 0;
+    this.upper = true;              // for the stun path; see Dardubala
   }
   get bossGrade() { return true; }
   /* The real Edika got a grace after every hit; this one never did, and it is
@@ -2990,16 +3206,23 @@ class DecoyFox extends Entity {
     if (this.grace > 0) {                 // hold still until it is fair to move
       this.vx = 0;
       this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-      moveAndCollide(this, dt, { oneWay: false });
+      moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
       this.face = this.dir;
       return;
     }
     if (Math.abs(d) > 12) this.dir = Math.sign(d);
     this.vx = this.dir * DARD.foxRun * 0.85;
     if (this.onGround && Math.random() < dt * 2.0) this.vy = -180;
+    /* He is spawned on whichever step Edika was standing on, so he has to be
+       able to stand on it - and to come after you off it. */
+    tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
+    this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
-    if (this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
+    // its own hop is -180, an apex of 18.6px: 13px short of the arena's pipes
+    if (hopWall(this)) { /* over */ }
+    // grounded, or the frame after a hop the wall he just left flips him back
+    else if (this.onGround && this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
     leash(this);
     this.face = this.dir;
   }
@@ -3043,7 +3266,26 @@ const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 2.2, quipE
                /* Harmless for this long after every hit. Long enough to hop
                   off and reposition before a fox that was a man a moment ago
                   starts hunting. */
-               grace: 1.5 };
+               grace: 1.5,
+               /* The arena is a three-tier step - street, the 196/214 landings
+                  at row 11, and his stage at row 9 - and he used to spend the
+                  whole fight on the street, because every enemy in this game
+                  falls straight through a one-way platform. Stand on the top
+                  step and he paced underneath you, harmless, forever.
+
+                  Now he collides with the steps and follows you between them:
+                  `climb` is an apex of 106px, which takes both tiers (64px) in
+                  one leap with room for the horizontal carry, and going down is
+                  a drop through the step he is on - the same move duck+jump
+                  gives the player. */
+               climb: -430, climbRun: 96, tierEvery: 1.6,
+               /* The fox's own box. He kept the MAN's 14x36 one while wearing
+                  38x30 of fox: a column of empty air over his back that hurt on
+                  contact, and a tail and a snout that a stomp went straight
+                  through. 20x24 sits on the body - measured off the sprite, its
+                  back is row 10 of 30 and its body runs cols 9-34 of 38 - and
+                  still under-covers, which is the right way round. */
+               foxW: 20, foxH: 24 };
 
 /* He never actually says anything. The stage direction IS the joke. */
 const DARD_QUIPS = ['IRONIC REMARK', 'SMIRK', 'IRONIC REMARK', 'DRY CHUCKLE'];
@@ -3056,19 +3298,38 @@ class Dardubala extends Entity {
   constructor(tx) {
     const hb = hitboxFor('l3dard');
     super(tx * TILE, 0, hb.w, hb.h);
+    this.manW = hb.w; this.manH = hb.h;
     this.y = groundYAt(tx) - this.h;
     this.hp = DARD.hp; this.dir = -1; this.turnCd = 0;
     this.phase = 'pace'; this.phaseT = 0; this.hitFlash = 0; this.t = 0;
     this.home = spanAround(tx);
     this.quip = 1.4; this.quipN = 0;
     this.grace = 0;
+    this.dropT = 0; this.tierT = DARD.tierEvery; this.leapT = 0;
+    /* His own moveAndCollide keys off dropT, not this - but the shared stun
+       path in updateWorld does not know that, and a rose to the face used to
+       drop him off the steps onto the street. */
+    this.upper = true;
     this.shoot = DARD.shootEvery; this.slam = DARD.slamEvery;
+    this.wearForm();
   }
   get bossGrade() { return true; }
   get bossName() { return 'EDIKA'; }
   get maxHp() { return DARD.hp; }
   // man on even hp, fox on odd - he flips with every hit he takes
   get isFox() { return this.hp % 2 === 1; }
+  /* The box follows the form. A fox is 24x22 and a man is the full sprite, and
+     wearing the man's box as a fox meant a band of empty air over his back
+     that hurt on contact. Anchored on his feet and his centre, so resizing him
+     never teleports him or buries him in the step he is standing on. */
+  wearForm() {
+    const w = this.isFox ? DARD.foxW : this.manW;
+    const h = this.isFox ? DARD.foxH : this.manH;
+    if (w === this.w && h === this.h) return;
+    const b = this.bottom, cx = this.cx;
+    this.w = w; this.h = h;
+    this.x = cx - w / 2; this.y = b - h;
+  }
   /* Safe to touch while rearing back, as well as while winded. He shares his
      step with you and damages on contact, so with only the 2.5s window safe a
      handful of unavoidable brushes ended the run before a stomp ever landed.
@@ -3160,11 +3421,14 @@ class Dardubala extends Entity {
           if (this.phaseT > DARD.pant) { this.phase = 'prowl'; this.phaseT = 0; }
           break;
       }
+      if (this.engaged && !this.scriptedOut)
+        tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
+      this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
       this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-      moveAndCollide(this, dt, { oneWay: false });
-      const fa = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
-      const fb = Math.floor((this.bottom + 3) / TILE);
-      if (this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+      moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
+      // the prowl hop is 20px and the pounce only comes round every 1.15s
+      if (hopWall(this)) { /* over */ }
+      else if (this.onGround && this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
       leash(this);
       this.face = this.dir;
       return;
@@ -3250,8 +3514,10 @@ class Dardubala extends Entity {
         break;
     }
 
+    if (this.engaged && !this.scriptedOut)
+      tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
-    moveAndCollide(this, dt, { oneWay: false });
+    moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
     const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
     const below = Math.floor((this.bottom + 3) / TILE);
     const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
@@ -3281,6 +3547,7 @@ class Dardubala extends Entity {
        zero and drove his health bar negative. */
     if (this.hp <= 0 || this.scriptedOut) return;
     this.hp--; this.hitFlash = 0.4;
+    this.wearForm();
     /* Knocked away from you rather than frozen in place. Standing still still
        left the new form in the same pixel you were, so the moment grace ran
        out it was already touching you - which is what "kills instantly" meant.
@@ -4068,6 +4335,22 @@ const EXTRA_HEART_TIME = 22; // how long a rose-granted 4th heart lasts
 const EXTRA_HEART_MAX = 2;   // ...and how many can stack above the normal 3
 const POWDER_TIME = 18;      // seconds of double jump
 
+/* An enemy spec with `up: true` is posted on the ledge above the street rather
+   than on it. Two things change: he has to COLLIDE with one-way platforms
+   instead of falling through them the way every ground enemy does, and his
+   leash becomes the ledge he is standing on instead of the whole avenue below.
+
+   The constructor already seats him correctly - every enemy takes
+   groundYAt(tx), which returns the TOPMOST surface in the column - so all the
+   flag does is stop him dropping off it on frame one. */
+function post(en, spec) {
+  if (!spec.up) return en;
+  en.upper = true;
+  const home = runAround(spec.x, floorRow(en));
+  if (home) en.home = home;
+  return en;
+}
+
 function reset(toTitle = false, opts = {}) {
   if (opts.levelIndex != null) loadLevel(opts.levelIndex);
   else if (toTitle) loadLevel(0);          // the title screen is always act one
@@ -4077,7 +4360,7 @@ function reset(toTitle = false, opts = {}) {
   shake = 0; freeze = 0; flash = 0;
 
   game.player = new Player(LEVEL.start.x * TILE, LEVEL.start.y * TILE);
-  game.enemies = LEVEL.enemies.map(e => new (enemyKind(e.t))(e.x, e.gate));
+  game.enemies = LEVEL.enemies.map(e => post(new (enemyKind(e.t))(e.x, e.gate), e));
   game.coins = [];
   for (const r of LEVEL.coinRuns)
     for (let i = 0; i < r.n; i++) game.coins.push(new Coin(r.x + i, r.y));
@@ -4327,9 +4610,15 @@ game.teaOutro = function () {
   this.endT = 0;
   this.script = updateTea;
   this.hazards = [];
-  // podium on the step he was standing on, just ahead of the player
-  const gy = groundBelow(p.cx + 30, p.bottom - 2) ?? (13 * TILE);
-  this.tea = { podX: p.cx + 24, podY: gy - 10, drunk: false, boss: d || null };
+  /* Podium on the step he is standing on, just ahead of him - and the probe
+     goes under HIM, not 30px along. Now that the fight can end anywhere on the
+     three-tier arena, a win taken near the right-hand end of a step put the
+     probe over the edge of it, and the teacup appeared a whole tier below the
+     man walking to it. Nudge podX back if the step runs out. */
+  const gy = groundBelow(p.cx, p.bottom - 2) ?? (13 * TILE);
+  let podX = p.cx + 24;
+  while (podX > p.cx + 8 && groundBelow(podX, p.bottom - 2) !== gy) podX -= 4;
+  this.tea = { podX, podY: gy - 10, drunk: false, boss: d || null };
   Sfx.win();
 };
 
@@ -4736,7 +5025,13 @@ function update(dt) {
       e.stun -= dt;
       e.vx = 0;
       e.vy = Math.min((e.vy || 0) + CFG.gravity * dt, CFG.maxFall);
-      moveAndCollide(e, dt, { oneWay: false });
+      /* `upper` here too, or a rose to the face drops a ledge guard through
+         the ledge he is posted on and the stun reads as a kill. It is not only
+         the posted guards: Edika, the decoy fox and the studio cameras all
+         stand on one-way tiles under their own collision rules, and this path
+         does their moving for them while they are stunned. They set `upper` in
+         their constructors for exactly this line. */
+      moveAndCollide(e, dt, { oneWay: e.upper === true });
       if (Math.random() < dt * 12)
         burst(e.cx + rand(-6, 6), e.y, 1, { colors: ['#ff8fd0', '#fff'], speed: 14, grav: -20, life: .6, size: 1 });
     } else e.update(dt);
