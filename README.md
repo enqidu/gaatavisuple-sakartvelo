@@ -1,20 +1,25 @@
 # Gaatavisuple Sakartvelo
 
-Two acts:
+**▶ Play: <https://enqidu.github.io/gaatavisuple-sakartvelo/>**
 
-| | |
-|---|---|
-| **Act 1** | *Gaatavisuple Achara* — the coast, ending with Aslan's helicopter |
-| **Act 2** | *Gaatavisuple Parlamenti* — Rustaveli Avenue, November 2003, ending with the tea |
+An 8-bit side-scrolling platformer about moments in recent Georgian history,
+rendered into a 320×180 canvas and built for screen recording. No
+dependencies, no build step. Every sound, music included, is synthesised in
+code with Web Audio.
 
+| | | |
+|---|---|---|
+| **Act 1** | *Gaatavisuple Achara* | Batumi, 2004. Aslan, the bridge, the ultra powder. |
+| **Act 2** | *Gaatavisuple Media* | The television company, November 2007. |
+| **Act 3** | *Gaatavisuple Parlamenti* | Rustaveli Avenue, November 2003, ending with the tea. |
 
-An 8-bit side-scrolling platformer built for screen recording. No dependencies,
-no build step.
+The rest of this file is the development log: what each mechanic does, and
+the measurements behind the numbers.
 
 ## Run
 
 ```bash
-node mario-mode/serve.js
+node serve.js
 ```
 
 Then open <http://localhost:8123>.
@@ -66,8 +71,7 @@ reached.
 
 ## Music
 
-`assets/music.m4a` (AAC, about a third the size of the original mp3), looping at
-0.4 volume. It starts on the keypress that
+Synthesised chiptune loops (see *The soundtrack*). They start on the keypress that
 leaves the title screen, never at load: browsers refuse audio until a real user
 gesture, so a `play()` on page load just throws and leaves the track silently
 dead.
@@ -256,10 +260,9 @@ inescapable loop.
 Khachapuri makes him immune, which is the joke: the only thing that beats it is
 lunch.
 
-`assets/laugh.mp3` plays as you come into her radius — on the rising edge only,
-and skipped if the clip is still running from the last one. It runs 5.7s, far
-longer than it takes to walk past someone, so restarting it on every approach
-would stutter it constantly.
+A synthesised laugh (`Stinger`) plays as you come into her radius — on the
+rising edge only, and skipped if the last one is still running, so walking
+back and forth past someone does not stutter it.
 
 `CHARM.immune` is the number that matters, not `cooldown`. Being charmed pins
 him where he stands — which is inside her hitbox — so a per-character cooldown
@@ -575,12 +578,12 @@ megabyte of load time and buys nothing.
 ### The soundtrack
 
 `ChipTune` holds named loops and `LEVEL.music` picks one; anything it does not
-recognise falls back to `assets/music.m4a`.
+recognise falls back to `DEFAULT_TUNE`.
 
 `TRACKS` holds recorded files by name and `TUNES` holds synthesised loops;
-`LEVEL.music` names either, and anything unrecognised falls back to `main`.
+`LEVEL.music` names either, and anything unrecognised falls back to `DEFAULT_TUNE` (`dark`). `TRACKS` is empty: the game ships no recordings.
 
-**All three acts play `assets/music.m4a`, and it restarts with every level** —
+**All three acts play the `dark` loop, and it restarts with every level** —
 entering an act, and restarting one after a death. `Music.cue()` does that from
 `reset()`, deliberately *not* from `retune()`: retune fires on any `loadLevel`,
 including the boot loop that validates all three acts, and re-cueing there
@@ -592,9 +595,7 @@ would fight itself.
 That is what `forced` is for: a moment outside the levels claiming the music
 without pretending to be one.
 
-Unused but kept, in case an act wants its own again: the `misha` track and the
-`dark` synth loop. None costs anything at runtime — audio
-elements are only built when an act names them.
+Any recorded track added to `TRACKS` must be licensed for redistribution — the repo and the Pages site both serve it publicly.
 
 Nothing is fetched until the first `Music.start()`, which only fires on a real
 keypress, so no track touches the boot payload. It stays ~1.6MB.
@@ -604,10 +605,9 @@ detuning a second square 0.5% against the first — close enough at this size.
 
 
 
-Older note, kept for the detail below: **act 3 plays `assets/music.m4a`; acts 1 and 2 are synthesised** — `LEVEL.music = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
+Older note, kept for the detail below: `LEVEL.music = 'dark'` hands over to `DarkTune`, a chiptune loop in D natural minor at
 84bpm over i–VI–III–VII: a square bass on the root, a sparse triangle line that
-leaves most of the bar empty, and a noise tick on the offbeat. One recorded track looping across three acts had worn thin, so the synth
-carries the two earlier ones and the recording is saved for the finale.
+leaves most of the bar empty, and a noise tick on the offbeat.
 
 It rides the **same `AudioContext` as `Sfx`** (exposed as `Sfx.context`) —
 browsers cap how many a page may open, and a second one would need its own
