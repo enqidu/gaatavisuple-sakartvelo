@@ -954,6 +954,138 @@ losing a heart, throwing on his 2.7s clock throughout; three punts from 90–300
 put him down and open his gate.
 
 
+## The engine pieces under the new features
+
+All behaviour-neutral on their own (verified with the trace harness above):
+
+- **`populateWorld()`** builds a level's contents; `reset()` calls it, and so
+  will anything that sets a level aside and comes back. One `WORLD_KEYS` list
+  says what "a level's contents" means, so the two cannot drift apart.
+- **`renderWorld()` / `present()`** — the world and the blit, split, so a
+  scene can paint over a frozen world or skip it.
+- **`camTargetX()` / `snapCamera()`** — the camera's goal, and a jump straight
+  to it. A level narrower than the screen is centred instead of clamped to a
+  negative edge.
+- **`paintInto(ctx, fn)`** — `g` is a `let` now, and this points it at any
+  canvas for one call, so every pixel-art helper (the flag, the rose, the
+  crowd figure, the helicopter) can paint a newspaper photo or a share card
+  without being rewritten.
+- **`savePNG(canvas, name)`** — 4x pixel-crisp, through a blob URL on a
+  download link. Works from GitHub Pages: everything is same-origin, so the
+  canvas is never tainted.
+- **Glyphs `# % " ( ) = &`** and **`validateText()`** at boot, which checks
+  every boss card, chant and slogan for characters the font cannot draw and
+  boxes they overflow. `drawText` skips an unknown character silently.
+- **`textSprite()`** caches rendered strings: `drawText` is one `fillRect` per
+  lit pixel, too slow for anything that scrolls.
+- **Audio:** `Sfx.noise()` (with its own generator — sound must never move the
+  game's dice, which also keeps the trace harness valid), `Sfx.hold()` for a
+  held note with a `stop()`, `Sfx.stopHolds()`, and `Music.fade(to, secs)` on
+  real time, reset by anything that restarts the music.
+- The particle drag was the one frame-rate-dependent multiply in the file;
+  it is `Math.pow(0.99, dt*60)` now.
+
+### Slow motion
+
+`Time.slow(id, scale, hold, out)` — anything can ask, the slowest live request
+wins, it holds for `hold` real seconds and eases back over `out`. `update()`
+runs menus, cards and scenes on real time and the world on `dt × scale`.
+**Hit-stop stays real time, and a slow-mo hold only counts down once the
+freeze is over** — so a kill reads stop, then slow, then speed back up.
+Measured: `freeze 0.2` + `slow(0.25, 0.5)` holds 0.25 for 0.7s, then 0.54,
+0.96, 1.00 at 1/6s steps.
+
+### Run stats
+
+`Stats.run` is the whole sitting (time, deaths per act, restarts, a summary of
+each act won); `Stats.cur` is the attempt in progress. The newspaper, the
+ticker, the timer and the share card read it.
+
+**Kills are counted when the dead are reaped, not in `addCombo`.** `addCombo`
+misses a kill bumped from below, a Bomber blown up by his own bomb and a fall
+out of the world, and fires on boss hits that kill nothing. Decoys are marked
+`noKill`. Verified: a stomp, a bump-kill and a decoy pop count 1, 1, 0.
+
+The clock is in-game time: it only ticks in play, on the scaled dt, so hit-stop,
+slow motion, cards, outros and scenes never cost the player.
+
+### Scenes, interludes, and R
+
+`Scenes` / `startScene()` / `game.state = 'scene'`, and `INTERLUDES` — the
+running order after each act. For now each act still goes straight to the
+next act's card; the helicopter lap and the newspaper slot in here.
+
+**R was broken on every end screen.** `frame()` handled it before `update()`
+saw it, so R on an act-clear screen replayed the act you had just *won*, R on
+the final screen replayed act 3 at score 0 and skipped the high-score entry,
+and R on game over dropped the score you had entered the act with. Global R
+now only acts mid-act (`hotkeys()`), and restarts keeping the score you came
+in with — the same deal as dying. On the end screens R continues, like Space.
+
+## Game feel
+
+- **Finishers.** A boss's killing blow gets slow motion and a camera punch-in
+  (`Feel.finisher`): small bosses 0.3x for 0.3s, Aslan and Targamadze-on-air
+  0.2x for 0.5s, Edika 0.15x for 0.6s, flowing straight into the tea. The zoom
+  is a cropped blit at **5, 6 or 7 display pixels per buffer pixel** — whole
+  numbers, so it stays nearest-neighbour crisp — and steps back out one level
+  at a time. Hit-stop under a finisher is capped at 0.03s, or slow motion would
+  stretch it five-fold. HUD and boss bar hide while zoomed.
+- **Sparks** where the boots met the head, on every stomp and rose hit; a grey
+  clank when a stomp does nothing (NOT NOW, ON AIR, WIDE AWAKE, USE HIS BOMBS).
+- **Chained stomps climb** a whole tone per link (`Sfx.chain`, from the combo
+  that already resets on landing).
+- **Screen punches** — a directional kick on top of the shake: stomps (growing
+  with the chain), boss hits, finishers, getting hurt (away from the hit),
+  gates opening, the ultra liftoff. The biggest kick in a frame wins; they do
+  not stack into a lurch. Measured on a stomp: 2px at chain 0, 3.5 at 3, 6 at 8.
+
+## Boss intro cards
+
+Fighting-game style: the world freezes, Misha's red panel and the boss's slide
+in from either side with a white diagonal seam and speed lines, the name slams
+down from scale 5 to 3 with a shake, two typed lines of billing, VS, FIGHT!.
+2.3s, skippable after 0.4s. **A retry gets a 0.9s version** — dying to a boss
+three times should not mean watching his card three times. Nothing ticks while
+it plays: not the enemies, not the run clock (verified: the boss moved 0px and
+the clock 0s over a second of card).
+
+Triggered by the same rule that puts the boss's health bar up, plus "on
+screen", so the card ends where the bar appears and the portrait is a man you
+can see. Aslan and the two act finals use their own `engaged` latches.
+
+**Act 1's dog-walker and act 2's anchor are the same man, Giorgi
+Targamadze** — once walking Aslan's dogs, later a journalist. Both now carry
+his name on the bar and the card, and the cards are written as a callback:
+"ASLAN'S MAN / BROUGHT HIS DOGS", rounds 2 and 3, and then in act 2 "YOU
+AGAIN? / NOW A HUMBLE JOURNALIST".
+
+## The party look
+
+United National Movement colours, keyed to the flag's own red (`UNM`
+palette), so the flag and the interface always agree.
+
+- **Title:** red-and-white pennant bunting, five-cross flags either side of the
+  name, the act on a swallowtail ribbon, a ballot box with a red 5 and VOTE, a
+  rose with KMARA!, a red controls strip.
+- **HUD:** coins and score on a red plate, a small 5 ballot chip in the corner.
+  The boss bar stays purple — purple is the enemy, red is you. MUSIC OFF moved
+  under the plate.
+- Cards, score entry and the won screens get bunting and a red strip.
+- The crowd's flags are the five-cross flag now, at its smallest legible size:
+  a 5x4 white field with a red cross.
+
+## Campaign props and chants
+
+`LEVEL.props`: **banners and bunting** hang overhead in the world, in rows the
+levels do not use, so they never sit behind the action. (A billboard-and-poster
+layer was tried and taken out on playtest feedback.)
+
+**Chants** go a syllable at a time, each a square-wave shout and a clap:
+MI-SHA!, KMA-RA!, GA-DA-DE-KI! (resign!), SA-KAR-TVE-LO!, NO-ME-RI KHU-TI!
+(number five). Gates opening, every other flag raised, and the act 3 crowd
+(on its own every 7–10s once it has four marchers, and on every surge).
+
 ## Dying
 
 Restarts the act you died in, holding the score you entered it with. Sending a
@@ -974,7 +1106,21 @@ it is happening.
 ## Testing an act directly
 
 `?act=2` boots straight into that act instead of replaying everything before
-it — <http://localhost:8123/?act=2>. Clamped, so a junk value is harmless.
+it — <http://localhost:8123/?act=2>. Clamped, so a junk value is harmless. It
+counts as a practice run: nothing it does is saved as a best.
+
+`?step=manual` boots without starting the frame loop. A test drives the game
+itself — `update(1/60)`, `render()`, `reset(false, {levelIndex})`, keys through
+`Input.keys` / `Input.pressed`, global keys through `hotkeys()` — so nothing
+advances behind its back between two measurements. Every check in this file
+from here on was made that way.
+
+**Behaviour-neutral refactors are checked against the original, frame by
+frame.** A copy of the previous release is served beside the working one, and
+a harness replays the same scripted input on both — `Math.random` replaced by
+a seeded generator, digests of player position, score, hp and every enemy's
+x every 30 frames, all three acts, at 60 and at 30 fps. The refactors below
+produced identical traces.
 
 
 ## Edika has no drawn forelock, on purpose
@@ -1158,11 +1304,17 @@ Feeding raw `p.vx` into the lead was the instability. `vx` changes every frame
 as he accelerates, brakes, lands and turns, so the point the camera aimed at
 jittered constantly and the view swam — worst when tapping left and right,
 where the lead flips sign. The lead is now smoothed on its own before it
-reaches the target, the target is chased more slowly, and vertical has a 26px
-dead zone so small hops do not pump the view.
+reaches the target, and the target is chased more slowly.
 
 Measured max frame-to-frame camera movement: tapping **4.38px → 1.70px**,
 running **2.68px → 0.74px**.
+
+**Vertically it holds at the floor.** It used to chase the jump arc behind a
+26px dead zone, so a jump lifted it and, on the way back down, the street had
+slid to a sliver at the bottom of the screen. Nothing in these levels sits
+above row 4, which is on screen with the camera at the floor (y=60), so it now
+stays there and only lifts when his head would leave the top of the frame — a
+jump off a high ledge (13px, leaving 19px of ground) or the ultra launch.
 
 
 ## The bridge (Act 1)

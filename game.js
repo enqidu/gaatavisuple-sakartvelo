@@ -176,6 +176,11 @@ const GLYPHS = {
   '/':[0x01,0x02,0x02,0x04,0x08,0x08,0x10], '*':[0,0x0A,0x04,0x1F,0x04,0x0A,0],
   '<':[0x02,0x04,0x08,0x10,0x08,0x04,0x02], '>':[0x08,0x04,0x02,0x01,0x02,0x04,0x08],
   "'":[0x04,0x04,0,0,0,0,0],      ',':[0,0,0,0,0x04,0x04,0x08],
+  // for VOTE #5, the ratings meter, quotes and the odd aside
+  '#':[0x0A,0x0A,0x1F,0x0A,0x1F,0x0A,0x0A], '%':[0x18,0x19,0x02,0x04,0x08,0x13,0x03],
+  '"':[0x0A,0x0A,0,0,0,0,0],                '=':[0,0,0x1F,0,0x1F,0,0],
+  '(':[0x02,0x04,0x08,0x08,0x08,0x04,0x02], ')':[0x08,0x04,0x02,0x02,0x02,0x04,0x08],
+  '&':[0x0C,0x12,0x14,0x08,0x15,0x12,0x0D],
 };
 
 function textWidth(str, s = 1) { return str.length * 6 * s - s; }
@@ -204,6 +209,52 @@ function drawText(g, str, x, y, color = '#fff', s = 1, shadow = '#000') {
 
 function drawTextCentered(g, str, cx, y, color, s = 1, shadow = '#000') {
   drawText(g, str, cx - textWidth(str, s) / 2, y, color, s, shadow);
+}
+
+function drawTextRight(g, str, rx, y, color, s = 1, shadow = '#000') {
+  drawText(g, str, rx - textWidth(str, s), y, color, s, shadow);
+}
+
+/* drawText is a fillRect per lit pixel, which is fine for a HUD and too slow
+   for a ticker that scrolls a sentence every frame. Text that moves or
+   repeats is drawn once into a small canvas here and blitted after that. */
+const textCache = new Map();
+function textSprite(str, color = '#fff', s = 1, shadow = '#000') {
+  const key = `${str}|${color}|${s}|${shadow}`;
+  let c = textCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = Math.max(1, textWidth(String(str), s) + (shadow ? s : 0));
+  c.height = 7 * s + (shadow ? s : 0);
+  drawText(c.getContext('2d'), str, 0, 0, color, s, shadow);
+  if (textCache.size > 160) textCache.delete(textCache.keys().next().value);
+  textCache.set(key, c);
+  return c;
+}
+
+/* Greedy word wrap to a pixel width. */
+function wrapText(str, maxW, s = 1) {
+  const out = [];
+  let line = '';
+  for (const word of String(str).split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && textWidth(next, s) > maxW) { out.push(line); line = word; }
+    else line = next;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+/* The party's colours: the red is the flag's own red, so the flag and the
+   interface around it always agree. */
+const UNM = { red: '#d6263c', redDk: '#8f1526', redPl: '#b01c2c', redLt: '#f05a6a',
+              white: '#f4f4f4', paper: '#ece6d6', ink: '#16161e', grey: '#8a8274',
+              gold: '#ffd85e' };
+
+/* Characters a string uses that the font cannot draw. drawText skips them
+   silently, so a slogan with a missing glyph just ships with a hole in it. */
+function missingGlyphs(str) {
+  return [...new Set([...String(str).toUpperCase()].filter(ch => !GLYPHS[ch]))].join('');
 }
 
 /* ---------------------------------------------------------- sprite loading
@@ -481,13 +532,91 @@ const Sfx = (() => {
   const seq = (notes, step = 90, type = 'square', gain = 0.05) =>
     notes.forEach(([f, d], i) => setTimeout(() => tone(f, d, type, gain), i * step));
 
+  // a burst of white noise: static, claps, splashes, the hiss of a dead feed
+  let nseed = 1;
+  function noise(dur, gain = 0.04) {
+    if (muted) return;
+    try {
+      const a = ensure();
+      const len = Math.max(1, Math.floor(a.sampleRate * dur));
+      const buf = a.createBuffer(1, len, a.sampleRate);
+      const d = buf.getChannelData(0);
+      // its own generator: sound effects must never move the game's dice
+      for (let i = 0; i < len; i++) { nseed = (Math.imul(nseed, 1103515245) + 12345) >>> 0; d[i] = nseed / 2147483648 - 1; }
+      const src = a.createBufferSource(), g = a.createGain();
+      src.buffer = buf;
+      g.gain.setValueAtTime(gain, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+      src.connect(g).connect(a.destination);
+      src.start();
+    } catch (e) { /* no audio device */ }
+  }
+
+  /* One note held until told to stop - the tea, the test-card tone. Every
+     live one is tracked, so a restart can silence the lot. */
+  const holds = new Set();
+  const NONE = { stop() {} };
+  function hold(freq, { type = 'triangle', gain = 0.04, attack = 0.05, vib = null } = {}) {
+    if (muted) return NONE;
+    try {
+      const a = ensure(), t = a.currentTime;
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      let lfo = null;
+      if (vib) {                       // [rate Hz, depth Hz]
+        lfo = a.createOscillator();
+        const depth = a.createGain();
+        lfo.frequency.value = vib[0]; depth.gain.value = vib[1];
+        lfo.connect(depth).connect(o.frequency);
+        lfo.start(t);
+      }
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + Math.max(0.01, attack));
+      o.connect(g).connect(a.destination);
+      o.start(t);
+      const h = {
+        stop(release = 0.08) {
+          if (!holds.has(h)) return;
+          holds.delete(h);
+          const now = a.currentTime;
+          g.gain.cancelScheduledValues(now);
+          g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), now);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + release);
+          o.stop(now + release + 0.02);
+          if (lfo) lfo.stop(now + release + 0.02);
+        },
+      };
+      holds.add(h);
+      return h;
+    } catch (e) { return NONE; }
+  }
+
+  // stomps rise a whole tone per link in the chain, so a run of them climbs
+  let chain = 0;
+
   return {
     // shared so the act 3 synth does not open a second AudioContext; browsers
     // cap how many a page may have, and a second one would need its own
     // unlock gesture
     get context() { try { return ensure(); } catch (e) { return null; } },
     jump:  () => tone(300, 0.14, 'square', 0.045, 680),
-    stomp: () => tone(220, 0.10, 'square', 0.06, 60),
+    stomp: () => { const k = Math.pow(2, 2 * Math.min(chain, 8) / 12);
+                   tone(220 * k, 0.10, 'square', 0.06, 60 * k); },
+    set chain(n) { chain = n; },
+    noise, hold,
+    stopHolds() { for (const h of [...holds]) h.stop(0.05); },
+    clank: () => tone(1400, 0.05, 'square', 0.03, 900),
+    slam:  () => { tone(110, 0.25, 'sawtooth', 0.07, 40); tone(55, 0.3, 'square', 0.05); },
+    fight: () => seq([[392, .08], [523, .08], [784, .22]], 80, 'square', 0.05),
+    thump: () => { tone(90, 0.18, 'square', 0.07, 40); noise(0.06, 0.05); },
+    whoosh: () => noise(0.25, 0.03),
+    // one syllable of a crowd chant: the last one lands lower and longer
+    chant: (i, last) => {
+      tone(last ? 196 : 262 - i * 14, last ? 0.22 : 0.12, 'square', 0.04);
+      tone((last ? 196 : 262 - i * 14) * 1.5, last ? 0.22 : 0.12, 'triangle', 0.015);
+      noise(0.03, 0.04);
+    },
     coin:  () => seq([[988, 0.06], [1319, 0.11]], 60),
     bump:  () => tone(150, 0.07, 'square', 0.05, 95),
     brick: () => tone(90, 0.14, 'sawtooth', 0.05, 40),
@@ -584,6 +713,7 @@ const TUNES = {
 };
 
 const ChipTune = (() => {
+  let muteK = 1, volK = 1;            // mute switch x fade level
   const LOOKAHEAD = 0.18;
   let actx = null, out = null, timer = null, step = 0, next = 0, cur = null, name = null;
 
@@ -643,7 +773,7 @@ const ChipTune = (() => {
         actx = Sfx.context;
         if (!actx) return;
         if (actx.state === 'suspended') actx.resume();
-        out = actx.createGain(); out.gain.value = 0.6;
+        out = actx.createGain(); out.gain.value = 0.6 * muteK * volK;
         out.connect(actx.destination);
         cur = T; name = which;
         step = 0; next = actx.currentTime + 0.08;
@@ -661,7 +791,8 @@ const ChipTune = (() => {
       setTimeout(() => { try { dead.disconnect(); } catch (e) {} }, 400);
       out = null;
     },
-    setMuted(m) { try { if (out) out.gain.value = m ? 0 : 0.6; } catch (e) {} },
+    setMuted(m) { muteK = m ? 0 : 1; try { if (out) out.gain.value = 0.6 * muteK * volK; } catch (e) {} },
+    setVolume(k) { volK = k; try { if (out) out.gain.value = 0.6 * muteK * volK; } catch (e) {} },
     get playing() { return !!name; },
     get current() { return name; },
   };
@@ -677,13 +808,39 @@ const TRACKS = {
 const Music = (() => {
   const els = {};
   let muted = false, armed = false, liveTrack = null;
+  const BASE_VOL = 0.4;
+  let level = 1, fadeTimer = null;          // 0..1 multiplier on BASE_VOL
+
+  function applyLevel() {
+    for (const a of Object.values(els)) if (a) a.volume = BASE_VOL * level;
+    ChipTune.setVolume(level);
+  }
+  /* Ducks or restores the soundtrack over `secs` of REAL time - its own
+     interval, so it is not slowed down by slow motion along with the scene it
+     is scoring. */
+  function fade(to, secs = 0.5) {
+    clearInterval(fadeTimer); fadeTimer = null;
+    const from = level, t0 = performance.now(), ms = Math.max(1, secs * 1000);
+    fadeTimer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      level = from + (to - from) * k;
+      applyLevel();
+      if (k >= 1) { clearInterval(fadeTimer); fadeTimer = null; }
+    }, 16);
+  }
+  /* Anything that restarts the music also puts it back at full level, or a
+     death in the middle of a duck would leave the next attempt silent. */
+  function restoreLevel() {
+    clearInterval(fadeTimer); fadeTimer = null;
+    level = 1; applyLevel();
+  }
 
   function element(name) {
     if (els[name] === undefined) {
       const src = TRACKS[name];
       if (!src) return (els[name] = null);
       const a = new Audio(src);
-      a.loop = true; a.volume = 0.4;
+      a.loop = true; a.volume = BASE_VOL * level;
       a.addEventListener('error', () => console.warn(`music: ${src} failed to load`));
       els[name] = a;
     }
@@ -711,6 +868,7 @@ const Music = (() => {
      lets retune() re-pick the source on later act changes without ever being
      the thing that starts audio in the first place. */
   function pick(fromStart = false) {
+    restoreLevel();
     const tune = tuneFor();
     if (tune) {
       silenceTracks(null); liveTrack = null;
@@ -766,6 +924,8 @@ const Music = (() => {
       return muted;
     },
     get muted() { return muted; },
+    fade,
+    get level() { return level; },
     get playing() {
       return ChipTune.playing || Object.values(els).some(a => a && !a.paused);
     },
@@ -974,6 +1134,13 @@ const LEVEL_1 = {
      Every act had its whole roster standing on the floor, which made the
      platforms pure decoration: nothing up there but coins, so there was never
      a reason to be careful on them. */
+  /* Campaign dressing (see drawProps): banners and bunting hung overhead. */
+  props: [
+    { kind: 'banner',    x: 24,  y: 3, w: 5, text: 'KMARA!' },
+    { kind: 'bunting',   x: 90,  y: 2, w: 6 },
+    { kind: 'banner',    x: 112, y: 2, w: 6, text: 'VOTE #5' },
+  ],
+
   enemies: [
     { t: 'walker', x: 22 },  { t: 'walker', x: 34 },
     { t: 'walker', x: 38, up: true },     // the 36-39 ledge
@@ -1027,7 +1194,7 @@ const LEVEL_2 = {
   invincibleLabel: 'MATSONI',
   smashKind: 'tv',
   heroRose: false,          // no rose in hand on the newsroom raid
-  finalBoss: 'THE ANCHOR',
+  finalBoss: 'TARGAMADZE',
   arenaX: 158,              // past here the Anchor commits
   winLines: [['BROADCAST', '#ffd85e'], ['INTERRUPTED', '#7ae07a']],
   afterLines: [
@@ -1094,6 +1261,10 @@ const LEVEL_2 = {
     { x: 92,  y: 9,  n: 4 }, { x: 101, y: 8,  n: 4 },
     { x: 119, y: 8,  n: 3 }, { x: 140, y: 9,  n: 4 },
     { x: 149, y: 8,  n: 3 }, { x: 170, y: 8,  n: 6 },
+  ],
+
+  props: [
+    { kind: 'banner',    x: 104, y: 3, w: 6, text: 'FREE MEDIA*' },
   ],
 
   enemies: [
@@ -1224,6 +1395,13 @@ const LEVEL_3 = {
     { x: 197, y: 9,  n: 3 }, { x: 215, y: 9,  n: 5 },
   ],
 
+  props: [
+    { kind: 'banner',    x: 20,  y: 3, w: 5, text: 'KMARA!' },
+    { kind: 'banner',    x: 72,  y: 3, w: 7, text: 'GADADEKI!' },
+    { kind: 'banner',    x: 160, y: 3, w: 6, text: 'KMARA!' },
+    { kind: 'bunting',   x: 194, y: 2, w: 26 },
+  ],
+
   enemies: [
     { t: 'l3guard', x: 16 }, { t: 'l3guard', x: 24 }, { t: 'l3guard', x: 31 },
     { t: 'l3guard', x: 19, up: true },    // the 18-20 ledge
@@ -1337,7 +1515,9 @@ function openGate(gx, label = 'THE WAY IS OPEN') {
   }
   if (!opened) return;
   shake = 6; flash = 0.35;
+  punch(0, -3);
   floatText(gx * TILE + 8, 8 * TILE, label, '#7ae07a');
+  Chant.start('misha', gx * TILE + 8, 7 * TILE);
   Sfx.gate();
 }
 
@@ -1412,6 +1592,31 @@ function validateLevel() {
   return warn;
 }
 
+/* Every line of drafted text in one place - boss cards, chants, slogans -
+   checked once at boot for characters the font cannot draw and for boxes
+   they do not fit. drawText skips an unknown glyph silently, so without this
+   a slogan with a % in it just ships with a hole. */
+function validateText() {
+  const warn = [];
+  const check = (where, str, maxW) => {
+    const miss = missingGlyphs(str);
+    if (miss) warn.push(`${where}: "${str}" uses ${miss}, which the font cannot draw`);
+    if (maxW != null && textWidth(str) > maxW) warn.push(`${where}: "${str}" is ${textWidth(str)}px, box is ${maxW}px`);
+  };
+  for (const [k, sp] of Object.entries(INTRO)) {
+    check(`intro ${k}`, sp.l1, VIEW_W - 8);
+    check(`intro ${k}`, sp.l2, VIEW_W - 8);
+  }
+  for (const [k, sy] of Object.entries(CHANTS)) check(`chant ${k}`, sy.join('-'));
+  LEVELS.forEach((L, i) => {
+    for (const p of L.props || []) {
+      if (p.kind === 'banner') check(`act ${i + 1} banner at ${p.x}`, p.text, p.w * TILE - 6);
+    }
+  });
+  if (warn.length) console.warn('text:\n  ' + warn.join('\n  '));
+  return warn;
+}
+
 const tileAt = (tx, ty) =>
   (tx < 0 || ty < 0 || tx >= LEVEL.w || ty >= LEVEL.h) ? T.AIR : grid[ty * LEVEL.w + tx];
 const isSolid  = t => t === T.GROUND || t === T.BRICK || t === T.QUESTION || t === T.USED || t === T.PIPE || t === T.GATE || t === T.BRIDGE;
@@ -1446,6 +1651,85 @@ function groundBelow(px, fromY) {
 let particles = [], floats = [], bumps = [];
 let shake = 0, freeze = 0, flash = 0;
 
+/* Slow motion. Anything can ask for it by name - a boss's last hit, the tea -
+   and the slowest live request wins. A request holds for `hold` real seconds,
+   then eases back to full speed over `out`. The hold only counts down once
+   hit-stop (`freeze`) is over, so a kill reads as stop, then slow, then speed
+   back up, rather than the slow-mo being eaten by the freeze.
+
+   Applied by update(): gameplay, scripts, particles and shake all run on the
+   scaled dt together. The clock that times a run uses the same scaled dt, so
+   slow motion never costs the player time. Music is untouched - it is
+   scheduled against the audio clock. */
+const Time = {
+  scale: 1, reqs: {},
+  slow(id, to, hold, out = 0.3) { this.reqs[id] = { to, hold, out, t: 0 }; },
+  release(id, out) {
+    const r = this.reqs[id];
+    if (!r) return;
+    r.hold = 0;
+    if (out != null) r.out = out;
+  },
+  tick(raw, frozen) {
+    let target = 1;
+    for (const id in this.reqs) {
+      const r = this.reqs[id];
+      if (r.hold > 0) {
+        if (!frozen) r.hold -= raw;
+        target = Math.min(target, r.to);
+        continue;
+      }
+      r.t += raw;
+      const k = r.out > 0 ? Math.min(1, r.t / r.out) : 1;
+      target = Math.min(target, r.to + (1 - r.to) * k);
+      if (k >= 1) delete this.reqs[id];
+    }
+    this.scale = target;
+  },
+  reset() { this.reqs = {}; this.scale = 1; },
+};
+
+/* Juice. The finishing blow on a boss gets slow motion and a camera punch-in;
+   every stomp gets a spark and a kick of the screen; a chain of stomps climbs
+   in pitch (see Sfx.chain).
+
+   The zoom is a cropped blit in present(), and only ever at 5, 6 or 7 display
+   pixels per buffer pixel (1.25x, 1.5x, 1.75x on top of the base 4x) - whole
+   numbers, so it stays nearest-neighbour crisp instead of shimmering. It
+   steps back out a level at a time for the same reason. */
+const FINISH = {
+  small: { k: 5, slow: 0.30, hold: 0.30 },
+  big:   { k: 6, slow: 0.20, hold: 0.50 },
+  huge:  { k: 7, slow: 0.15, hold: 0.60 },
+};
+let sparks = [], punchX = 0, punchY = 0;
+const Feel = {
+  k: 4, hold: 0, stepT: 0, fx: 0, fy: 0,
+  get zoomed() { return this.k > 4; },
+  finisher(x, y, kind = 'small') {
+    const f = FINISH[kind] || FINISH.small;
+    Time.slow('finish', f.slow, f.hold, 0.35);
+    this.k = f.k; this.hold = f.hold; this.stepT = 0; this.fx = x; this.fy = y;
+    // a long hit-stop under slow motion would last five times as long
+    freeze = Math.min(freeze, 0.03);
+    punch(0, 6);
+  },
+  tick(raw) {
+    if (this.k <= 4) return;
+    if (this.hold > 0) { this.hold -= raw; return; }
+    this.stepT += raw;
+    if (this.stepT >= 0.08) { this.stepT = 0; this.k--; }
+  },
+  clear() { this.k = 4; this.hold = 0; sparks = []; punchX = punchY = 0; },
+};
+
+function spark(x, y, kind = 'hit') { sparks.push({ x, y, t: 0, kind }); }
+function punch(dx, dy) {
+  // the biggest kick this frame wins; they do not stack into a lurch
+  if (Math.abs(dx) > Math.abs(punchX)) punchX = dx;
+  if (Math.abs(dy) > Math.abs(punchY)) punchY = dy;
+}
+
 function burst(x, y, n, opts = {}) {
   const { colors = ['#ffd85e', '#e8434f', '#fff'], speed = 90, life = 0.55,
           size = 2, grav = 470, spread = Math.PI * 2, dir = 0 } = opts;
@@ -1466,10 +1750,16 @@ function floatText(x, y, text, color = '#fff', s = 1, life = 0.9) {
 }
 
 function updateEffects(dt) {
+  for (const sp of sparks) sp.t += dt;
+  sparks = sparks.filter(sp => sp.t < 0.12);
+  const decay = Math.pow(0.0005, dt);
+  punchX *= decay; punchY *= decay;
+  if (Math.abs(punchX) < 0.2) punchX = 0;
+  if (Math.abs(punchY) < 0.2) punchY = 0;
   for (const p of particles) {
     p.vy += p.grav * dt;
     p.x += p.vx * dt; p.y += p.vy * dt;
-    p.vx *= 0.99; p.life -= dt;
+    p.vx *= Math.pow(0.99, dt * 60); p.life -= dt;
   }
   particles = particles.filter(p => p.life > 0);
   // the slow drift is for +100s; a held line like SAXLSHIIIIIIII would walk
@@ -1651,6 +1941,8 @@ class Player extends Entity {
 
   hurt(fromX) {
     if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
+    Stats.add('hits');
+    punch(this.cx < fromX ? -4 : 4, 0);
     if (this.spendHeart() === 'rose') {
       this.invuln = CFG.hurtInvuln;
       this.vy = -150;
@@ -1710,6 +2002,7 @@ class Player extends Entity {
        its own height, so respawning mid-crouch put him 11px low and he stood up
        into whatever was above. */
     this.h = this.standH; this.crouching = false; this.dropT = 0;
+    Stats.add('pits');
     const lost = this.spendHeart();
     this.combo = 0;
     shake = 6; flash = 0.5; Sfx.pit();
@@ -1741,7 +2034,7 @@ class Player extends Entity {
         Sfx.coin();
         return;
       }
-      this.coins++; game.score += 100;
+      this.coins++; game.score += 100; Stats.add('coins');
       bumps.push({ tx, ty, t: 0 });
       burst(tx * TILE + 8, ty * TILE, 8, { colors: ['#ffd85e', '#fff'], speed: 70, grav: 300 });
       floatText(tx * TILE + 8, ty * TILE - 6, '+100', '#ffd85e');
@@ -1817,7 +2110,7 @@ class Player extends Entity {
          not automatic on pickup: he should choose the moment, and he should be
          able to walk back to the lip and line it up. */
       if (this.ultra > 0) {
-        this.ultra--; this.ultraFlight = true;
+        this.ultra--; this.ultraFlight = true; punch(0, 3);
         this.vy = CFG.ultraJumpVel;
         shake = 6; flash = 0.3;
         floatText(this.cx, this.y - 14, 'LIFTOFF', '#ffd85e');
@@ -1865,6 +2158,7 @@ class Player extends Entity {
     this.throwHint = Math.max(0, this.throwHint - dt);
     if (!stuck && this.roses > 0 && this.throwCd <= 0 && Input.throwTap()) {
       this.roses--;
+      Stats.add('thrown');
       this.hasThrown = true; this.throwHint = 0;
       this.throwCd = 0.28;
       game.shots.push(new ThrownRose(this.cx, this.y + this.h * 0.42, this.face || 1));
@@ -1970,7 +2264,10 @@ class Dog extends Entity {
 }
 
 class MidBoss extends Entity {
-  get bossName() { return 'THE WALKER'; }
+  /* Giorgi Targamadze, walking Aslan's dogs. He comes back in act 2 as the
+     anchor - the same man, now a journalist - which is the joke the two
+     boss cards are written around. */
+  get bossName() { return 'TARGAMADZE'; }
   get maxHp() { return 3; }
   constructor(tx, gate = null) {
     const hb = hitboxFor('mid');
@@ -2093,6 +2390,7 @@ class MidBoss extends Entity {
       else { game.score += 800; floatText(this.cx, this.y - 4, '+800', '#ffd85e'); }
       burst(this.cx, this.y + this.h / 2, 28, { colors: ['#e8434f', '#ffd85e', '#fff'], speed: 155, life: 0.8, size: 3 });
       shake = 6; freeze = 0.12; flash = 0.45;
+      Feel.finisher(this.cx, this.y + this.h / 2, 'small');
       if (this.gate != null) openGate(this.gate);
       return;
     }
@@ -2393,6 +2691,7 @@ class Sleepy extends Entity {
       else { game.score += 700; floatText(this.cx, this.y - 4, '+700', '#ffd85e'); }
       burst(this.cx, this.y + this.h / 2, 26, { colors: ['#e8e8f0', '#9ee8ff', '#fff'], speed: 150, size: 3 });
       shake = 6; flash = 0.4;
+      Feel.finisher(this.cx, this.y + this.h / 2, 'small');
       if (this.gate != null) openGate(this.gate);
       return;
     }
@@ -2405,7 +2704,7 @@ class Sleepy extends Entity {
     if (this.phase === 'reel') { p.vy = CFG.stompBounce * 0.8; return; }
     if (this.harmless) { this.damage(p); return; }
     p.vy = CFG.stompBounce * 0.8;                 // awake: bounces off
-    floatText(this.cx, this.y - 8, 'WIDE AWAKE', '#ff8f9c');
+    floatText(this.cx, this.y - 8, 'WIDE AWAKE', '#ff8f9c'); spark(this.cx, this.y, 'clank'); Sfx.clank();
     shake = 4; Sfx.deny();
   }
   onBumped() { this.damage(null); }
@@ -2504,6 +2803,7 @@ class Svani extends Entity {
       else { game.score += 1200; floatText(this.cx, this.y - 4, '+1200', '#ffd85e'); }
       burst(this.cx, this.y + this.h / 2, 32, { colors: ['#e8434f', '#ffd85e', '#fff'], speed: 180, size: 3 });
       shake = 8; flash = 0.5;
+      Feel.finisher(this.cx, this.y + this.h / 2, 'small');
       if (this.gate != null) openGate(this.gate);
       return;
     }
@@ -2858,7 +3158,8 @@ class Anchor extends Entity {
     this.greeted = false;
   }
   get bossGrade() { return true; }
-  get bossName() { return 'THE ANCHOR'; }
+  // Targamadze again: act 1's dog walker, now presenting the news
+  get bossName() { return 'TARGAMADZE'; }
   get maxHp() { return ANCHOR.cameras + 1; }
   get onAir() { return game.enemies.some(e => e instanceof StudioCamera && !e.dead); }
   get harmless() { return this.phase === 'aim' || this.phase === 'offair'; }
@@ -2944,7 +3245,7 @@ class Anchor extends Entity {
        a target, and the game says why rather than "NOT NOW" - the player needs
        to be told where to look. */
     if (this.onAir) {
-      floatText(this.cx, this.y - 8, 'ON AIR', '#e8434f');
+      floatText(this.cx, this.y - 8, 'ON AIR', '#e8434f'); spark(this.cx, this.y, 'clank'); Sfx.clank();
       shake = 4; Sfx.deny();
       return;
     }
@@ -2961,6 +3262,8 @@ class Anchor extends Entity {
     shake = 14; flash = 0.8; freeze = 0.2; Sfx.stomp();
     burst(this.cx, this.y + this.h / 2, 30,
           { colors: ['#f4f4f4', '#ffd85e', '#2b3a5e'], speed: 190, size: 3 });
+    Stats.boss('anchor');
+    Feel.finisher(this.cx, this.y + this.h / 2, 'big');
     if (this.gate != null) openGate(this.gate);
     /* Hand back to play and let him run for the flag. Falls through to an
        immediate win for any act that has no flag, so this cannot strand a
@@ -3078,13 +3381,14 @@ class Bomber extends Entity {
       floatText(this.cx, this.y - 4, '+1000', '#ffd85e');
       burst(this.cx, this.y + this.h / 2, 34, { colors: ['#ff8a5c', '#e8434f', '#fff'], speed: 200, size: 3 });
       shake = 10; flash = 0.55;
+      Feel.finisher(this.cx, this.y + this.h / 2, 'small');
       if (this.gate != null) openGate(this.gate);
     } else floatText(this.cx, this.y - 8, `${this.hp} LEFT`, '#ffd85e');
   }
   onStomp(p) {
     p.vy = CFG.stompBounce * 0.8;
     this.taunt = 0.7;
-    floatText(this.cx, this.y - 8, 'USE HIS BOMBS', '#ff8a5c');
+    floatText(this.cx, this.y - 8, 'USE HIS BOMBS', '#ff8a5c'); spark(this.cx, this.y, 'clank'); Sfx.clank();
     Sfx.deny();
   }
 }
@@ -3531,7 +3835,7 @@ class Dardubala extends Entity {
        3 hp forever no matter how cleanly you landed on him. */
     const open = this.isFox ? this.phase === 'pant' : this.phase === 'winded';
     if (!open) {
-      floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff');
+      floatText(this.cx, this.y - 8, 'NOT NOW', '#c9a0ff'); spark(this.cx, this.y, 'clank'); Sfx.clank();
       shake = 4; Sfx.deny();
       return;
     }
@@ -3569,6 +3873,8 @@ class Dardubala extends Entity {
          -26. */
       floatText(this.cx, this.y - 40, 'SAXLSHIIIIIIII', '#ffd85e', 2, 5.4);
       shake = 14; flash = 0.8; freeze = 0.2;
+      Stats.boss('edika');
+      Feel.finisher(this.cx, this.y + this.h / 2, 'huge');
       game.teaOutro();
     } else {
       // the transformation itself, announced
@@ -3580,6 +3886,7 @@ class Dardubala extends Entity {
         // the space he is standing in
         const away = Math.sign(this.cx - p.cx) || 1;
         const dec = new DecoyFox(this.cx + away * 40, this.y, -away);
+        dec.noKill = true;
         dec.home = this.home;
         game.enemies.push(dec);
         floatText(this.cx, this.y - 30, 'TWO OF THEM', '#ff5ec4');
@@ -3743,7 +4050,7 @@ class FlyingBoss extends Entity {
     // Airborne and untouchable: the stomp just bounces off.
     if (!this.vulnerable) {
       this.denyFlash = 0.5;
-      floatText(this.cx, this.y - 8, 'OUT OF REACH', '#c9a0ff');
+      floatText(this.cx, this.y - 8, 'OUT OF REACH', '#c9a0ff'); spark(this.cx, this.y, 'clank'); Sfx.clank();
       shake = 5; flash = 0.4; freeze = 0.08; Sfx.deny();
       burst(this.cx, this.y + this.h / 2, 18, { colors: ['#6b3fa0', '#c9a0ff', '#fff'], speed: 115 });
       return;
@@ -3767,6 +4074,8 @@ class FlyingBoss extends Entity {
       shake = 12; flash = 0.8; freeze = 0.18;
       burst(this.cx, this.y + this.h / 2, 44,
             { colors: ['#ffd85e', '#e8434f', '#7ae07a', '#fff'], speed: 210, life: 1, size: 3 });
+      Stats.boss('aslan');
+      Feel.finisher(this.cx, this.y + this.h / 2, 'big');
       game.escape();                               // beaten, so he runs for the helicopter
     } else {
       game.addCombo(p, this.cx, this.y, 500);
@@ -3917,6 +4226,8 @@ function resolveShots() {
     for (const e of game.enemies) {
       if (e.dead || e instanceof Bomb || !aabb(r, e)) continue;
       r.dead = true;
+      Stats.add('landed');
+      spark(r.cx, r.cy2);
       // bosses shrug it off faster than the rank and file, but it still opens them
       e.stun = e.bossGrade ? ROSE_STUN * 0.7 : ROSE_STUN;
       floatText(e.cx, e.y - 10, 'STUNNED', '#ff8fd0');
@@ -4057,6 +4368,72 @@ const Scores = {
   },
 };
 
+/* How the run is going, for the things that report on it: the newspaper
+   between acts, the act-2 ticker, the timer and its ghost, the share card.
+
+   `run` is the whole sitting - every attempt, deaths across all of them.
+   `cur` is the attempt in progress at the current act, and is thrown away
+   when the act restarts; the act's summary is filed into `run.acts` when it
+   is won.
+
+   Kills are counted when the dead are reaped, not in addCombo: a kill bumped
+   from below, a Bomber blown up by his own bomb and a fall out of the world
+   all skip addCombo, and addCombo also fires on boss hits that kill nothing.
+   Decoys and defectors are marked noKill. */
+const Stats = {
+  run: null, cur: null,
+  newRun(practice = false) {
+    this.run = { practice, hard: Difficulty.hard, t: 0, deaths: [0, 0, 0],
+                 restarts: 0, acts: [], heli: null };
+    this.cur = null;
+  },
+  beginAct(i) {
+    if (!this.run) this.newRun(true);
+    this.cur = { act: i, t: 0, stomps: 0, kills: {}, killN: 0, bosses: {}, defectors: 0,
+                 hits: 0, pits: 0, flags: 0, thrown: 0, landed: 0, coins: 0, rooms: 0 };
+  },
+  tick(dt) {
+    if (this.cur) this.cur.t += dt;
+    if (this.run) this.run.t += dt;
+  },
+  add(field, n = 1) { if (this.cur) this.cur[field] += n; },
+  kill(e) {
+    if (!this.cur || e.noKill || e instanceof Bomb) return;
+    const k = e.kind || e.constructor.name;
+    this.cur.kills[k] = (this.cur.kills[k] || 0) + 1;
+    this.cur.killN++;
+  },
+  boss(name) { if (this.cur) this.cur.bosses[name] = this.cur.t; },
+  died(i) { if (this.run) this.run.deaths[i]++; },
+  endAct(i) {
+    if (!this.run || !this.cur) return;
+    this.run.acts[i] = { ...this.cur, kills: { ...this.cur.kills }, bosses: { ...this.cur.bosses },
+                         score: game.score - game.actScore, deaths: this.run.deaths[i] };
+  },
+};
+
+/* Everything a stomp feels like, before the enemy's own onStomp runs: the
+   count, a spark where the boots met him, a kick of the screen that grows
+   with the chain, and the chain itself for the pitch. */
+function stompFx(p, e) {
+  Sfx.chain = p.combo;
+  // contact can last a few frames; it is still one stomp
+  if (e.stompFxAt != null && game.time - e.stompFxAt < 0.25) return;
+  e.stompFxAt = game.time;
+  Stats.add('stomps');
+  spark(clamp(p.cx, e.x, e.x + e.w), e.y);
+  punch(0, (e.bossGrade ? 4 : 2) + Math.min(p.combo, 8) * 0.5);
+}
+
+function reapDead(list) {
+  const keep = [];
+  for (const e of list) {
+    if (e.dead) Stats.kill(e);
+    else keep.push(e);
+  }
+  return keep;
+}
+
 /* One of the crowd.
 
    Silhouette first: narrow head, a neck, shoulders wider than the torso, and
@@ -4112,10 +4489,12 @@ function drawPerson(cx, groundY, seed, back, step, prop) {
     g.fillStyle = mix(skin); g.fillRect(x + 7, y + 3, 1, 2);
     g.fillStyle = mix('#6b7280'); g.fillRect(x + 8, y - 5, 1, 9);   // stick
     const flap = (seed + Math.floor(game.time * 6)) % 2;            // it flutters
-    g.fillStyle = mix('#c0242c');
+    // the five-cross flag at its smallest legible size: white field, red cross
+    g.fillStyle = mix('#f4f4f4');
     g.fillRect(x + 9, y - 5 + flap, 5, 4);
-    g.fillStyle = mix('#8f1526');
-    g.fillRect(x + 9, y - 2 + flap, 5, 1);
+    g.fillStyle = mix('#d6263c');
+    g.fillRect(x + 11, y - 5 + flap, 1, 4);
+    g.fillRect(x + 9, y - 4 + flap, 5, 1);
     g.fillStyle = mix(coat); g.fillRect(x + 1, y + 10, 1, 5);
   } else if (prop === 'rose') {
     g.fillRect(x + 7, y + 5, 1, 5);              // one raised
@@ -4190,6 +4569,7 @@ const crowd = {
       if (hit) {
         this.flash = 0.6; shake = 3; Sfx.gate();
         floatText(this.x, p.y - 22, 'THE STREET!', '#ffd85e');
+        Chant.start('gadadeki', this.x, p.y - 36);
         burst(this.x, p.bottom - 4, 16,
               { colors: ['#d6263c', '#ffd85e', '#fff'], speed: 100, grav: 200, life: .8, size: 2 });
       }
@@ -4350,16 +4730,21 @@ function post(en, spec) {
   return en;
 }
 
-function reset(toTitle = false, opts = {}) {
-  if (opts.levelIndex != null) loadLevel(opts.levelIndex);
-  else if (toTitle) loadLevel(0);          // the title screen is always act one
-  const carried = opts.score != null ? opts.score : (opts.keepScore ? game.score : 0);
-  buildGrid();
-  particles = []; floats = []; bumps = [];
-  shake = 0; freeze = 0; flash = 0;
+/* Everything that lives IN a level, as opposed to the act or the player.
+   One list, read by reset() and by anything that has to set a level aside and
+   come back to it later, so the two can never disagree about what a level
+   contains. */
+const WORLD_KEYS = ['enemies', 'coins', 'items', 'flags', 'charmers', 'gates', 'hazards',
+                    'planks', 'shots', 'boss', 'heli', 'script', 'tea'];
 
-  game.player = new Player(LEVEL.start.x * TILE, LEVEL.start.y * TILE);
-  game.enemies = LEVEL.enemies.map(e => post(new (enemyKind(e.t))(e.x, e.gate), e));
+/* Builds the contents of the current LEVEL into game.*. The grid has to be
+   built first: enemies seat themselves on it. */
+function populateWorld() {
+  game.enemies = LEVEL.enemies.map(e => {
+    const en = post(new (enemyKind(e.t))(e.x, e.gate), e);
+    en.kind = e.t;
+    return en;
+  });
   game.coins = [];
   for (const r of LEVEL.coinRuns)
     for (let i = 0; i < r.n; i++) game.coins.push(new Coin(r.x + i, r.y));
@@ -4373,15 +4758,34 @@ function reset(toTitle = false, opts = {}) {
     })),
     ...(LEVEL.finalGate != null ? [{ x: LEVEL.finalGate, kind: 'final', guard: null }] : []),
   ];
-  game.flagsConverted = 0;
-  game.boss = null; game.heli = null; game.death = null; game.bossBeaten = false;
+  game.boss = null; game.heli = null;
   game.hazards = []; game.planks = []; game.script = null; game.tea = null; game.shots = [];
+}
+
+function reset(toTitle = false, opts = {}) {
+  if (opts.levelIndex != null) loadLevel(opts.levelIndex);
+  else if (toTitle) loadLevel(0);          // the title screen is always act one
+  const carried = opts.score != null ? opts.score : (opts.keepScore ? game.score : 0);
+  buildGrid();
+  particles = []; floats = []; bumps = [];
+  shake = 0; freeze = 0; flash = 0;
+  Time.reset();
+  Feel.clear();
+  BossIntro.cancel();
+  if (toTitle) BossIntro.seen.clear();     // a new run sees every card in full again
+  Chant.reset();
+
+  game.player = new Player(LEVEL.start.x * TILE, LEVEL.start.y * TILE);
+  populateWorld();
+  game.flagsConverted = 0;
+  game.death = null; game.bossBeaten = false;
   crowd.reset(LEVEL.start.x * TILE);
   bridgeRun.reset();
   game.entry = null;
   game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
   game.advance = false;
   game.state = toTitle ? 'title' : 'play';
+  if (!toTitle) Stats.beginAct(game.levelIndex);
   if (typeof Music !== 'undefined') Music.cue();   // the track starts over with the level
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
 }
@@ -4401,6 +4805,8 @@ game.addCombo = function (p, x, y, base) {
 game.lose = function () {
   if (this.state !== 'play') return;
   this.state = 'lost'; this.endT = 0;
+  Stats.died(this.levelIndex);
+  Chant.reset();
   shake = 7; flash = 0.7; Sfx.lose();
   burst(this.player.cx, this.player.y + 8, 30, { colors: ['#e8434f', '#fff'], speed: 160, life: 1 });
   // Death pop: hop up, then fall clean through the level. No collision, so it
@@ -4422,6 +4828,8 @@ game.escape = function () {
 game.win = function () {
   this.state = 'won'; this.endT = 0;
   this.best = Math.max(this.best, this.score);
+  Stats.endAct(this.levelIndex);
+  Chant.reset();
   // more acts to come? then this is an interlude, not the end of the run
   this.advance = this.levelIndex < LEVELS.length - 1;
   Sfx.win();
@@ -4433,6 +4841,196 @@ game.win = function () {
   for (let i = 0; i < 70; i++)
     burst(this.player.cx + rand(-70, 70), this.player.y - rand(0, 90), 1,
           { colors: ['#ffd85e', '#e8434f', '#3ad47a', '#41a6f0', '#fff'], speed: 80, life: 1.8, size: 2, grav: 170 });
+};
+
+/* ---------------------------------------------------------- scenes
+
+   Whatever happens between one act and the next. A scene is a full-screen
+   interlude with its own update and render - the helicopter lap, the
+   newspaper, the share card. `update(dt)` returns true when the scene is
+   finished; `world: true` paints the frozen level behind it.
+
+   INTERLUDES is the running order after each act. Scenes slot in as they are
+   built; for now each act goes straight to the next act's card, as before. */
+const Scenes = {};
+
+function startScene(name, arg) {
+  Time.reset();
+  game.scene = Scenes[name](arg);
+  game.state = 'scene';
+}
+
+const INTERLUDES = [
+  [['card', 1]],
+  [['card', 2]],
+  [['entry']],
+];
+
+const Interlude = {
+  q: [],
+  start(i) { this.q = (INTERLUDES[i] || [['entry']]).slice(); this.next(); },
+  next() {
+    const step = this.q.shift();
+    if (!step) { reset(true); return; }
+    const [kind, arg] = step;
+    if (kind === 'card') startCard(arg);
+    else if (kind === 'entry') {
+      if (Scores.qualifies(game.score)) startEntry(game.score);
+      else reset(true);            // run finished: title, board visible
+    }
+    else startScene(kind, arg);
+  },
+};
+
+/* ---------------------------------------------------------- boss intros
+
+   Fighting-game style: the world freezes, Misha's panel and the boss's slide
+   in from either side, the name slams down, two lines of billing, VS, FIGHT!
+   The first meeting in a run gets the whole thing; a retry gets a short
+   version so dying to a boss three times does not mean watching it three
+   times. Nothing ticks while it plays - not the enemies, not the run clock.
+
+   Triggered by the same rule that puts the boss's health bar on screen, so
+   the card ends exactly where the bar appears. */
+const INTRO = {
+  // Giorgi Targamadze, twice: Aslan's man with the dogs in act 1, a journalist in act 2
+  mid1:   { art: 'mid',      l1: "ASLAN'S MAN",            l2: 'BROUGHT HIS DOGS',           bg: '#2d4a7a' },
+  mid2:   { art: 'mid',      l1: 'ROUND 2',                l2: 'SAME MAN. NEW SUNGLASSES.',  bg: '#2d4a7a' },
+  mid3:   { art: 'mid',      l1: 'ROUND 3',                l2: 'HAS HEARD THE HELICOPTER',   bg: '#2d4a7a' },
+  aslan:  { art: 'boss',     l1: 'LION OF ACHARA',         l2: 'HELICOPTER ON STANDBY',      bg: '#3a2a5a', name: 'ASLAN' },
+  anchor: { art: 'l2anchor', l1: 'YOU AGAIN?',             l2: 'NOW A HUMBLE JOURNALIST',    bg: '#1c2436' },
+  sleepy: { art: 'l3sleepy', l1: 'MINISTER OF DOZING',     l2: 'DO NOT WAKE HIM. REALLY.',   bg: '#3a4a6a' },
+  svani:  { art: 'l3svani',  l1: 'FROM THE MOUNTAINS',     l2: 'FIVE HITS. BRING A LADDER.', bg: '#6a2030' },
+  bomber: { art: 'l3bomb',   l1: 'ARMOURED AND EXPLOSIVE', l2: 'TIP: USE HIS OWN BOMBS',     bg: '#4a3a20' },
+  edika:  { art: 'l3dard',   l1: 'THE SILVER FOX',         l2: 'HIS TEA IS GETTING COLD',    bg: '#2a2440' },
+};
+const INTRO_FULL = 2.3, INTRO_SHORT = 0.9;
+
+function introKey(e) {
+  if (e instanceof FlyingBoss) return 'aslan';
+  if (e instanceof Anchor) return 'anchor';
+  if (e instanceof Dardubala) return 'edika';
+  if (e instanceof Sleepy) return 'sleepy';
+  if (e instanceof Svani) return 'svani';
+  if (e instanceof Bomber) return 'bomber';
+  if (e instanceof MidBoss) {
+    const mids = LEVEL.enemies.filter(s => s.t === 'mid').map(s => s.gate);
+    return 'mid' + (mids.indexOf(e.gate) + 1 || 1);
+  }
+  return null;
+}
+
+const BossIntro = {
+  active: false, t: 0, dur: INTRO_FULL, key: null, spec: null, name: '', boss: null,
+  seen: new Set(),
+  /* Which boss, if any, has just come up. Mirrors the HUD bar's rule (within
+     190px, Edika only once engaged) plus "on screen", so the portrait on the
+     card is a man you can actually see. Aslan is game.boss, not an enemy, and
+     only counts once he commits to the arena. */
+  check() {
+    if (this.active || game.state !== 'play') return;
+    const p = game.player;
+    const onScreen = e => { const sx = e.cx - cam.x; return sx > 24 && sx < VIEW_W - 24; };
+    let who = null;
+    if (game.boss && game.boss.engaged && !game.boss.scripted) who = game.boss;
+    else who = game.enemies.find(e =>
+      !e.dead && e.bossName && !e.scriptedOut && Math.abs(e.cx - p.cx) < 190 &&
+      (!(e instanceof Dardubala) || e.engaged) && onScreen(e));
+    if (!who) return;
+    /* Not mid-air: freezing him half way through a jump over a pit, and then
+       resuming with the jump key up, cuts the jump and drops him in. */
+    if (!p.onGround) return;
+    const key = introKey(who);
+    if (!key || who.introduced) return;
+    who.introduced = true;
+    const id = `${game.levelIndex}:${key}`;
+    this.start(who, key, this.seen.has(id));
+    this.seen.add(id);
+  },
+  start(boss, key, short) {
+    this.active = true; this.t = 0; this.boss = boss; this.key = key;
+    this.spec = INTRO[key];
+    this.name = this.spec.name || boss.bossName || key.toUpperCase();
+    this.dur = short ? INTRO_SHORT : INTRO_FULL;
+    this.short = short;
+    // the world is frozen behind the card, so anything still shaking it would
+    // shake for the whole card
+    shake = 0; flash = 0; punchX = punchY = 0;
+    Sfx.slam();
+  },
+  update(raw) {
+    this.t += raw;
+    // skippable once it has had a moment to land
+    if (this.t > 0.4 && this.t < this.dur - 0.2 && (Input.jumpTap() || Input.throwTap() || Input.justDown('Enter')))
+      this.t = this.dur - 0.2;
+    if (!this.fought && this.t > (this.short ? 0.45 : 1.7)) { this.fought = true; Sfx.fight(); }
+    if (this.t >= this.dur) this.cancel();
+  },
+  cancel() { this.active = false; this.boss = null; this.fought = false; },
+  draw() {
+    if (!this.active) return;
+    const t = this.t, sp = this.spec;
+    const easeOut = k => 1 - Math.pow(1 - clamp(k, 0, 1), 3);
+    if (t < 0.12) {                              // the slam flash
+      g.fillStyle = `rgba(255,255,255,${0.7 * (1 - t / 0.12)})`;
+      g.fillRect(0, 0, VIEW_W, VIEW_H);
+    }
+    g.fillStyle = 'rgba(6,4,12,.72)';
+    g.fillRect(0, 0, VIEW_W, 44); g.fillRect(0, 136, VIEW_W, 44);
+
+    if (!this.short) {
+      // panels: in from either side, out again at the end
+      const inK = easeOut((t - 0.12) / 0.23), outK = easeOut((t - (this.dur - 0.3)) / 0.3);
+      const off = Math.round(200 * (1 - inK) + 200 * outK);
+      for (let r = 44; r < 136; r++) {
+        const sx = 172 - ((r - 44) >> 2);
+        g.fillStyle = UNM.redPl; g.fillRect(-off, r, sx, 1);
+        g.fillStyle = sp.bg;     g.fillRect(sx + 2 + off, r, VIEW_W - sx - 2, 1);
+        if (off === 0) { g.fillStyle = UNM.white; g.fillRect(sx, r, 2, 1); }
+      }
+      g.fillStyle = 'rgba(255,255,255,.18)';      // speed lines, outward
+      for (let i = 0; i < 9; i++) {
+        const y = 48 + ((i * 37) % 84), run = (t * 380 + i * 53) % 170;
+        g.fillRect(Math.round(150 - run - 18) - off, y, 18, 1);
+        g.fillRect(Math.round(176 + run) + off, y + 2, 18, 1);
+      }
+      // portraits at 2x: Misha left facing right, the boss right facing left
+      const hero = ART.hero, ba = ART[sp.art];
+      if (hero) g.drawImage(hero.canvas, 60 - off, 134 - hero.h * 2, hero.w * 2, hero.h * 2);
+      if (ba) {
+        g.save();
+        g.translate(244 + off + ba.w, 134 - ba.h * 2);
+        g.scale(-1, 1);
+        g.drawImage(ba.canvas, 0, 0, ba.w * 2, ba.h * 2);
+        g.restore();
+      }
+      if (off === 0) {
+        drawText(g, 'MISHA', 20, 48, UNM.white, 1);
+        if (Math.floor(t * 4) % 2 === 0) drawTextCentered(g, 'VS', 160, 84, UNM.gold, 2);
+      }
+    }
+
+    // the name: slams down from big to its resting size, then a shake
+    let maxS = 5;
+    while (maxS > 3 && textWidth(this.name, maxS) > VIEW_W - 8) maxS--;
+    const slamT = this.short ? t / 0.25 : (t - 0.35) / 0.2;
+    if (slamT > 0) {
+      const sc = slamT >= 1 ? 3 : Math.max(3, maxS - Math.floor(slamT * (maxS - 2)));
+      const sh = slamT >= 1 && slamT < 2 ? Math.round(rand(-2, 2)) : 0;
+      drawTextCentered(g, this.name, VIEW_W / 2 + sh, 14, UNM.white, sc, UNM.redDk);
+    }
+    if (!this.short) {
+      const typed = s => s.slice(0, Math.max(0, Math.floor((t - 0.6) / 0.045)));
+      drawTextCentered(g, typed(sp.l1), VIEW_W / 2, 144, UNM.gold, 1);
+      drawTextCentered(g, typed(sp.l2), VIEW_W / 2, 154, '#cfd8e8', 1);
+    }
+    const fightAt = this.short ? 0.45 : 1.7;
+    if (t > fightAt) {
+      const w = textWidth('FIGHT!', 4) + 12;
+      g.fillStyle = UNM.red; g.fillRect(Math.round((VIEW_W - w) / 2), 72, w, 36);
+      drawTextCentered(g, 'FIGHT!', VIEW_W / 2, 76, UNM.white, 4, UNM.redDk);
+    }
+  },
 };
 
 /* ---------------------------------------------------------- act card
@@ -4485,6 +5083,8 @@ function drawCard() {
                      VIEW_W / 2, 124, '#7ec8f0', 1);
   if (t > cardEnd() && Math.floor(t * 2) % 2 === 0)
     drawTextCentered(g, 'PRESS SPACE', VIEW_W / 2, 150, '#8890a4', 1);
+  drawBunting(0);
+  drawRedStrip(173, 7);
 }
 
 /* Arcade-style three-letter entry: no HTML input, so it stays inside the
@@ -4604,7 +5204,7 @@ game.teaOutro = function () {
     burst(e.cx, e.y + 6, 20,
           { colors: ['#7ec8f0', '#dde3ec', '#fff'], speed: 110, grav: -30, life: .8, size: 2 });
   }
-  this.enemies = this.enemies.filter(e => !e.dead);
+  this.enemies = reapDead(this.enemies);
   this.state = 'escape';
   this.endT = 0;
   this.script = updateTea;
@@ -4684,22 +5284,45 @@ const cam = { x: 0, y: 0, lead: 0 };
    the camera was aiming at jittered constantly and the whole view swam - most
    obvious when tapping left and right, where the lead flips sign.
 
-   Vertical is slower still and has a dead zone. Small hops should not move the
-   view at all; without one, every jump pumped the camera up and down. */
-const CAM = { lead: 0.42, leadMax: 60, leadEase: 0.10, xEase: 0.004,
-              yEase: 0.06, yDead: 26 };
+   Vertical holds at the floor (see camTargetY) and eases slowly when the
+   ultra launch does lift it. */
+const CAM = { lead: 0.42, leadMax: 60, leadEase: 0.10, xEase: 0.004, yEase: 0.06 };
+
+/* Where the camera wants to be. A level narrower than the screen (a bonus
+   room) is centred rather than clamped: [0, w - 320] is an empty interval
+   there, and clamp() would pin it to a negative edge. */
+function camTargetX() {
+  const span = LEVEL.w * TILE - VIEW_W;
+  if (span <= 0) return span / 2;
+  return clamp(game.player.cx + cam.lead - VIEW_W / 2, 0, span);
+}
+/* The ground stays in view. The camera used to chase the jump arc, so a jump
+   lifted it and on the way back down the street had slid to a sliver at the
+   bottom of the screen. Nothing in these levels sits above row 4, which is on
+   screen with the camera at the floor (y=60), so it now stays there and only
+   lifts for the ultra powder's launch - when he would otherwise go out of the
+   top of the frame. */
+function camTargetY() {
+  const floor = LEVEL_H_PX - VIEW_H;
+  return clamp(Math.min(floor, game.player.y - 16), 0, floor);
+}
 
 function updateCamera(dt) {
   const p = game.player;
   const want = clamp(p.vx * CAM.lead, -CAM.leadMax, CAM.leadMax);
   cam.lead = lerp(cam.lead ?? want, want, 1 - Math.pow(CAM.leadEase, dt));
 
-  const tx = clamp(p.cx + cam.lead - VIEW_W / 2, 0, LEVEL.w * TILE - VIEW_W);
-  cam.x = lerp(cam.x, tx, 1 - Math.pow(CAM.xEase, dt));
+  cam.x = lerp(cam.x, camTargetX(), 1 - Math.pow(CAM.xEase, dt));
 
-  let ty = clamp(p.y - VIEW_H * 0.55, 0, LEVEL_H_PX - VIEW_H);
-  if (Math.abs(ty - cam.y) < CAM.yDead) ty = cam.y;     // ignore small hops
-  cam.y = lerp(cam.y, ty, 1 - Math.pow(CAM.yEase, dt));
+  cam.y = lerp(cam.y, camTargetY(), 1 - Math.pow(CAM.yEase, dt));
+}
+
+/* Jump straight to the target - for arriving somewhere new, where easing in
+   from wherever the camera last was would sweep across the whole level. */
+function snapCamera() {
+  cam.lead = 0;
+  cam.x = camTargetX();
+  cam.y = camTargetY();
 }
 
 /* ---------------------------------------------------------- update */
@@ -4739,7 +5362,7 @@ function resolveEnemies(dt) {
       const open = e.vulnerable ?? e.harmless ?? false;
       const falling = open ? p.vy >= 0 : p.vy > 15;
       const band = open ? e.h * 0.9 : e.h * 0.5;
-      if (falling && p.bottom - p.vy * dt <= e.y + band && open) { e.onStomp(p); continue; }
+      if (falling && p.bottom - p.vy * dt <= e.y + band && open) { stompFx(p, e); e.onStomp(p); Sfx.chain = 0; continue; }
       // otherwise the contact itself wears him down, on a cooldown
       if (!(e.invCd > 0) && e.chip && !e.scriptedOut && e.hp > 0) {
         e.invCd = INV_BOSS_CD;
@@ -4765,11 +5388,13 @@ function resolveEnemies(dt) {
     const band     = open ? e.h * 0.9 : e.h * 0.5;
     const feetAbove = p.bottom - p.vy * dt <= e.y + band;
     if (falling && feetAbove) {
+      stompFx(p, e);
       e.onStomp(p);
+      Sfx.chain = 0;
       if (!isBoss) p.vy = CFG.stompBounce;
     } else if (!e.harmless && !(e.stun > 0)) p.hurt(e.cx);
   }
-  game.enemies = game.enemies.filter(e => !e.dead);
+  game.enemies = reapDead(game.enemies);
 }
 
 function resolveItems() {
@@ -4852,7 +5477,7 @@ function resolveCoins() {
   for (const c of game.coins) {
     if (c.dead || !aabb(p, c)) continue;
     c.dead = true;
-    p.coins++; game.score += 100;
+    p.coins++; game.score += 100; Stats.add('coins');
     burst(c.cx, c.y + 5, 6, { colors: ['#ffd85e', '#fff8dc'], speed: 65, grav: 240, life: 0.45, size: 1 });
     floatText(c.cx, c.y, '+100', '#ffd85e');
     Sfx.coin();
@@ -4932,13 +5557,17 @@ function updateEscape(dt) {
   }
 }
 
-function update(dt) {
+function update(rawDt) {
+  Time.tick(rawDt, freeze > 0);
+  Feel.tick(rawDt);
+  let dt = rawDt;                // menus, cards and scenes run on real time
   if (game.state === 'title') {
     game.time += dt;
     updateEffects(dt);
     if (Input.jumpTap() || Input.justDown('Enter')) {
       Sfx.start();
       Music.start();          // this keypress is the gesture that unblocks audio
+      Stats.newRun(false);
       // act 1 has a card of its own now; startCard falls through to play for
       // any act that does not
       if (LEVELS[0].card) startCard(0);
@@ -4949,8 +5578,16 @@ function update(dt) {
 
   if (game.state === 'card')  { updateCard(dt); return; }
   if (game.state === 'entry') { game.time += dt; updateEntry(dt); return; }
+  if (game.state === 'scene') {
+    game.time += dt;
+    if (game.scene.update(dt)) Interlude.next();
+    return;
+  }
 
-  if (freeze > 0) { freeze -= dt; updateEffects(dt * 0.25); return; }
+  // a boss card freezes the world outright - no effects, no clock, no input
+  if (game.state === 'play' && BossIntro.active) { BossIntro.update(rawDt); return; }
+  if (freeze > 0) { freeze -= rawDt; updateEffects(rawDt * 0.25 * Time.scale); return; }
+  dt = rawDt * Time.scale;       // ...and the world on game time
 
   if (game.state === 'escape') {
     game.endT += dt; game.time += dt;
@@ -4976,13 +5613,14 @@ function update(dt) {
     for (const pl of game.planks) pl.update(dt);
     game.planks = game.planks.filter(pl => !pl.dead);
     if (LEVEL.crowd) crowd.update(dt);
+    Chant.update(dt);
     updateEffects(dt);
     updateCamera(dt);
     return;
   }
 
   if (game.state === 'won' || game.state === 'lost') {
-    game.endT += dt;
+    game.endT += dt; game.time += dt;
     if (game.death) {
       game.death.vy = Math.min(game.death.vy + CFG.deathGravity * dt, CFG.deathMaxFall);
       game.death.y += game.death.vy * dt;
@@ -4991,19 +5629,22 @@ function update(dt) {
     updateEffects(dt);
     updateCamera(dt);
     if (Input.justDown('KeyR') || (game.endT > 1.4 && Input.jumpTap())) {
-      if (game.state === 'won' && game.advance) startCard(game.levelIndex + 1);
+      /* Winning an act runs that act's interlude: the next act's card, or
+         the end of the run. R used to be caught by frame() before this
+         branch ever saw it, so on this screen it replayed the act you had
+         just WON - and on the final screen replayed act 3 at score 0 and
+         skipped the high-score entry. */
+      if (game.state === 'won') Interlude.start(game.levelIndex);
       /* Dying restarts the act you died in, holding the score you entered it
          with. Sending a player back to act 1 for failing in act 2 makes them
          replay ten minutes they had already cleared. */
-      else if (game.state === 'lost')
-        reset(false, { levelIndex: game.levelIndex, score: game.actScore });
-      else if (Scores.qualifies(game.score)) startEntry(game.score);
-      else reset(true);            // run finished: title, board visible
+      else reset(false, { levelIndex: game.levelIndex, score: game.actScore });
     }
     return;
   }
 
   game.time += dt;
+  Stats.tick(dt);
   game.player.update(dt);
 
   /* `!game.bossBeaten` matters: his exit sets game.boss to null, and the
@@ -5049,6 +5690,7 @@ function update(dt) {
   game.planks = game.planks.filter(pl => !pl.dead);
   bridgeRun.update(dt);
   if (LEVEL.crowd) crowd.update(dt);
+  Chant.update(dt);
   for (const r of game.shots) r.update(dt);
   game.shots = game.shots.filter(r => !r.dead);
   for (const c of game.coins) c.update(dt);
@@ -5072,6 +5714,7 @@ function update(dt) {
 
   updateEffects(dt);
   updateCamera(dt);
+  BossIntro.check();
 }
 
 /* ---------------------------------------------------------- rendering */
@@ -5080,9 +5723,43 @@ const display = document.getElementById('game');
 const dctx = display.getContext('2d');
 const buf = document.createElement('canvas');
 buf.width = VIEW_W; buf.height = VIEW_H;
-const g = buf.getContext('2d');
+/* `let`, not `const`: paintInto() points it at another canvas for the length
+   of one call, so every pixel-art helper below - all of which draw on `g` -
+   can paint a newspaper photo or a share card without being rewritten. */
+let g = buf.getContext('2d');
 g.imageSmoothingEnabled = false;
 dctx.imageSmoothingEnabled = false;
+
+function paintInto(ctx, fn) {
+  const keep = g;
+  g = ctx;
+  ctx.imageSmoothingEnabled = false;
+  try { return fn(); } finally { g = keep; }
+}
+
+/* Hands the player a PNG of a canvas, scaled up pixel-crisp. Every image the
+   game draws is same-origin (the sprite key-out already reads pixels back,
+   which a tainted canvas would refuse), so the export is allowed, and a blob
+   URL on a download link needs no server - it works from GitHub Pages. */
+function savePNG(src, name, sc = 4) {
+  const c = document.createElement('canvas');
+  c.width = src.width * sc; c.height = src.height * sc;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.drawImage(src, 0, 0, c.width, c.height);
+  const go = url => {
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  if (c.toBlob) c.toBlob(b => {
+    if (!b) return;
+    const u = URL.createObjectURL(b);
+    go(u);
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }, 'image/png');
+  else go(c.toDataURL('image/png'));
+}
 
 let showHud = true, debug = false, crt = true;
 
@@ -5659,9 +6336,11 @@ class LevelFlag extends Entity {
     this.converted = true;
     this.pop = 0.5;
     game.score += 300;
-    game.flagsConverted++;
+    game.flagsConverted++; Stats.add('flags');
     if (LEVEL.crowd) crowd.join(this.x);
     floatText(this.x + 9, this.y - 6, '+300', '#ffd85e');
+    // every other flag the street answers - every one would be a drone
+    if (!this.tv && game.flagsConverted % 2 === 1) Chant.start('sakartvelo', this.x + 9, this.y - 20);
     if (this.tv) {
       floatText(this.x + 9, this.y - 18, 'OFF AIR', '#7ec8f0');
       burst(this.x + 10, this.y + 10, 26,
@@ -5982,6 +6661,7 @@ function drawEntities() {
   for (const pl of game.planks) pl.draw();
   for (const r of game.shots) r.draw();
   if (LEVEL.crowd) crowd.draw();
+  Chant.draw();
   if (game.tea) drawTeaScene();
   if (game.heli) drawHeli(game.heli.x, game.heli.y, game.heli.t);
 
@@ -6132,6 +6812,33 @@ function drawBossArrow(sx, sy, b) {
   drawText(g, 'BOSS', right ? VIEW_W - 34 : 10, ay + 10, '#c9a0ff', 1);
 }
 
+function drawSpark(sp) {
+  const x = Math.round(sp.x), y = Math.round(sp.y);
+  const f = Math.min(2, Math.floor(sp.t / 0.04));       // three frames
+  if (sp.kind === 'clank') {                            // a grey ping: it did nothing
+    g.fillStyle = f === 0 ? '#e8eef8' : '#8890a4';
+    g.fillRect(x - 1, y - 1, 3, 3);
+    if (f > 0) { g.fillRect(x - 4, y, 2, 1); g.fillRect(x + 3, y, 2, 1); }
+    return;
+  }
+  if (f === 0) {                                        // white core, short rays
+    g.fillStyle = '#fff';
+    g.fillRect(x - 1, y - 1, 3, 3);
+    g.fillRect(x - 4, y, 3, 1); g.fillRect(x + 2, y, 3, 1);
+    g.fillRect(x, y - 4, 1, 3); g.fillRect(x, y + 2, 1, 3);
+  } else if (f === 1) {                                 // hollow, longer, yellow
+    g.fillStyle = '#ffd85e';
+    g.fillRect(x - 6, y, 4, 1); g.fillRect(x + 3, y, 4, 1);
+    g.fillRect(x, y - 6, 1, 4); g.fillRect(x, y + 3, 1, 4);
+    g.fillRect(x - 4, y - 4, 1, 1); g.fillRect(x + 4, y - 4, 1, 1);
+    g.fillRect(x - 4, y + 4, 1, 1); g.fillRect(x + 4, y + 4, 1, 1);
+  } else {                                              // four embers
+    g.fillStyle = '#ff8a5c';
+    g.fillRect(x - 7, y, 1, 1); g.fillRect(x + 7, y, 1, 1);
+    g.fillRect(x, y - 7, 1, 1); g.fillRect(x, y + 7, 1, 1);
+  }
+}
+
 function drawParticles() {
   for (const p of particles) {
     g.globalAlpha = p.life / p.max > 0.35 ? 1 : 0.5;   // 2-step alpha, not a fade
@@ -6139,6 +6846,7 @@ function drawParticles() {
     g.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
   }
   g.globalAlpha = 1;
+  for (const sp of sparks) drawSpark(sp);
   for (const f of floats) {
     if (f.life < 0.25 && Math.floor(f.life * 20) % 2 === 0) continue;
     drawTextCentered(g, f.text, f.x, f.y, f.color, f.s);
@@ -6164,12 +6872,16 @@ function drawHud() {
     const fading = last && game.player.extraT < 4 && Math.floor(game.time * 6) % 2 === 0;
     if (!fading) drawHeart(8 + (3 + i) * 11, 8, true, '#ff8fd0', '#ffd0e8');
   }
+  // coins and score on a red party plate, a ballot chip in the corner
+  g.fillStyle = UNM.white; g.fillRect(6, 16, 87, 1); g.fillRect(6, 28, 87, 1);
+  g.fillStyle = UNM.redPl; g.fillRect(6, 17, 87, 11);
   drawCoinIcon(9, 20);
-  drawText(g, `*${String(game.player.coins).padStart(2, '0')}`, 18, 19, '#ffd85e', 1);
-  drawText(g, String(game.score).padStart(6, '0'), 52, 19, '#fff', 1);
+  drawText(g, `*${String(game.player.coins).padStart(2, '0')}`, 18, 19, '#ffd85e', 1, UNM.redDk);
+  drawText(g, String(game.score).padStart(6, '0'), 52, 19, UNM.white, 1, UNM.redDk);
+  drawBallot(VIEW_W - 16, 5, 11, 11, 1);
   if (game.player.combo > 1)
     drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
-  if (Music.muted) drawText(g, 'MUSIC OFF', VIEW_W - 62, 8, '#8890a4', 1);
+  if (Music.muted) drawTextRight(g, 'MUSIC OFF', VIEW_W - 8, 44, '#8890a4', 1);
   if (game.player.roses > 0) {
     drawMiniRose(8, 29);
     drawText(g, `ROSES X${game.player.roses}`, 15, 30, '#ff8fd0', 1);
@@ -6257,31 +6969,187 @@ const noKeyboard = (() => {
   } catch (e) { return false; }
 })();
 
+/* ---------------------------------------------------------- campaign
+
+   Banners and bunting hung overhead in the world, in rows the levels do not
+   use, so they never sit behind the action.
+
+   LEVEL.props entries, in tiles:
+     { kind: 'banner', x, y, w, text }   sways
+     { kind: 'bunting', x, y, w }        sags                                  */
+function drawProps() {
+  const props = LEVEL.props;
+  if (!props) return;
+  for (const p of props) {
+    if (p.kind !== 'banner' && p.kind !== 'bunting') continue;
+    const bx = p.x * TILE, bw = p.w * TILE;
+    if (bx + bw < cam.x - 16 || bx > cam.x + VIEW_W + 16) continue;
+    if (p.kind === 'bunting') { drawBunting(p.y * TILE, bx, bx + bw, 6); continue; }
+    const by = p.y * TILE + Math.round(Math.sin(game.time * 1.5 + p.x));
+    g.fillStyle = '#c8c8c8';
+    g.fillRect(bx, by - 6, 1, 6); g.fillRect(bx + bw - 1, by - 6, 1, 6);
+    g.fillStyle = UNM.red;   g.fillRect(bx, by, bw, 11);
+    g.fillStyle = UNM.redLt; g.fillRect(bx, by, bw, 1);
+    g.fillStyle = UNM.redDk; g.fillRect(bx, by + 10, bw, 1);
+    drawTextCentered(g, p.text, bx + bw / 2, by + 2, UNM.white, 1, UNM.redDk);
+  }
+}
+
+/* Chants, a syllable at a time, each one a square-wave shout and a clap.
+   One at a time, world-space, rising off whoever started it. */
+const CHANTS = {
+  misha:      ['MI', 'SHA!', 'MI', 'SHA!'],
+  kmara:      ['KMA', 'RA!', 'KMA', 'RA!'],
+  gadadeki:   ['GA', 'DA', 'DE', 'KI!'],
+  sakartvelo: ['SA', 'KAR', 'TVE', 'LO!'],
+  khuti:      ['NO', 'ME', 'RI', 'KHU', 'TI!'],
+};
+const CHANT_BEAT = 0.28;
+const Chant = {
+  cur: null, next: 8,
+  reset() { this.cur = null; this.next = 8; },
+  start(key, x, y) {
+    if (this.cur || !CHANTS[key]) return;
+    this.cur = { sy: CHANTS[key], i: -1, t: CHANT_BEAT, x, y };
+  },
+  update(dt) {
+    // act 3's crowd keeps it going on its own once it is big enough
+    if (LEVEL.crowd && crowd.n >= 4 && !this.cur) {
+      this.next -= dt;
+      if (this.next <= 0) {
+        this.next = 7 + (crowd.n % 4);
+        const gy = groundBelow(crowd.x, game.player.bottom - 2);
+        if (gy != null) this.start(crowd.n % 2 ? 'kmara' : 'gadadeki', crowd.x - 30, gy - 44);
+      }
+    }
+    const c = this.cur;
+    if (!c) return;
+    c.t += dt;
+    const last = c.sy.length - 1;
+    if (c.i < last && c.t >= CHANT_BEAT) {
+      c.t = 0; c.i++;
+      Sfx.chant(c.i % 4, c.i === last);
+    } else if (c.i === last && c.t > 0.9) this.cur = null;
+  },
+  draw() {
+    const c = this.cur;
+    if (!c || c.i < 0) return;
+    const full = c.sy.join('-');
+    let x = Math.round(c.x - textWidth(full) / 2);
+    const y = Math.round(c.y - Math.min(4, c.i + c.t / CHANT_BEAT));
+    for (let k = 0; k <= c.i; k++) {
+      drawText(g, c.sy[k], x, y, k % 2 ? UNM.red : UNM.white, 1);
+      x += c.sy[k].length * 6;
+      if (k < c.sy.length - 1) { drawText(g, '-', x, y, '#8890a4', 1); x += 6; }
+    }
+  },
+};
+
+/* ---------------------------------------------------------- party look
+
+   Red and white, the five-cross flag, ballot number 5. Small reusable pieces
+   so the title, the HUD, the cards and the end screens all speak the same
+   visual language. Scaled art is drawn once at 1x into a canvas and blown up
+   nearest-neighbour, never redrawn bigger by hand. */
+const partyArt = {};
+function flagArt(wave = 0) {
+  const k = 'flag' + wave;
+  if (!partyArt[k]) {
+    const c = document.createElement('canvas'); c.width = 15; c.height = 10;
+    paintInto(c.getContext('2d'), () => drawFlagNew(0, 0, wave));
+    partyArt[k] = c;
+  }
+  return partyArt[k];
+}
+function roseArt() {
+  if (!partyArt.rose) {
+    const c = document.createElement('canvas'); c.width = 9; c.height = 12;
+    paintInto(c.getContext('2d'), () => drawRose(0, 0));
+    partyArt.rose = c;
+  }
+  return partyArt.rose;
+}
+function drawScaled(art, x, y, sc) {
+  g.drawImage(art, Math.round(x), Math.round(y), art.width * sc, art.height * sc);
+}
+
+// pennants on a rope: red, white, red, white - the street decorated for a rally
+function drawBunting(y = 0, x0 = 0, x1 = VIEW_W, sag = 0) {
+  g.fillStyle = '#c8c8c8';
+  for (let x = x0; x < x1; x++) {
+    const k = (x - x0) / Math.max(1, x1 - x0);
+    g.fillRect(x, y + Math.round(Math.sin(k * Math.PI) * sag), 1, 1);
+  }
+  let i = 0;
+  for (let x = x0 + 1; x + 6 <= x1; x += 8, i++) {
+    const k = (x + 3 - x0) / Math.max(1, x1 - x0);
+    const yy = y + 1 + Math.round(Math.sin(k * Math.PI) * sag);
+    const flap = (Math.floor(game.time * 4) + i) % 2;
+    g.fillStyle = i % 2 ? UNM.white : UNM.red;
+    for (let r = 0; r < 6; r++) {            // stepped triangle, point down: 6,6,4,4,2,2
+      const k = r >> 1;
+      g.fillRect(x + k + (r > 3 ? flap : 0), yy + r, 6 - 2 * k, 1);
+    }
+  }
+}
+
+// a ballot square with a red 5 in it: the party's list number
+function drawBallot(x, y, w, h, sc = 1, label = null, border = 1) {
+  g.fillStyle = UNM.red; g.fillRect(x, y, w, h);
+  g.fillStyle = UNM.white; g.fillRect(x + border, y + border, w - 2 * border, h - 2 * border);
+  drawText(g, '5', x + Math.round((w - (5 * sc)) / 2), y + Math.round((h - 7 * sc) / 2), UNM.red, sc, null);
+  if (label) drawTextCentered(g, label, x + w / 2, y + h + 3, UNM.white, 1);
+}
+
+// a full-width red strip with a white hairline over it
+function drawRedStrip(y, h) {
+  g.fillStyle = UNM.white; g.fillRect(0, y - 1, VIEW_W, 1);
+  g.fillStyle = UNM.red;   g.fillRect(0, y, VIEW_W, h);
+}
+
 function drawTitle() {
   g.fillStyle = 'rgba(8,10,20,.62)'; g.fillRect(0, 0, VIEW_W, VIEW_H);
+  drawBunting(0);
   const bounce = Math.round(Math.sin(game.time * 2.4) * 2);
   // two lines at scale 3: the whole name on one line is 411px against a 320 buffer
-  drawTextCentered(g, 'GAATAVISUPLE', VIEW_W / 2, 14 + bounce, '#ffd85e', 3);
-  drawTextCentered(g, 'SAKARTVELO', VIEW_W / 2, 38 + bounce, '#ffd85e', 3);
-  drawTextCentered(g, `ACT 1 - ${LEVELS[0].subtitle}`, VIEW_W / 2, 62, '#7ec8f0', 1);
-  drawScoreboard(VIEW_W / 2, 76);
+  drawTextCentered(g, 'GAATAVISUPLE', VIEW_W / 2, 12 + bounce, UNM.white, 3, UNM.redDk);
+  drawTextCentered(g, 'SAKARTVELO', VIEW_W / 2, 34 + bounce, UNM.red, 3, UNM.ink);
+  // a flag either side of the name, waving out of step with each other
+  const w = Math.floor(game.time * 3) % 2;
+  drawScaled(flagArt(w), 12, 14, 2);
+  drawScaled(flagArt(1 - w), 278, 14, 2);
+  // the act on a red ribbon with notched ends
+  g.fillStyle = UNM.white; g.fillRect(40, 60, 240, 1); g.fillRect(40, 74, 240, 1);
+  g.fillStyle = UNM.red;
+  for (let r = 0; r < 13; r++) {               // swallowtail: a V cut into each end
+    const inset = 6 - Math.abs(r - 6);
+    g.fillRect(40 + inset, 61 + r, 240 - inset * 2, 1);
+  }
+  drawTextCentered(g, `ACT 1 - ${LEVELS[0].subtitle}`, VIEW_W / 2, 64, UNM.white, 1, UNM.redDk);
+  // ballot number 5 on the right, a rose and the street's word on the left
+  drawBallot(274, 82, 28, 34, 3, 'VOTE', 2);
+  drawScaled(roseArt(), 20, 86, 2);
+  drawTextCentered(g, 'KMARA!', 29, 114, UNM.red, 1);
+  drawScoreboard(VIEW_W / 2, 80);
   if (noKeyboard) {
     if (Math.floor(game.time * 2) % 2 === 0)
-      drawTextCentered(g, 'THIS ONE NEEDS A KEYBOARD', VIEW_W / 2, 132, '#ffd85e', 1);
-    drawTextCentered(g, 'OPEN IT ON A COMPUTER TO PLAY', VIEW_W / 2, 150, '#fff', 1);
-    drawTextCentered(g, 'NO TOUCH CONTROLS YET - SORRY', VIEW_W / 2, 162, '#8890a4', 1);
+      drawTextCentered(g, 'THIS ONE NEEDS A KEYBOARD', VIEW_W / 2, 134, '#ffd85e', 1);
+    drawTextCentered(g, 'OPEN IT ON A COMPUTER TO PLAY', VIEW_W / 2, 146, '#fff', 1);
+    drawRedStrip(165, 15);
+    drawTextCentered(g, 'NO TOUCH CONTROLS YET - SORRY', VIEW_W / 2, 169, UNM.white, 1, UNM.redDk);
     return;
   }
   if (Math.floor(game.time * 2) % 2 === 0)
-    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 128, '#fff', 1);
+    drawTextCentered(g, 'PRESS SPACE TO START', VIEW_W / 2, 134, '#fff', 1);
   const hard = Difficulty.hard;
-  drawTextCentered(g, `D  DIFFICULTY: ${hard ? 'HARD' : 'EASY'}`, VIEW_W / 2, 142,
+  drawTextCentered(g, `D  DIFFICULTY: ${hard ? 'HARD' : 'EASY'}`, VIEW_W / 2, 144,
                    hard ? '#ff8a5c' : '#7ae07a', 1);
   // one slot, two uses: the platform hint matters on easy, the warning on hard
   drawTextCentered(g, hard ? 'HALF THE ROSES, NO INVINCIBILITY'
                            : 'DUCK+JUMP DROPS THROUGH A PLATFORM',
-                   VIEW_W / 2, 152, '#8890a4', 1);
-  drawTextCentered(g, 'ARROWS MOVE  DOWN DUCK  SHIFT RUN  X ROSE', VIEW_W / 2, 164, '#8890a4', 1);
+                   VIEW_W / 2, 154, '#8890a4', 1);
+  drawRedStrip(165, 15);
+  drawTextCentered(g, 'ARROWS MOVE  DOWN DUCK  SHIFT RUN  X ROSE', VIEW_W / 2, 169, UNM.white, 1, UNM.redDk);
 }
 
 function drawEntry() {
@@ -6304,12 +7172,19 @@ function drawEntry() {
   }
   drawTextCentered(g, 'UP DOWN LETTER   LEFT RIGHT SLOT', VIEW_W / 2, 130, '#8890a4', 1);
   drawTextCentered(g, 'SPACE TO CONFIRM', VIEW_W / 2, 144, '#8890a4', 1);
+  drawBunting(0);
+  drawRedStrip(173, 7);
 }
 
 function drawOverlay() {
   if (game.state === 'won') {
     g.fillStyle = 'rgba(6,18,10,.58)';
     g.fillRect(0, 0, VIEW_W, VIEW_H);
+    drawBunting(0);
+    const wv = Math.floor(game.time * 3) % 2;
+    // below the HUD rows, so they never sit on the score plate
+    drawScaled(flagArt(wv), 10, 56, 2);
+    drawScaled(flagArt(1 - wv), VIEW_W - 40, 56, 2);
 
     /* End of the run, not the end of an act: a whole crowd of him bouncing
        behind the credits. Drawn after the dim so they read bright against it
@@ -6368,7 +7243,7 @@ function drawOverlay() {
     // the prompt waits for the last line rather than talking over it
     const settled = AFTER_LEAD + Math.max(0, after.length - 1) * AFTER_STEP + 0.8;
     if (game.endT > Math.max(1.4, settled) && Math.floor(game.endT * 2) % 2 === 0)
-      drawTextCentered(g, game.advance ? 'PRESS SPACE TO CONTINUE' : 'PRESS R TO RESTART',
+      drawTextCentered(g, 'PRESS SPACE TO CONTINUE',
                        VIEW_W / 2, y + 26, '#8890a4', 1);
   }
 
@@ -6401,14 +7276,18 @@ function buildScanlines() {
   scanPattern = dctx.createPattern(c, 'repeat');
 }
 
-function render() {
+/* The level as the camera sees it: backdrop, tiles, everyone in it, effects.
+   Separate from the overlays so a scene can paint the frozen world behind
+   itself, or skip it entirely. */
+function renderWorld() {
   drawBackdrop();
 
-  const sx = shake > 0 ? Math.round(rand(-shake, shake)) : 0;
-  const sy = shake > 0 ? Math.round(rand(-shake, shake)) : 0;
+  const sx = (shake > 0 ? Math.round(rand(-shake, shake)) : 0) + Math.round(punchX);
+  const sy = (shake > 0 ? Math.round(rand(-shake, shake)) : 0) + Math.round(punchY);
 
   g.save();
   g.translate(-Math.round(cam.x) + sx, -Math.round(cam.y) + sy);
+  drawProps();
   drawTiles();
   drawLevelFlags();
   drawEntities();
@@ -6416,8 +7295,36 @@ function render() {
   drawParticles();
   drawDebug();
   g.restore();
+}
 
-  if (game.state === 'play') drawBossIndicator();
+/* The 320x180 buffer onto the display at 4x, then the optional scanlines. */
+function present() {
+  dctx.imageSmoothingEnabled = false;
+  if (Feel.zoomed && game.state !== 'scene') {
+    const k = Feel.k;
+    const sw = Math.ceil(VIEW_W * SCALE / k), sh = Math.ceil(VIEW_H * SCALE / k);
+    const bx = Math.round(Feel.fx - cam.x), by = Math.round(Feel.fy - cam.y);
+    const cx = clamp(bx - (sw >> 1), 0, VIEW_W - sw), cy = clamp(by - (sh >> 1), 0, VIEW_H - sh);
+    dctx.drawImage(buf, cx, cy, sw, sh, 0, 0, sw * k, sh * k);
+  } else dctx.drawImage(buf, 0, 0, VIEW_W * SCALE, VIEW_H * SCALE);
+
+  if (crt) {
+    if (!scanPattern) buildScanlines();
+    dctx.fillStyle = scanPattern;
+    dctx.fillRect(0, 0, VIEW_W * SCALE, VIEW_H * SCALE);
+  }
+}
+
+function render() {
+  if (game.state === 'scene') {
+    if (game.scene.world) renderWorld();
+    game.scene.render();
+    present();
+    return;
+  }
+  renderWorld();
+
+  if (game.state === 'play' && !Feel.zoomed && !BossIntro.active) drawBossIndicator();
 
   if (flash > 0) {
     g.fillStyle = `rgba(255,255,255,${clamp(flash, 0, 1) * 0.45})`;
@@ -6427,16 +7334,13 @@ function render() {
   if (game.state === 'title') drawTitle();
   else if (game.state === 'card') drawCard();
   else if (game.state === 'entry') drawEntry();
-  else { drawHud(); drawOverlay(); }
-
-  dctx.imageSmoothingEnabled = false;
-  dctx.drawImage(buf, 0, 0, VIEW_W * SCALE, VIEW_H * SCALE);
-
-  if (crt) {
-    if (!scanPattern) buildScanlines();
-    dctx.fillStyle = scanPattern;
-    dctx.fillRect(0, 0, VIEW_W * SCALE, VIEW_H * SCALE);
+  else {
+    if (!Feel.zoomed && !BossIntro.active) drawHud();
+    drawOverlay();
+    BossIntro.draw();
   }
+
+  present();
 }
 
 /* ---------------------------------------------------------- loop */
@@ -6449,12 +7353,17 @@ function fitCanvas() {
 addEventListener('resize', fitCanvas);
 
 let last = 0;
-function frame(now) {
-  const dt = Math.min((now - last) / 1000 || 0, 1 / 30);
-  last = now;
-
-  if (Input.justDown('KeyR') && game.state !== 'title' && game.state !== 'card')
-    reset(false, { levelIndex: game.levelIndex });
+/* Keys that work anywhere, outside the state machine. Its own function so a
+   test can press them without spinning up a second requestAnimationFrame
+   loop by calling frame() by hand. */
+function hotkeys() {
+  /* R restarts the act you are in, keeping the score you entered it with -
+     the same deal as dying. Only mid-act: the end screens handle R
+     themselves, and a scene or the name entry must never be thrown away. */
+  if (Input.justDown('KeyR') && (game.state === 'play' || game.state === 'escape')) {
+    if (Stats.run) Stats.run.restarts++;
+    reset(false, { levelIndex: game.levelIndex, score: game.actScore });
+  }
   if (Input.justDown('KeyH')) showHud = !showHud;
   if (Input.justDown('KeyM')) Music.toggle();
   if (Input.justDown('KeyN')) Sfx.toggle();
@@ -6463,7 +7372,13 @@ function frame(now) {
   /* Only from the title: flipping it mid-run would add or remove pickups from
      a level already in progress. */
   if (Input.justDown('KeyD') && game.state === 'title') { Difficulty.toggle(); Sfx.coin(); }
+}
 
+function frame(now) {
+  const dt = Math.min((now - last) / 1000 || 0, 1 / 30);
+  last = now;
+
+  hotkeys();
   update(dt);
   render();
   Input.clearFrame();
@@ -6487,6 +7402,7 @@ function frame(now) {
      Doing it per level also closes the older gap where only act 1 was ever
      checked, because LEVEL was still bound to LEVEL_1 at this point. */
   for (let i = 0; i < LEVELS.length; i++) { loadLevel(i); buildGrid(); validateLevel(); }
+  validateText();
   loadLevel(0);
   const missing = Object.keys(SPRITES).filter(k => ART[k].isPlaceholder);
   if (missing.length) console.info('placeholders in use:', missing.join(', '));
@@ -6494,8 +7410,17 @@ function frame(now) {
      replaying everything before it. Clamped, so a junk value is harmless. */
   const wanted = parseInt(new URLSearchParams(location.search).get('act') || '1', 10);
   const act = Number.isFinite(wanted) ? clamp(wanted - 1, 0, LEVELS.length - 1) : 0;
-  if (act > 0) { reset(false, { levelIndex: act }); Music.start(); }
+  if (act > 0) { Stats.newRun(true); reset(false, { levelIndex: act }); Music.start(); }
   else reset(true);
   document.getElementById('boot').classList.add('hidden');
+  /* ?step=manual leaves the clock to whoever is driving: a test harness calls
+     update(dt) and render() itself, so nothing advances behind its back
+     between two measurements. */
+  if (new URLSearchParams(location.search).get('step') === 'manual') {
+    if (!Music.muted) Music.toggle();       // a test run is silent
+    if (!Sfx.muted) Sfx.toggle();
+    render();
+    return;
+  }
   requestAnimationFrame(frame);
 })();
