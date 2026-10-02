@@ -1075,11 +1075,11 @@ palette), so the flag and the interface always agree.
 - The crowd's flags are the five-cross flag now, at its smallest legible size:
   a 5x4 white field with a red cross.
 
-## Campaign props and chants
+## Chants
 
-`LEVEL.props`: **banners and bunting** hang overhead in the world, in rows the
-levels do not use, so they never sit behind the action. (A billboard-and-poster
-layer was tried and taken out on playtest feedback.)
+(Billboards, posters, and then overhead banners and bunting were tried in the
+levels and taken out on playtest feedback - the red-and-white look stays on
+the title, HUD, cards and end screens.)
 
 **Chants** go a syllable at a time, each a square-wave shout and a clap:
 MI-SHA!, KMA-RA!, GA-DA-DE-KI! (resign!), SA-KAR-TVE-LO!, NO-ME-RI KHU-TI!

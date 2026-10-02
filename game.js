@@ -1134,12 +1134,6 @@ const LEVEL_1 = {
      Every act had its whole roster standing on the floor, which made the
      platforms pure decoration: nothing up there but coins, so there was never
      a reason to be careful on them. */
-  /* Campaign dressing (see drawProps): banners and bunting hung overhead. */
-  props: [
-    { kind: 'banner',    x: 24,  y: 3, w: 5, text: 'KMARA!' },
-    { kind: 'bunting',   x: 90,  y: 2, w: 6 },
-    { kind: 'banner',    x: 112, y: 2, w: 6, text: 'VOTE #5' },
-  ],
 
   enemies: [
     { t: 'walker', x: 22 },  { t: 'walker', x: 34 },
@@ -1263,9 +1257,6 @@ const LEVEL_2 = {
     { x: 149, y: 8,  n: 3 }, { x: 170, y: 8,  n: 6 },
   ],
 
-  props: [
-    { kind: 'banner',    x: 104, y: 3, w: 6, text: 'FREE MEDIA*' },
-  ],
 
   enemies: [
     { t: 'l2girl',  x: 14 }, { t: 'l2man',   x: 22 },
@@ -1395,12 +1386,6 @@ const LEVEL_3 = {
     { x: 197, y: 9,  n: 3 }, { x: 215, y: 9,  n: 5 },
   ],
 
-  props: [
-    { kind: 'banner',    x: 20,  y: 3, w: 5, text: 'KMARA!' },
-    { kind: 'banner',    x: 72,  y: 3, w: 7, text: 'GADADEKI!' },
-    { kind: 'banner',    x: 160, y: 3, w: 6, text: 'KMARA!' },
-    { kind: 'bunting',   x: 194, y: 2, w: 26 },
-  ],
 
   enemies: [
     { t: 'l3guard', x: 16 }, { t: 'l3guard', x: 24 }, { t: 'l3guard', x: 31 },
@@ -1608,11 +1593,6 @@ function validateText() {
     check(`intro ${k}`, sp.l2, VIEW_W - 8);
   }
   for (const [k, sy] of Object.entries(CHANTS)) check(`chant ${k}`, sy.join('-'));
-  LEVELS.forEach((L, i) => {
-    for (const p of L.props || []) {
-      if (p.kind === 'banner') check(`act ${i + 1} banner at ${p.x}`, p.text, p.w * TILE - 6);
-    }
-  });
   if (warn.length) console.warn('text:\n  ' + warn.join('\n  '));
   return warn;
 }
@@ -6969,31 +6949,7 @@ const noKeyboard = (() => {
   } catch (e) { return false; }
 })();
 
-/* ---------------------------------------------------------- campaign
-
-   Banners and bunting hung overhead in the world, in rows the levels do not
-   use, so they never sit behind the action.
-
-   LEVEL.props entries, in tiles:
-     { kind: 'banner', x, y, w, text }   sways
-     { kind: 'bunting', x, y, w }        sags                                  */
-function drawProps() {
-  const props = LEVEL.props;
-  if (!props) return;
-  for (const p of props) {
-    if (p.kind !== 'banner' && p.kind !== 'bunting') continue;
-    const bx = p.x * TILE, bw = p.w * TILE;
-    if (bx + bw < cam.x - 16 || bx > cam.x + VIEW_W + 16) continue;
-    if (p.kind === 'bunting') { drawBunting(p.y * TILE, bx, bx + bw, 6); continue; }
-    const by = p.y * TILE + Math.round(Math.sin(game.time * 1.5 + p.x));
-    g.fillStyle = '#c8c8c8';
-    g.fillRect(bx, by - 6, 1, 6); g.fillRect(bx + bw - 1, by - 6, 1, 6);
-    g.fillStyle = UNM.red;   g.fillRect(bx, by, bw, 11);
-    g.fillStyle = UNM.redLt; g.fillRect(bx, by, bw, 1);
-    g.fillStyle = UNM.redDk; g.fillRect(bx, by + 10, bw, 1);
-    drawTextCentered(g, p.text, bx + bw / 2, by + 2, UNM.white, 1, UNM.redDk);
-  }
-}
+/* ---------------------------------------------------------- chants
 
 /* Chants, a syllable at a time, each one a square-wave shout and a clap.
    One at a time, world-space, rising off whoever started it. */
@@ -7287,7 +7243,6 @@ function renderWorld() {
 
   g.save();
   g.translate(-Math.round(cam.x) + sx, -Math.round(cam.y) + sy);
-  drawProps();
   drawTiles();
   drawLevelFlags();
   drawEntities();
