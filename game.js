@@ -515,7 +515,7 @@ const Sfx = (() => {
 /* ---------------------------------------------------------- chiptune
 
    Two synthesised loops, so acts do not have to share one recorded track.
-   `LEVEL.music` names one; anything else plays DEFAULT_TUNE.
+   `LEVEL.music` names one; anything else falls back to assets/music.m4a.
 
      dark  - D natural minor, 84bpm, i-VI-III-VII. Square bass, a sparse
              triangle line that leaves most of the bar empty, a noise tick on
@@ -668,12 +668,11 @@ const ChipTune = (() => {
 })();
 
 /* Recorded tracks, by name. An act names either one of these or one of the
-   TUNES above; anything unrecognised plays DEFAULT_TUNE. Elements are made
-   on demand and kept, so switching acts does not re-download. Empty for now:
-   every act is synthesised, so the game ships no third-party recordings. Add
-   a file here only if its licence allows redistribution. */
-const TRACKS = {};
-const DEFAULT_TUNE = 'dark';
+   TUNES above; anything unrecognised falls back to `main`. Elements are made
+   on demand and kept, so switching acts does not re-download. */
+const TRACKS = {
+  main:  'assets/music.m4a',            // AAC: about a third the size of the mp3
+};
 
 const Music = (() => {
   const els = {};
@@ -696,9 +695,7 @@ const Music = (() => {
   let forced = null;
   const tuneFor  = () => {
     if (forced && TUNES[forced]) return forced;
-    const m = typeof LEVEL !== 'undefined' && LEVEL ? LEVEL.music : null;
-    if (TUNES[m]) return m;
-    return TRACKS[m] ? null : DEFAULT_TUNE;
+    return (typeof LEVEL !== 'undefined' && LEVEL && TUNES[LEVEL.music]) ? LEVEL.music : null;
   };
   const trackFor = () => {
     if (forced && TRACKS[forced]) return forced;
@@ -777,46 +774,31 @@ const Music = (() => {
   };
 })();
 
-/* One-shot laugh for the end of a run. Counts as an effect, not music, so it
-   follows the effects mute (N) rather than the music mute (M). Synthesised —
-   six falling "ha"s, each a square burst that drops in pitch, with a vibrato
-   wobble so it reads as a voice rather than a beep. */
+/* One-shot sample for the end of a run. Counts as an effect, not music, so it
+   follows the effects mute (N) rather than the music mute (M). */
 const Stinger = (() => {
-  const HAS = 6, GAP = 0.15, HA = 0.11;
-  let until = 0;                        // actx time the current laugh ends
-
-  function ha(a, t, f) {
-    const o = a.createOscillator(), g = a.createGain();
-    const lfo = a.createOscillator(), depth = a.createGain();
-    o.type = 'square';
-    o.frequency.setValueAtTime(f, t);
-    o.frequency.exponentialRampToValueAtTime(f * 0.72, t + HA);
-    lfo.frequency.value = 28; depth.gain.value = f * 0.04;
-    lfo.connect(depth).connect(o.frequency);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.07, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + HA);
-    o.connect(g).connect(a.destination);
-    o.start(t); lfo.start(t);
-    o.stop(t + HA + 0.02); lfo.stop(t + HA + 0.02);
-  }
+  let el = null, failed = false;
+  const ensure = () => {
+    if (el || failed) return el;
+    el = new Audio('assets/laugh.mp3');
+    el.volume = 0.8;
+    el.addEventListener('error', () => { failed = true; console.warn('laugh: assets/laugh.mp3 failed to load'); });
+    return el;
+  };
   return {
-    /* onlyIfIdle matters for the proximity trigger: restarting the laugh on
-       every approach would stutter it. Let it finish instead. */
+    /* onlyIfIdle matters for the proximity trigger: the clip runs 5.7s, far
+       longer than it takes to walk past someone, so restarting it on every
+       approach would stutter it constantly. Let it finish instead. */
     laugh({ onlyIfIdle = false } = {}) {
       if (Sfx.muted) return;
-      const a = Sfx.context;
+      const a = ensure();
       if (!a) return;
-      if (onlyIfIdle && a.currentTime < until) return;
-      try {
-        if (a.state === 'suspended') a.resume();
-        const t0 = a.currentTime + 0.02;
-        for (let i = 0; i < HAS; i++) ha(a, t0 + i * GAP, 620 - i * 38);
-        until = t0 + HAS * GAP + 0.05;
-      } catch (e) { /* no audio device */ }
+      if (onlyIfIdle && !a.paused && !a.ended) return;
+      try { a.currentTime = 0; } catch (e) { /* not seekable yet */ }
+      a.play().catch(() => { /* no gesture yet */ });
     },
-    get playing() { const a = Sfx.context; return !!a && a.currentTime < until; },
-    get element() { return null; },
+    get playing() { return !!el && !el.paused && !el.ended; },
+    get element() { return el; },
   };
 })();
 

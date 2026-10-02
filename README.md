@@ -4,8 +4,9 @@
 
 An 8-bit side-scrolling platformer about moments in recent Georgian history,
 rendered into a 320×180 canvas and built for screen recording. No
-dependencies, no build step. Every sound, music included, is synthesised in
-code with Web Audio.
+dependencies, no build step. The music and the laugh are recordings; the
+rest of the sound effects, and the end-credits loop, are synthesised in code
+with Web Audio.
 
 | | | |
 |---|---|---|
@@ -71,7 +72,8 @@ reached.
 
 ## Music
 
-Synthesised chiptune loops (see *The soundtrack*). They start on the keypress that
+`assets/music.m4a` (AAC, about a third the size of the original mp3), looping at
+0.4 volume. It starts on the keypress that
 leaves the title screen, never at load: browsers refuse audio until a real user
 gesture, so a `play()` on page load just throws and leaves the track silently
 dead.
@@ -260,9 +262,16 @@ inescapable loop.
 Khachapuri makes him immune, which is the joke: the only thing that beats it is
 lunch.
 
-A synthesised laugh (`Stinger`) plays as you come into her radius — on the
-rising edge only, and skipped if the last one is still running, so walking
-back and forth past someone does not stutter it.
+`assets/laugh.mp3` plays as you come into her radius — on the rising edge only,
+and skipped if the clip is still running from the last one. It runs 5.7s, far
+longer than it takes to walk past someone, so restarting it on every approach
+would stutter it constantly.
+
+For one release (Oct 1, `669ed6e`) it was replaced by a synthesised six-"ha"
+burst, on the theory that the clip was third-party. That version peaked at
+0.069 against the clip's 0.8 and made 0.4s of sound against 5.7s — rendered and
+measured — so in play it was effectively silent. The clip is back; the rights
+were confirmed.
 
 `CHARM.immune` is the number that matters, not `cooldown`. Being charmed pins
 him where he stands — which is inside her hitbox — so a per-character cooldown
@@ -578,12 +587,12 @@ megabyte of load time and buys nothing.
 ### The soundtrack
 
 `ChipTune` holds named loops and `LEVEL.music` picks one; anything it does not
-recognise falls back to `DEFAULT_TUNE`.
+recognise falls back to `assets/music.m4a`.
 
 `TRACKS` holds recorded files by name and `TUNES` holds synthesised loops;
-`LEVEL.music` names either, and anything unrecognised falls back to `DEFAULT_TUNE` (`dark`). `TRACKS` is empty: the game ships no recordings.
+`LEVEL.music` names either, and anything unrecognised falls back to `main`.
 
-**All three acts play the `dark` loop, and it restarts with every level** —
+**All three acts play `assets/music.m4a`, and it restarts with every level** —
 entering an act, and restarting one after a death. `Music.cue()` does that from
 `reset()`, deliberately *not* from `retune()`: retune fires on any `loadLevel`,
 including the boot loop that validates all three acts, and re-cueing there
@@ -595,7 +604,10 @@ would fight itself.
 That is what `forced` is for: a moment outside the levels claiming the music
 without pretending to be one.
 
-Any recorded track added to `TRACKS` must be licensed for redistribution — the repo and the Pages site both serve it publicly.
+Unused but kept, in case an act wants its own again: the `dark` synth loop. It
+costs nothing at runtime. Any recorded track added to `TRACKS` is served
+publicly by the repo and the Pages site, so it has to be one you have the
+rights to.
 
 Nothing is fetched until the first `Music.start()`, which only fires on a real
 keypress, so no track touches the boot payload. It stays ~1.6MB.
