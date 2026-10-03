@@ -194,19 +194,22 @@ Placement is in `LEVEL.items` and `LEVEL.flags`, in tile coordinates.
 
 Every mid boss holds a full-height gate shut (`gate` in `LEVEL.enemies`), so
 none of them can be run past. Killing him drops it. Aslan holds `finalGate`
-(226), which is the only way to the flag — so no path to the win screen skips
+(286), which is the only way to the flag — so no path to the win screen skips
 the fight.
 
 The endgame runs in clean stages, deliberately non-overlapping:
 
 | Tile | |
 |---|---|
-| 200 | third mid boss |
-| 206 | his gate |
-| 208 | boss arena begins — Aslan starts diving |
-| 210 | pipe, a step to jump from |
-| 226 | final gate |
-| 231 | flag |
+| 260 | third gate boss (Targamadze, round two) |
+| 266 | his gate |
+| 268 | boss arena begins — Aslan starts diving |
+| 270 | pipe, a step to jump from |
+| 286 | final gate |
+| 291 | flag |
+
+(Every act-1 tile from 144 on moved 60 along when the sea went in — see
+**The sea** below. Older notes in this file that quote pre-sea numbers say so.)
 
 Gates are full height (rows 0–12). A gate standing only a few tiles proud of
 the floor would still lose to a 3.9-tile jump taken off a nearby platform.
@@ -336,7 +339,7 @@ by reading the code:
 
 Two placement rules that matter:
 
-- **`bossTriggerX` (128)** is where he appears; **`bossArenaX` (196)** is where
+- **`bossTriggerX` (128)** is where he appears; **`bossArenaX` (268)** is where
   he starts diving. Without that second gate he was beatable at the trigger, and
   since beating him launches his exit — and the exit ends the level — winning
   the fight ended the run halfway through. That was the "boss flew away mid
@@ -444,6 +447,9 @@ catches:
   into the masonry beside them and were silently uncollectable.
 - **Card lines wider than the screen** — the font is fixed-width, so breaks are
   hand-placed.
+- **Rooms** (`validateRoom`, on each room's own grid): exactly one way in and
+  one way out, side walls sealed rows 0–12, an unbroken floor, the way in not
+  dropping into a solid tile, and some pipe in some act warping to it.
 
 
 ## Deploying
@@ -1135,13 +1141,15 @@ fix is a sprite edit that thickens it in the source, not pixels drawn on top.
 
 ## Throwing roses
 
-Roughly every third `?` block holds three roses instead of a coin — keyed off
+Roughly every third `?` block holds five roses instead of a coin (it used to
+say ROSES +3 while paying five; the text now says what it pays) — keyed off
 the tile rather than randomly, so a block that paid out ammo last run still
 does. `X` throws one; it arcs about 140px and **staggers** whatever it hits for
 1.7s (1.2s on a boss).
 
 The HUD shows `ROSES Xn`, and `PRESS X TO THROW` blinks under it until you
-actually throw your first one, then never again.
+actually throw your first one, then never again. In Act 1 the same key throws
+**flags** instead — see **Militia defects**.
 
 It does not kill. That is the point: every fight in the game resolved as *wait
 for the opening and land on his head*, and one ranged verb lets you **open** a
@@ -1231,8 +1239,11 @@ seconds, flooring any guard near them. Bosses are immune — the street can shif
 a cordon, not a minister.
 
 They are pressure, not units: no controls, no collision, and they never block
-you. `LEVEL.crowd` turns them on — **Act 2 only**. Act 1 walks it alone, which
-is the point of Act 1: the street has not come out yet.
+you. `LEVEL.crowd` means *flagpoles feed the crowd* — Act 2 only. The crowd
+itself runs wherever it has people (`crowd.active`), because Act 1 now has one
+of its own: the militia who change sides when you hit them with a flag (see
+**Militia defects**). Its settings come from `LEVEL.crowdCfg` over the
+`CROWD` defaults.
 
 `CROWD_PROPS` says what each marcher is holding, by draw index — three **little
 red flags** on sticks, three **roses**, two pairs of empty hands, across the
@@ -1319,8 +1330,9 @@ jump off a high ledge (13px, leaving 19px of ground) or the ultra launch.
 
 ## The bridge (Act 1)
 
-Tiles 179–192 used to be a four-tile pit. 179–194 is now a **fifteen-tile
-ravine** spanned by a `T.BRIDGE` deck laid flush with the ground either side, so
+Tiles 179–192 used to be a four-tile pit. 179–194 — **239–254 since the sea
+pushed everything 60 tiles along** (pre-sea numbers below are marked) — is now a
+**fifteen-tile ravine** spanned by a `T.BRIDGE` deck laid flush with the ground either side, so
 it reads as a road rather than a platform to climb.
 
 **Why fifteen and not thirteen.** Thirteen looked correct at 60fps — the powder
@@ -1367,7 +1379,7 @@ tile you were about to step onto, so a 0.6s reaction — an ordinary human beat 
 still cost a heart with nothing you could have done.
 
 Then the **ultra white powder** drops on the near lip, and it is the only way
-over. Apex is 122px; the crossing lands around tile 194.
+over. Apex is 122px; the crossing lands around tile 254 (194 pre-sea).
 
 A pure vertical mega-jump was the wrong shape: to carry fifteen tiles on hang
 time alone it would have to rise fifteen tiles, which is taller than the level.
@@ -1380,8 +1392,9 @@ speed cap, not the height.
 requires you to make, and with the cut applied a tapped launch landed 92px short
 every time.
 
-The pipe that used to sit at 176 was moved back to 165. At 176 it was a wall one
-tile short of the ravine — you cleared it, landed on the single tile at 178 and
+The pipe that used to sit at 176 was moved back to 165 (236 → 225 since the
+sea). At 176 it was a wall one tile short of the ravine — you cleared it, landed
+on the single tile at 178 and
 were already over the edge, with no ground to build up the speed the crossing
 needs.
 
@@ -1399,12 +1412,150 @@ Two things the widened ravine broke, and how they are fixed:
 
 - `MidBoss` was the **only gate holder never leashed**. His last-hit leap
   carries 5.3 tiles and the ledge turn is suppressed mid-leap, so he could jump
-  off the 194 lip, fall out of the world, and hand you gate 206 for free. He now
+  off the 194 lip, fall out of the world, and hand you gate 206 (254 and 266
+  since the sea) for free. He now
   gets `spanAround` + `leash` like every other gate holder.
 - `shadowUnder` used `groundYAt`, which returns a row-13 fallback for an empty
   column — it painted a shadow in mid-air the whole way across, reading as an
   invisible floor. It uses `groundBelow` and bails on `null`. The crowd had the
   same bug and the same fix; over Act 2's four-tile pits neither was visible.
+
+## The sea (Act 1)
+
+The four-tile pit at 140–144 became **open water from 140 to 204**, crossed on
+a **banana boat**. Everything from 144 on moved 60 tiles along (`w` 300); the
+bridge, ravine, gates and arena kept their spacing exactly, so their
+measurements still hold — the ravine sweep gives identical results before and
+after the shift.
+
+- The banana (`BananaBoat`, 44px) sits docked at the pier. Stand on it for
+  0.4s (`SEA.boardT`) and a speedboat takes up the rope: 0 → 100px/s
+  (`SEA.tow`, `accel` 85), camera leading with the boat's speed. Near the beach
+  the speedboat drops the rope and peels away, and the banana coasts onto the
+  sand at 204.
+- Hazards spawn just off-screen right, keyed to the tile the banana's nose
+  reaches (`SEA.schedule`): patrol launches coming the other way (jump them, or
+  land on one and sink it, 300) and spiked mines (stomping one blows up under
+  you). Aslan, already stalking from 128, floats `PATROL!`.
+- **Anything in the water** — below the surface by 8px and not riding — is a
+  splash and a pit: one heart, and `seaRun.fail()` sends the boat back to the
+  dock and calls the patrols off. A retry is a ten-second run.
+- Standing back on the pier with the boat out — beached on the far side, or
+  towing on without you after you hopped off at the start — brings it home and
+  calls the patrols off. An empty boat used to keep spawning them and they
+  sailed on over the pier into you. Any part of you over the pier counts (by
+  your centre, the last 5px of the lip read as sea), and patrol boats sink a
+  tile before the pier.
+- Hazards spawn clamped to the water, and whatever is left afloat is cleared
+  when the banana beaches. The last two used to spawn on the sand, one mine
+  right where the banana lands.
+- A flag-stunned patrol boat sails on afterwards (`PatrolBoat` resets its speed
+  every frame; the shared stun path zeroes `vx`).
+
+**Rideables** are the engine piece behind it: anything in `game.rideables` with
+a top you can stand on. They update before the player; `landOnRideables` lands
+him from above or keeps a rider stuck through bobbing, and hands its speed over
+as `carryVx`, which `moveAndCollide` adds to his own — so carrying still
+respects walls, and the carry survives a jump, so you land back on a moving
+boat. While airborne he keeps pace with the boat he left (`lastRide`), not
+the speed it had when he jumped — hopping while the banana was still speeding
+up landed him behind it. A hit while aboard, or mid-hop over the water (a mine
+you came down on), pops you up, never off: knockback there was a second heart
+in the sea. Measured: every hop from every spot on the banana, at every point
+of the launch, lands back on it at 60 and 30fps. The banana does not bob until
+it is a tile clear of the pier — a 1px dip with a rider still half over the
+lip pushed him into the pier's ground and the wall test shoved him a tile
+back.
+
+The water is `LEVEL.water [{from, to, y}]`: a body drawn behind everything and a
+translucent waterline drawn in front, so boats sit *in* it. The sunset is one
+760px untiled panorama (`seaBg`) — a mirrored tile put two suns in the sky.
+
+## The mayor's limousine (Act 1, gate 2)
+
+Three Targamadzes in one act was too many; the middle gate is now held by
+**Aslan's son, the mayor, in his limousine** (`Limo`, `LIMO`). It parks, revs
+for 0.6s, charges across the arena at up to 150px/s, then **stops at the end
+of its run so he can wave through the sunroof** — the only time its roof can be
+stomped. Any other stomp is a `BULLETPROOF` clank. Each hit lets two bodyguards
+out of the doors — beside the car, on the side with more street (the street
+ends at his own gate, not where the ground does), on the street itself, and
+harmless for as long as the car is after a hit (`LIMO.grace`).
+Spawned inside the car's footprint they came up under the player still
+bouncing off the roof, and a clean stomp cost a heart most times. Three hits, a
+slow-motion finisher, and the gate at 221 opens. It has
+its own boss card (ASLAN'S SON / THE CITY BUDGET, ON WHEELS).
+
+## Militia defects (Act 1)
+
+In Act 1, `X` throws **small five-cross flags** (`LEVEL.throwKind = 'flag'`).
+A plain soldier hit by one **defects**: his rifle drops, he turns, hops, and
+walks back to join the militia following you. +300 flat, deliberately outside
+the combo chain, so throwing never out-scores stomping. Targamadze, his dogs,
+the limousine and Aslan's patrol boats only get the ordinary stun.
+
+- **Ammo** reuses the rose counter, shown as `FLAGS Xn`: three to start, three
+  more at every pole you raise, five from a paying `?` block, fifteen at most
+  (`AMMO`). A gain blinks the counter yellow rather than floating another
+  label over the pole, which already floats +300 and starts a chant there. About 26 over the act against 21 walkers plus the limousine's
+  guards, so you choose who to turn.
+- **The flag flies flatter than a rose.** A walker is 17px tall, and the rose's
+  lob clears his head anywhere inside ~125px — measured, it only connected
+  between 130 and 160px. The flag rises at most 4px and stays at his height:
+  it connects from 10 to 170px.
+- A defector (`Turncoat`) is a decorative actor, not an enemy: he left the enemy
+  list the moment he was hit, marked `noKill`, so he is never counted as a
+  kill. He always merges within three seconds, wall or pit in the way or not,
+  so nobody is ever lost or stuck on a ledge.
+- **The militia** is the act's crowd (`crowdCfg`: max 10, surge every 4.5s once
+  three have joined, reach 64px, `STAND DOWN!`, the MI-SHA chant). They are the
+  walker sprite with a flag on a stick, trailing away from you and facing you.
+  Each soldier stands on your floor, steps up onto anything up to three tiles
+  high (they stand on pipes), and the line ends at a gap or a wall — nobody on
+  the sea, over a pit or up the cellar wall (`militiaFooting`). The floor is
+  read from your feet only while you are on them, so a jump under a brick row
+  no longer stands anyone on the bricks.
+  Out at sea up to three ride the back of the banana. **They stop at the
+  ravine lip** and shout `WE ARE WITH YOU!` — Aslan's arena stays yours.
+  Gate holders and anything afloat are exempt from the surge, as before.
+
+## Rooms: Aslan's cellar
+
+Hold **down** for 0.3s on the pipe at tile 48 and you sink into it. Not a tap:
+ducking a bullet or a dog while standing on a pipe must never send you
+underground. DOWN has to be let go between warps (`warpLatch`) — coming up out
+of 48 puts you on the pipe that leads straight back down — and a warp never
+overrides a death, a win or an outro that happened earlier in the same frame. A small blinking arrow marks a pipe that goes somewhere once you
+are near it.
+
+**Aslan's cellar** is a 30-tile vault under the boulevard — stone floor, walls
+and ceiling, a brick back wall with alcoves full of gold bars and money sacks,
+two bare bulbs. About thirty coins, two guards to turn or stomp, and a `?`
+block of flags. You drop in through a pipe in the ceiling and leave by the one
+on the floor at the far end, which brings you back up out of 48.
+
+How it works (`LEVEL.rooms`, `enterRoom` / `exitRoom`):
+
+- A room is a small LEVEL-shaped object, normalised at boot
+  (`normaliseRooms`): it inherits the act's throw kind, crowd settings and
+  flags style, and finish, gates, bridge, water and the boss trigger are forced
+  off. Its pipes carry `hang: true` (the way in) and `exit: true` (the way out);
+  the act's pipe carries `warp: 'cellar'`. Blocks gained a height `h` for walls
+  and the vault, and `LEVEL.roof` makes `groundYAt` scan from under the vault so
+  enemies are not seated on the roof.
+- Going in sets the act aside whole: `LEVEL`, the **grid by reference** (used
+  `?` blocks, broken bricks, opened gates and a cut bridge stay exactly as
+  left), and every `WORLD_KEYS` list. `LEVEL` is assigned directly, never via
+  `loadLevel`, which would retune the music. Coming out restores it all.
+- A visited room is cached, so its coins never come back. Death and `R` go
+  through `reset()`, which forgets rooms along with everything else.
+- **The militia come along** — the crowd is not set aside, only moved to the
+  pipe, so its numbers live in one place. A defector still walking when you
+  warp joins as the warp starts, while the level he is in is still the
+  current one (merged after the swap, the cellar's were cached away with it).
+- The pipe animation is its own state (`pipe`): 0.45s sinking, the swap, 0.45s
+  rising (or dropping out of the ceiling pipe), with the player clipped to the
+  part outside the pipe. The clock runs; nothing else moves.
 
 
 ## Damage order

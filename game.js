@@ -627,6 +627,7 @@ const Sfx = (() => {
     gate:  () => seq([[220, .12], [330, .12], [494, .22]], 100, 'square', 0.05),
     charm: () => seq([[660, .10], [880, .16]], 95, 'triangle', 0.05),
     pit:   () => tone(260, 0.45, 'sawtooth', 0.06, 55),
+    pipe:  () => seq([[196, .07], [131, .07], [196, .07], [131, .07], [98, .12]], 70, 'square', 0.05),
     win:   () => seq([[523, .14], [659, .14], [784, .14], [1047, .30]], 130, 'triangle', 0.05),
     lose:  () => seq([[392, .18], [330, .18], [262, .40]], 170, 'triangle', 0.05),
     start: () => seq([[523, .09], [784, .09], [1047, .20]], 90, 'square', 0.05),
@@ -991,8 +992,17 @@ addEventListener('keyup', e => Input.keys.delete(e.code));
 const T = { AIR: 0, GROUND: 1, BRICK: 2, QUESTION: 3, USED: 4, PLATFORM: 5, PIPE: 6, GATE: 7, BRIDGE: 8 };
 
 const LEVEL_1 = {
-  w: 240, h: LEVEL_H,
-  backdrops: [{ art: 'bg', fromX: 0, par: 0.34, tile: true }],
+  w: 300, h: LEVEL_H,
+  // the boulevard, a sunset over the sea for the crossing, the boulevard again
+  backdrops: [
+    { art: 'bg',    fromX: 0,   par: 0.34, tile: true },
+    /* One 760px panorama, not a mirrored tile - a mirrored sunset has two
+       suns. Anchored so its left edge is on screen when the dissolve into it
+       starts (tile 134) and its right edge still is at 212: (212-124)*16*0.34
+       is 479px of drift, plus 320 of screen. */
+    { art: 'seaBg', fromX: 146, par: 0.34, tile: false, anchorX: 124 },
+    { art: 'bg',    fromX: 212, par: 0.34, tile: true },
+  ],
   subtitle: 'GAATAVISUPLE ACHARA',
   invincibleLabel: 'ACHARULI',
   card: [
@@ -1002,19 +1012,23 @@ const LEVEL_1 = {
   ],
   winLines: [['ASLANI GAIQTSA', '#ffd85e'], ['ACHARA TAVISUPALIA!', '#7ae07a']],
   start: { x: 3, y: 11 },
-  finishX: 231,
-  /* Endgame runs in clean stages so nothing overlaps:
-       200  third mid boss
-       206  his gate — opens when he dies
-       210  pipe (a step to jump from during the fight)
-       208+ boss arena: Aslan starts diving
-       226  final gate — opens when Aslan is beaten
-       231  flag                                                            */
+  finishX: 291,
+  /* The sea at 140-204 (the banana boat) pushed everything after it 60 tiles
+     along; relative to each other the bridge, the ravine, the gates and the
+     arena are exactly where they were, so their measurements still hold.
+
+     Endgame runs in clean stages so nothing overlaps:
+       260  third gate boss (Targamadze, round two)
+       266  his gate — opens when he dies
+       270  pipe (a step to jump from during the fight)
+       268+ boss arena: Aslan starts diving
+       286  final gate — opens when Aslan is beaten
+       291  flag                                                            */
   finalBoss: 'ASLAN',
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
-  bossArenaX: 208,     // only past here does he commit to dives you can punish
+  bossArenaX: 268,     // only past here does he commit to dives you can punish
 
-  /* 179-192 was a four-tile pit. It is now a FIFTEEN-tile ravine spanned by a
+  /* The ravine (was 179-194, now 239-254 after the sea) is a FIFTEEN-tile gap spanned by a
      bridge that gets blown as he steps on it, and the ultra powder that drops
      when it goes is the only way over.
 
@@ -1024,9 +1038,17 @@ const LEVEL_1 = {
      piece. Measured at 60/50/30fps, sweeping every launch frame: at fifteen the
      powder fails at all three and the ultra crosses at all three, held or
      tapped. Seventeen is where the ultra itself starts falling short. */
-  ground: [[0, 58], [62, 90], [94, 140], [144, 179], [194, 240]],
-  bridge: { from: 179, to: 194, row: 13 },
+  /* 140-204 is open sea now, not a 4-tile pit: the banana boat crosses it.
+     See LEVEL_1.water and boatRun. */
+  ground: [[0, 58], [62, 90], [94, 140], [204, 239], [254, 300]],
+  water: [{ from: 140, to: 204, y: 212 }],
+  bridge: { from: 239, to: 254, row: 13 },
   oldFlag: 'achara',       // act 1 flies Achara's flag, not the 1918 one
+  /* X throws small five-cross flags here, not roses: a guard hit by one
+     defects and falls in behind you (see Walker.defect and the militia crowd).
+     The flagpoles pay ammo instead of marchers. */
+  throwKind: 'flag',
+  crowdCfg: { militia: true, max: 10, gap: 30, surgeEvery: 4.5, surgeReach: 64, minToSurge: 3, chant: 'misha' },
 
   blocks: [
     { x: 14, y: 9,  w: 1, t: T.QUESTION },
@@ -1049,32 +1071,32 @@ const LEVEL_1 = {
     { x: 122, y: 9,  w: 3, t: T.PLATFORM },
     { x: 131, y: 10, w: 4, t: T.PLATFORM },
 
-    { x: 150, y: 9,  w: 3, t: T.PLATFORM },
-    { x: 157, y: 7,  w: 3, t: T.PLATFORM },
-    /* Split around the pipe at 165-166. The run used to span 164-167, which
+    { x: 210, y: 9,  w: 3, t: T.PLATFORM },
+    { x: 217, y: 7,  w: 3, t: T.PLATFORM },
+    /* Split around the pipe at 225-226. The run used to span 224-227, which
        put two of its tiles flat on the pipe cap with zero headroom under
        them - unbumpable, and the ? among them was uncollectable. Moving that
        pipe back to 165 for the ravine run-up is what put it there. */
-    { x: 164, y: 9,  w: 1, t: T.BRICK },
-    { x: 167, y: 9,  w: 3, t: T.BRICK },
-    { x: 169, y: 9,  w: 1, t: T.QUESTION },
-    { x: 173, y: 10, w: 3, t: T.PLATFORM },
+    { x: 224, y: 9,  w: 1, t: T.BRICK },
+    { x: 227, y: 9,  w: 3, t: T.BRICK },
+    { x: 229, y: 9,  w: 1, t: T.QUESTION },
+    { x: 233, y: 10, w: 3, t: T.PLATFORM },
 
-    { x: 196, y: 10, w: 4, t: T.PLATFORM },
-    { x: 204, y: 8,  w: 2, t: T.BRICK },   // trimmed to keep column 206 clear for the gate
-    { x: 214, y: 10, w: 3, t: T.PLATFORM },
-    { x: 221, y: 9,  w: 3, t: T.PLATFORM },
+    { x: 256, y: 10, w: 4, t: T.PLATFORM },
+    { x: 264, y: 8,  w: 2, t: T.BRICK },   // trimmed to keep column 266 clear for the gate
+    { x: 274, y: 10, w: 3, t: T.PLATFORM },
+    { x: 281, y: 9,  w: 3, t: T.PLATFORM },
   ],
 
   pipes: [
     { x: 31,  y: 11, h: 2 },
-    { x: 48,  y: 11, h: 2 },
+    { x: 48,  y: 11, h: 2, warp: 'cellar' },   // hold DOWN on it: Aslan's cellar
     { x: 110, y: 11, h: 2 },
-    /* Was at 176. That put a wall one tile short of the ravine: he cleared the
+    /* Was at 236 (176 before the sea). That put a wall one tile short of the ravine: he cleared the
        pipe, landed on the single tile at 178 and was already over the edge,
        with no ground to build up the speed the crossing needs. */
-    { x: 165, y: 10, h: 3 },
-    { x: 210, y: 11, h: 2 },
+    { x: 225, y: 10, h: 3 },
+    { x: 270, y: 11, h: 2 },
   ],
 
   coinRuns: [
@@ -1083,12 +1105,14 @@ const LEVEL_1 = {
     { x: 58,  y: 9,  n: 4 }, { x: 73,  y: 6,  n: 3 },
     { x: 79,  y: 4,  n: 3 }, { x: 90,  y: 9,  n: 4 },
     { x: 105, y: 8,  n: 5 }, { x: 114, y: 5,  n: 4 },
-    { x: 132, y: 8,  n: 4 }, { x: 140, y: 9,  n: 4 },
-    // 170 not 166, and 200 not 201: both used to run into the masonry beside
+    { x: 132, y: 8,  n: 4 },
+    // arcs over the sea, picked up from the banana boat
+    { x: 150, y: 10, n: 3 }, { x: 166, y: 9,  n: 4 }, { x: 184, y: 10, n: 3 },
+    // 230 not 226, and 260 not 261: both used to run into the masonry beside
     // them and spawn coins inside solid tiles, where they cannot be collected
-    { x: 158, y: 5,  n: 3 }, { x: 170, y: 9,  n: 4 },
-    { x: 195, y: 9,  n: 4 }, { x: 200, y: 8,  n: 4 },
-    { x: 215, y: 8,  n: 3 },
+    { x: 218, y: 5,  n: 3 }, { x: 230, y: 9,  n: 4 },
+    { x: 255, y: 9,  n: 4 }, { x: 260, y: 8,  n: 4 },
+    { x: 275, y: 8,  n: 3 },
   ],
 
   // khachapuri = temporary invincibility, rose = heal one heart.
@@ -1099,19 +1123,19 @@ const LEVEL_1 = {
     { x: 50,  y: 10, t: 'powder' },      // before the first mid boss
     { x: 100, y: 10, t: 'rose' },
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
-    { x: 150, y: 9,  t: 'rose' },
-    { x: 154, y: 10, t: 'powder' },      // before the second mid boss
-    /* Past the landing, not on it. At 195 it sat one tile off the far lip and
+    { x: 210, y: 8,  t: 'rose' },        // on the 210-212 ledge, past the beach
+    { x: 214, y: 10, t: 'powder' },      // before the limousine
+    /* Past the landing, not on it. At 255 it sat one tile off the far lip and
        handed the double jump straight back, so any later fall was re-crossed
        with powder+ultra rather than the ultra alone. */
-    { x: 199, y: 9,  t: 'powder' },      // before the third mid boss
-    { x: 202, y: 9,  t: 'khachapuri' },  // the act's one invincibility
-    { x: 212, y: 10, t: 'powder' },      // inside the arena, before Aslan
-    { x: 218, y: 9,  t: 'rose' },
+    { x: 259, y: 9,  t: 'powder' },      // before the third gate boss
+    { x: 262, y: 9,  t: 'khachapuri' },  // the act's one invincibility
+    { x: 272, y: 10, t: 'powder' },      // inside the arena, before Aslan
+    { x: 278, y: 9,  t: 'rose' },
   ],
 
   // Flagpoles flying the old republic flag; touching one changes it over.
-  flags: [12, 45, 76, 108, 145, 171, 218],   // 171 not 186: 186 is over the ravine now
+  flags: [12, 45, 76, 108, 206, 231, 278],   // 231 not 246: 246 is over the ravine
 
   // Placed to make a stretch awkward rather than to pad it out: on the run-up
   // to a gap, beside a gate, and in the boss arena.
@@ -1119,10 +1143,10 @@ const LEVEL_1 = {
      at 58-62 and her pull dragged the player over the edge — then the respawn
      put him back inside her radius, so she pulled him straight in again. An
      unbreakable loop that drained a heart per cycle. See validateLevel(). */
-  /* 203 not 198: the ultra crossing lands him around 195 and her pull radius
-     is 62px, so at 198 she caught him the instant he completed the one jump
+  /* 263 not 258: the ultra crossing lands him around 255 and her pull radius
+     is 62px, so at 258 she caught him the instant he completed the one jump
      the act forces him to make. */
-  charmers: [30, 42, 106, 168, 203],   // 106 not 102: clear of the gate at 101
+  charmers: [30, 42, 106, 228, 263],   // 106 not 102: clear of the gate at 101
 
   /* Each mid boss holds a gate shut. `gate` is the tile column that stays
      solid until he dies, so the level cannot be run past — every mid boss is
@@ -1148,17 +1172,53 @@ const LEVEL_1 = {
     { t: 'walker', x: 106, up: true },    // the wide 104-108 ledge
     { t: 'walker', x: 126 }, { t: 'walker', x: 134 },
     { t: 'walker', x: 133, up: true },    // the 131-134 ledge
-    { t: 'mid',    x: 152, gate: 161 },
-    { t: 'walker', x: 162 }, { t: 'walker', x: 170 },
-    { t: 'walker', x: 172 },
-    { t: 'walker', x: 174, up: true },    // the 173-175 ledge, last one before the bridge
-    { t: 'mid',    x: 200, gate: 206 },
-    { t: 'walker', x: 208 },
+    { t: 'limo',   x: 212, gate: 221 },   // the mayor's limousine
+    { t: 'walker', x: 222 }, { t: 'walker', x: 230 },
+    { t: 'walker', x: 232 },
+    { t: 'walker', x: 234, up: true },    // the 233-235 ledge, last one before the bridge
+    { t: 'mid',    x: 260, gate: 266 },   // Targamadze, round two
+    { t: 'walker', x: 268 },
   ],
 
   // Opens only when Aslan is beaten, so the flag cannot be reached by walking
   // past the fight.
-  finalGate: 226,
+  finalGate: 286,
+
+  /* Under the boulevard, through the pipe at 48: where the money went. Thirty
+     tiles of vault - stone floor, walls and ceiling - full of coins, two
+     guards to turn or stomp and a ? block of flags (16,8 is one of the
+     paying ones: (16*7 + 8*13) % 3 == 0). You drop in from the pipe in the
+     ceiling and leave by the one on the floor at the far end, which brings
+     you back up out of 48. See enterRoom(). */
+  rooms: {
+    cellar: {
+      w: 30, title: "ASLAN'S CELLAR", tiles: 'cellar', voidColor: '#140c0e',
+      roof: 5,                     // first open row under the vault
+      backdrops: [{ art: 'cellarBg', fromX: 0, par: 0.5, tile: true }],
+      ground: [[0, 30]],
+      blocks: [
+        { x: 0,  y: 0, w: 1,  h: 13, t: T.GROUND },   // walls
+        { x: 29, y: 0, w: 1,  h: 13, t: T.GROUND },
+        { x: 1,  y: 3, w: 28, h: 2,  t: T.GROUND },   // the vault
+        { x: 8,  y: 10, w: 4, t: T.PLATFORM },
+        { x: 14, y: 8, w: 2, t: T.BRICK },
+        { x: 16, y: 8, w: 1, t: T.QUESTION },
+        { x: 17, y: 8, w: 2, t: T.BRICK },
+        { x: 21, y: 10, w: 4, t: T.PLATFORM },
+      ],
+      pipes: [
+        { x: 7,  y: 5,  h: 2, hang: true },   // the way in - clear of the HUD at top left
+        { x: 26, y: 11, h: 2, exit: true },   // the way out, back to 48
+      ],
+      coinRuns: [
+        { x: 6,  y: 12, n: 2 }, { x: 8,  y: 8,  n: 4 },
+        { x: 13, y: 12, n: 6 }, { x: 14, y: 6,  n: 5 },
+        { x: 21, y: 8,  n: 4 }, { x: 20, y: 12, n: 4 },
+        { x: 26, y: 9,  n: 2 },
+      ],
+      enemies: [{ t: 'walker', x: 12 }, { t: 'walker', x: 19 }],
+    },
+  },
 };
 
 
@@ -1446,7 +1506,7 @@ let LEVEL = LEVEL_1;
    here and hit the temporal dead zone. The body only runs at spawn time. */
 function enemyKind(t) {
   return ({
-    walker: Walker, mid: MidBoss,
+    walker: Walker, mid: MidBoss, limo: Limo,
     l2girl: PressGirl, l2girl2: PressGirl2, l2man: PressMan,
     l2anchor: Anchor, l2camera: StudioCamera,
     l3guard: Guard, l3sleepy: Sleepy, l3svani: Svani,
@@ -1471,7 +1531,8 @@ function buildGrid() {
   for (const [a, b] of LEVEL.ground)
     for (let x = a; x < b; x++) { set(x, 13, T.GROUND); set(x, 14, T.GROUND); }
   for (const b of LEVEL.blocks)
-    for (let i = 0; i < b.w; i++) set(b.x + i, b.y, b.t);
+    for (let j = 0; j < (b.h || 1); j++)          // h: a room's walls and vault
+      for (let i = 0; i < b.w; i++) set(b.x + i, b.y + j, b.t);
   for (const p of LEVEL.pipes)
     for (let i = 0; i < p.h; i++) { set(p.x, p.y + i, T.PIPE); set(p.x + 1, p.y + i, T.PIPE); }
   // Laid flush with the ground either side, so it reads as a road and not as a
@@ -1577,6 +1638,26 @@ function validateLevel() {
   return warn;
 }
 
+/* A room must be a sealed box with one way in and one way out, and its way
+   back must lead to a pipe that warps into it. Run on the room's own grid. */
+function validateRoom(r) {
+  const warn = [];
+  const ins = r.pipes.filter(p => p.hang), outs = r.pipes.filter(p => p.exit);
+  if (ins.length !== 1) warn.push(`room ${r.id}: ${ins.length} ways in, wants 1`);
+  if (outs.length !== 1) warn.push(`room ${r.id}: ${outs.length} ways out, wants 1`);
+  if (!LEVELS.some(L => (L.pipes || []).some(p => p.warp === r.id)))
+    warn.push(`room ${r.id}: no pipe in any act leads here`);
+  for (let ty = 0; ty <= 12; ty++)
+    for (const tx of [0, r.w - 1])
+      if (!isSolid(grid[ty * r.w + tx])) warn.push(`room ${r.id}: wall open at ${tx},${ty}`);
+  if (r.ground.length !== 1 || r.ground[0][0] !== 0 || r.ground[0][1] !== r.w)
+    warn.push(`room ${r.id}: floor has a gap`);
+  const w = ins[0];
+  if (w && isSolid(grid[(w.y + w.h) * r.w + w.x])) warn.push(`room ${r.id}: the way in drops into a solid tile`);
+  if (warn.length) console.warn('rooms:\n  ' + warn.join('\n  '));
+  return warn;
+}
+
 /* Every line of drafted text in one place - boss cards, chants, slogans -
    checked once at boot for characters the font cannot draw and for boxes
    they do not fit. drawText skips an unknown glyph silently, so without this
@@ -1603,7 +1684,8 @@ const isSolid  = t => t === T.GROUND || t === T.BRICK || t === T.QUESTION || t =
 const isOneWay = t => t === T.PLATFORM;
 
 function groundYAt(tx) {
-  for (let ty = 0; ty < LEVEL.h; ty++) {
+  // a room's vault is a ceiling, not somewhere to stand: scan from below it
+  for (let ty = LEVEL.roof || 0; ty < LEVEL.h; ty++) {
     const t = tileAt(tx, ty);
     if (isSolid(t) || isOneWay(t)) return ty * TILE;
   }
@@ -1811,14 +1893,18 @@ function hitboxFor(key) {
 function moveAndCollide(e, dt, { oneWay = true } = {}) {
   const prevBottom = e.bottom;
 
-  e.x += e.vx * dt;
+  /* carryVx is the speed of whatever he is riding. Adding it here rather than
+     teleporting him keeps walls honest: a boat that carries him into the
+     beach stops him at the beach. Zero for everyone else. */
+  const mv = e.vx + (e.carryVx || 0);
+  e.x += mv * dt;
   let x0 = Math.floor(e.x / TILE), x1 = Math.floor((e.x + e.w - 1) / TILE);
   let y0 = Math.floor(e.y / TILE), y1 = Math.floor((e.y + e.h - 1) / TILE);
   for (let ty = y0; ty <= y1; ty++)
     for (let tx = x0; tx <= x1; tx++) {
       if (!isSolid(tileAt(tx, ty))) continue;
-      if (e.vx > 0)      { e.x = tx * TILE - e.w; e.vx = 0; e.hitWall = true; }
-      else if (e.vx < 0) { e.x = (tx + 1) * TILE; e.vx = 0; e.hitWall = true; }
+      if (mv > 0)      { e.x = tx * TILE - e.w; e.vx = 0; e.carryVx = 0; e.lastRide = null; e.hitWall = true; }
+      else if (mv < 0) { e.x = (tx + 1) * TILE; e.vx = 0; e.carryVx = 0; e.lastRide = null; e.hitWall = true; }
     }
 
   e.y += e.vy * dt;
@@ -1884,6 +1970,7 @@ class Player extends Entity {
     super(x, y, hb.w, hb.h);
     this.hp = 3; this.maxHp = 3; this.coins = 0;
     this.invuln = 0; this.invincible = 0; this.coyote = 0; this.buffer = 0;
+    this.ride = null; this.lastRide = null; this.carryVx = 0;      // see landOnRideables
     this.runT = 0; this.combo = 0;
     this.charmed = 0; this.charmPull = 0; this.charmSlow = false; this.charmImmune = 0;
     this.doubleJumpT = 0; this.airJumps = 0;
@@ -1923,16 +2010,21 @@ class Player extends Entity {
     if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
     Stats.add('hits');
     punch(this.cx < fromX ? -4 : 4, 0);
+    /* Riding, or in a hop off something carrying him over water: knockback
+       there throws him past a 44px banana into the sea, a second heart and
+       the whole crossing again for one mine. */
+    const riding = !!this.ride || (!!waterAt(this.cx) && !!this.carryVx);
     if (this.spendHeart() === 'rose') {
       this.invuln = CFG.hurtInvuln;
       this.vy = -150;
-      this.vx = (this.cx < fromX ? -1 : 1) * 110;
+      this.vx = riding ? 0 : (this.cx < fromX ? -1 : 1) * 110;
       shake = 4; flash = 0.4; Sfx.hurt();
       return;
     }
     this.invuln = CFG.hurtInvuln;
     this.vy = -150;
-    this.vx = (this.cx < fromX ? -1 : 1) * 110;
+    // knocked straight up while riding: a 44px banana is no place for knockback
+    this.vx = riding ? 0 : (this.cx < fromX ? -1 : 1) * 110;
     shake = 4; flash = 0.55; Sfx.hurt();
     burst(this.cx, this.y + this.h / 2, 14, { colors: ['#e8434f', '#fff'], speed: 100 });
     if (this.hp <= 0) game.lose();
@@ -1982,6 +2074,7 @@ class Player extends Entity {
        its own height, so respawning mid-crouch put him 11px low and he stood up
        into whatever was above. */
     this.h = this.standH; this.crouching = false; this.dropT = 0;
+    this.ride = null; this.lastRide = null; this.carryVx = 0;
     Stats.add('pits');
     const lost = this.spendHeart();
     this.combo = 0;
@@ -2005,10 +2098,10 @@ class Player extends Entity {
          the tile rather than Math.random so a given block is always the same
          one - a block that paid out ammo last run still does. */
       if ((tx * 7 + ty * 13) % 3 === 0) {
-        this.roses = Math.min(this.roses + 5, 15);
-        if (!this.hasThrown) this.throwHint = 6;   // prompt until they use one
+        this.roses = Math.min(this.roses + AMMO.block, AMMO.cap); this.ammoFlash = 0.8;
+        if (!this.hasThrown && !game.taughtThrow) this.throwHint = 6;   // until they use one, ever
         bumps.push({ tx, ty, t: 0 });
-        floatText(tx * TILE + 8, ty * TILE - 6, 'ROSES +3', '#ff8fd0');
+        floatText(tx * TILE + 8, ty * TILE - 6, `${ammoName()} +${AMMO.block}`, '#ff8fd0');
         burst(tx * TILE + 8, ty * TILE, 14,
               { colors: ['#d6263c', '#f05a6a', '#3fae4a'], speed: 90, grav: 260, life: .8, size: 2 });
         Sfx.coin();
@@ -2078,7 +2171,7 @@ class Player extends Entity {
     /* Crouch + jump on a one-way platform drops you through it. Checked
        before the jump chain so it consumes the buffer - otherwise he drops
        and immediately jumps back up through the same platform. */
-    if (this.crouching && this.buffer > 0 && this.onGround && onOneWayOnly(this)) {
+    if (this.crouching && this.buffer > 0 && this.onGround && (onOneWayOnly(this) || this.ride?.dropThrough)) {
       this.buffer = 0; this.dropT = 0.20;
       this.setCrouch(false);
       this.y += 2; this.vy = 60;
@@ -2121,7 +2214,9 @@ class Player extends Entity {
 
     if (this.onGround) this.strideT += Math.abs(this.vx) * dt;
     const wasAir = !this.onGround;
+    const prevBottom = this.bottom;
     moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
+    landOnRideables(this, prevBottom);
 
     if (this.ultraFlight && Math.random() < dt * 40)
       burst(this.cx + rand(-4, 4), this.y + rand(4, 20), 1,
@@ -2136,12 +2231,14 @@ class Player extends Entity {
     }
     this.throwCd = Math.max(0, this.throwCd - dt);
     this.throwHint = Math.max(0, this.throwHint - dt);
+    this.ammoFlash = Math.max(0, (this.ammoFlash || 0) - dt);
     if (!stuck && this.roses > 0 && this.throwCd <= 0 && Input.throwTap()) {
       this.roses--;
       Stats.add('thrown');
-      this.hasThrown = true; this.throwHint = 0;
+      this.hasThrown = true; this.throwHint = 0; game.taughtThrow = true;
       this.throwCd = 0.28;
-      game.shots.push(new ThrownRose(this.cx, this.y + this.h * 0.42, this.face || 1));
+      const Shot = LEVEL.throwKind === 'flag' ? ThrownFlag : ThrownRose;
+      game.shots.push(new Shot(this.cx, this.y + this.h * 0.42, this.face || 1));
       Sfx.jump();
     }
     this.squashT  = Math.max(0, this.squashT - dt);
@@ -2161,7 +2258,12 @@ class Player extends Entity {
     }
 
     // A pit costs a heart, not the run.
-    if (this.y > LEVEL_H_PX + 60) this.fellInPit();
+    const sea = waterAt(this.cx);
+    if (sea && !this.ride && this.bottom > sea.y + 8) {
+      splash(this.cx, sea.y);
+      this.fellInPit();
+      seaRun.fail();
+    } else if (this.y > LEVEL_H_PX + 60) this.fellInPit();
   }
 }
 
@@ -2182,8 +2284,11 @@ class Walker extends Entity {
     this.y = groundYAt(tx) - this.h;
     this.dir = -1; this.speed = 24; this.turnCd = 0; this.t = rand(0, 4);
   }
+  // a limousine guard still climbing out of the car cannot hurt you yet
+  get harmless() { return this.spawnT > 0; }
   update(dt) {
     this.t += dt;
+    if (this.spawnT > 0) this.spawnT -= dt;
     this.turnCd = Math.max(0, this.turnCd - dt);
     this.hitWall = false;
     this.vx = this.dir * this.speed;
@@ -2209,6 +2314,19 @@ class Walker extends Entity {
     floatText(this.cx, this.y, '+200', '#ffd85e');
     burst(this.cx, this.y + this.h / 2, 14, { colors: ['#8ec63f', '#fff'], speed: 120, grav: 300 });
     shake = 3; Sfx.stomp();
+  }
+  /* Hit by a flag in act 1. A flat 300, outside the combo chain: there is
+     nothing to farm, and a chain that a throw could extend would make the
+     stomp chain worth less than standing still and throwing. */
+  defect() {
+    this.dead = true; this.noKill = true;
+    game.score += 300;
+    Stats.add('defectors');
+    floatText(this.cx, this.y - 14, 'DEFECTED!', '#ffd85e');
+    floatText(this.cx, this.y - 4, '+300', '#fff');
+    burst(this.cx, this.y + this.h / 2, 14, { colors: ['#d6263c', '#f4f4f4', '#ffd85e'], speed: 90, life: .7, size: 2 });
+    game.planks.push(new DroppedRifle(this.cx, this.y + 10, this.dir), new Turncoat(this));
+    shake = 2; Sfx.coin();
   }
 }
 
@@ -2255,9 +2373,9 @@ class MidBoss extends Entity {
     this.gate = gate;
     this.y = groundYAt(tx) - this.h;
     /* He was the one gate holder without a leash. His last-hit leap carries
-       5.3 tiles and the ledge turn is suppressed mid-leap, so once the pit at
-       179 became a thirteen-tile ravine he could jump off the 192 lip, fall
-       out of the world, and hand you gate 206 for free. */
+       5.3 tiles and the ledge turn is suppressed mid-leap, so once the pit
+       before his gate became a ravine he could jump off its far lip, fall out
+       of the world, and hand you his gate for free. */
     this.home = spanAround(tx);
     this.dir = -1; this.turnCd = 0;
     this.hp = 3; this.hitFlash = 0; this.t = 0;
@@ -2518,6 +2636,188 @@ function tierChase(e, dt, { climb = -430, run = 96, every = 1.6, reach = 240 } =
   } else if (theirs > mine + 1 && onOneWayOnly(e)) {
     e.dropT = 0.3; e.dropFrom = e.bottom; e.tierT = every;
   }
+}
+
+/* The mayor's limousine: act 1's second gate. Aslan's son in a black stretch
+   car with little Achara flags on the wings, charging up and down his own
+   street. It cannot be stomped while it moves - land on the roof and you just
+   bounce off the paintwork. At each end it brakes, the sunroof opens and he
+   stands up to wave at you; THAT is the window. Every hit, two bodyguards
+   pile out of the doors.
+
+   A different fight from both Targamadzes: you are not timing a dog-walker's
+   lunge, you are jumping a car and then running it down. */
+const LIMO = { hp: 3, rev: 0.6, speed: 150, accel: 420, wave: 1.4, grace: 0.9, guards: 2, w: 56, h: 18 };
+
+class Limo extends Entity {
+  constructor(tx, gate = null) {
+    super(tx * TILE, 0, LIMO.w, LIMO.h);
+    this.y = groundYAt(tx) - this.h;
+    this.gate = gate;
+    this.hp = LIMO.hp; this.dir = -1; this.face = -1;
+    this.phase = 'park'; this.phaseT = 0; this.t = 0; this.hitFlash = 0; this.grace = 0;
+    this.home = spanAround(tx);
+  }
+  get bossGrade() { return true; }
+  get bossName() { return 'THE MAYOR'; }
+  get maxHp() { return LIMO.hp; }
+  get selfDrawn() { return true; }
+  // parked and waving is safe to touch; anything that moves is two tonnes of car
+  get harmless() { return this.phase === 'park' || this.phase === 'wave' || this.grace > 0; }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.grace = Math.max(0, this.grace - dt);
+    this.hitWall = false;
+    const p = game.player;
+    switch (this.phase) {
+      case 'park':
+        this.vx = 0;
+        if (Math.abs(p.cx - this.cx) < 170) { this.phase = 'rev'; this.phaseT = 0; this.dir = Math.sign(p.cx - this.cx) || -1; }
+        break;
+      case 'rev':                       // the tell: engine roaring, exhaust, a "!"
+        this.vx = 0;
+        if (Math.random() < dt * 20)
+          burst(this.dir > 0 ? this.x - 2 : this.x + this.w + 2, this.bottom - 4, 1,
+                { colors: ['#8890a4', '#c8ccd4'], speed: 30, grav: -40, life: .5, size: 2 });
+        if (this.phaseT > LIMO.rev) { this.phase = 'charge'; this.phaseT = 0; Sfx.brick(); }
+        break;
+      case 'charge':
+        this.vx = clamp(this.vx + this.dir * LIMO.accel * dt, -LIMO.speed, LIMO.speed);
+        break;
+      case 'wave':                      // stopped at the end of the run, sunroof open
+        this.vx = 0;
+        if (this.phaseT > LIMO.wave) {
+          this.phase = 'rev'; this.phaseT = 0;
+          this.dir = Math.sign(p.cx - this.cx) || -this.dir;
+        }
+        break;
+    }
+    this.face = this.dir;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    // the end of his street is the leash: the beach on one side, his gate on the other
+    const atEnd = this.home && ((this.dir < 0 && this.x <= this.home.lo + 1) ||
+                                (this.dir > 0 && this.x + this.w >= this.home.hi - 1));
+    leash(this);
+    if (this.phase === 'charge' && (this.hitWall || atEnd)) {
+      this.phase = 'wave'; this.phaseT = 0; this.vx = 0;
+      shake = 4; Sfx.bump();
+      burst(this.dir > 0 ? this.x + this.w : this.x, this.bottom - 6, 10,
+            { colors: ['#c8ccd4', '#fff'], speed: 90, grav: 200, life: .4, size: 1 });
+      floatText(this.cx, this.y - 26, '*WAVES*', '#c9a0ff');
+    }
+  }
+  onStomp(p) {
+    p.vy = CFG.stompBounce * 0.85;
+    if (this.phase !== 'wave' || this.grace > 0) {
+      floatText(this.cx, this.y - 10, 'BULLETPROOF', '#c9a0ff');
+      spark(this.cx, this.y, 'clank'); Sfx.clank();
+      return;
+    }
+    this.takeHit(p);
+  }
+  chip(p) { this.takeHit(p); }
+  takeHit(p) {
+    if (this.dead) return;
+    this.hp--; this.hitFlash = 0.4; this.grace = LIMO.grace;
+    shake = 7; freeze = 0.09; Sfx.stomp();
+    burst(this.cx, this.y, 22, { colors: ['#14151a', '#c8ccd4', '#ffd85e'], speed: 150, size: 2 });
+    if (this.hp <= 0) {
+      this.dead = true;
+      if (p) game.addCombo(p, this.cx, this.y, 1000);
+      else { game.score += 1000; floatText(this.cx, this.y - 4, '+1000', '#ffd85e'); }
+      floatText(this.cx, this.y - 26, '*FLEES ON FOOT*', '#c9a0ff');
+      burst(this.cx, this.y + 8, 34, { colors: ['#14151a', '#3a3f4a', '#ffd85e', '#fff'], speed: 190, life: .9, size: 3 });
+      shake = 10; flash = 0.5;
+      Stats.boss('mayor');
+      Feel.finisher(this.cx, this.y + this.h / 2, 'small');
+      if (this.gate != null) openGate(this.gate);
+      return;
+    }
+    if (p) game.addCombo(p, this.cx, this.y, 400);
+    floatText(this.cx, this.y - 12, `${this.hp} LEFT`, '#ffd85e');
+    /* The doors fly open and two bodyguards pile out, heading for you. Out
+       of the side with more street, beside the car and on the street it
+       stands on: spawned inside its footprint they came up under the player
+       still bouncing off the roof, so a clean stomp cost a heart most times
+       (and groundYAt seated the one at 218 on the ledge above). Harmless while
+       they climb out, for as long as the car is after a hit. */
+    /* His street ends at his own gate as well as at the ground span (which
+       runs on past the gate): bounded by the span alone, a stomp while he
+       waved against the gate put both guards behind it. */
+    const p0 = game.player;
+    let lo = this.home ? this.home.lo : this.x - 64, hi = this.home ? this.home.hi : this.x + this.w + 64;
+    if (this.gate != null) {
+      const gx = this.gate * TILE;
+      if (gx >= this.x + this.w) hi = Math.min(hi, gx);
+      else if (gx + TILE <= this.x) lo = Math.max(lo, gx + TILE);
+    }
+    const side = (this.x - lo) < (hi - this.x - this.w) ? 1 : -1;
+    for (let i = 0; i < LIMO.guards; i++) {
+      const w = new Walker(Math.floor(this.cx / TILE));
+      w.kind = 'walker';
+      w.x = side > 0 ? this.x + this.w + 2 + i * 20 : this.x - w.w - 2 - i * 20;
+      w.x = clamp(w.x, lo, hi - w.w);
+      w.y = this.bottom - w.h;
+      w.dir = Math.sign(p0.cx - w.cx) || side;
+      w.vy = -120; w.spawnT = LIMO.grace;       // the same window the car itself gets
+      game.enemies.push(w);
+    }
+    this.phase = 'rev'; this.phaseT = -0.4;      // a beat longer before he goes again
+    this.dir = Math.sign(game.player.cx - this.cx) || -this.dir;
+  }
+  draw() {
+    const flash = this.hitFlash > 0 && Math.floor(this.hitFlash * 24) % 2 === 0;
+    paintLimo(this.x, this.y, this.face, this.t, this.phase === 'wave', flash, this.vx);
+    if (this.phase === 'rev' && this.phaseT > 0 && Math.floor(game.time * 14) % 2 === 0)
+      drawTextCentered(g, '!', this.cx, this.y - 16, '#ff8a5c', 2);
+    if (this.phase === 'wave' && this.grace <= 0 && Math.floor(game.time * 8) % 2 === 0)
+      drawTextCentered(g, 'STOMP THE ROOF', this.cx, this.y - 36, '#7ae07a', 1);
+  }
+}
+
+/* The car, drawn in rects facing right and mirrored for left: a black stretch
+   body with a chrome strip, smoked windows, white-wall wheels, headlights,
+   and a little Achara flag on each front wing. `waving` stands the mayor up
+   through the sunroof. */
+function paintLimo(x, y, face, t, waving, flash, vx = 0) {
+  x = Math.round(x); y = Math.round(y);
+  const W = LIMO.w;
+  g.save();
+  if (face < 0) { g.translate(x + W, y); g.scale(-1, 1); } else g.translate(x, y);
+  if (waving) {                                    // the mayor, out of the sunroof
+    g.fillStyle = '#14151a'; g.fillRect(24, -10, 8, 10);        // suit
+    g.fillStyle = '#f4f4f4'; g.fillRect(27, -10, 2, 4);         // shirt
+    g.fillStyle = '#e8c39a'; g.fillRect(25, -17, 6, 7);         // head
+    g.fillStyle = '#2a2018'; g.fillRect(25, -18, 6, 2);         // hair
+    const up = Math.floor(t * 6) % 2;                           // the wave
+    g.fillStyle = '#14151a'; g.fillRect(32, -14 + up, 2, 6 - up);
+    g.fillStyle = '#e8c39a'; g.fillRect(32, -16 + up, 2, 2);
+  }
+  const body = flash ? '#f4f4f4' : '#14151a';
+  g.fillStyle = body;      g.fillRect(2, 6, W - 4, 8);          // body
+  g.fillRect(12, 1, W - 22, 6);                                  // cabin
+  g.fillStyle = flash ? '#fff' : '#2a2d36'; g.fillRect(12, 1, W - 22, 1);   // roof line
+  g.fillStyle = '#2a3a5a';                                       // smoked windows
+  for (const wx of [14, 23, 32]) g.fillRect(wx, 3, 7, 3);
+  g.fillStyle = '#6a7a9a'; g.fillRect(14, 3, 2, 1); g.fillRect(23, 3, 2, 1);
+  g.fillStyle = '#c8ccd4'; g.fillRect(2, 10, W - 4, 1);          // chrome strip
+  g.fillRect(W - 3, 8, 3, 4); g.fillRect(0, 8, 3, 4);            // bumpers
+  g.fillStyle = '#ffd85e'; g.fillRect(W - 3, 7, 2, 2);           // headlight
+  g.fillStyle = '#c0242c'; g.fillRect(1, 7, 2, 2);               // tail light
+  // wheels: black tyres, white walls, a hub that turns when it moves
+  const spin = Math.floor(t * Math.abs(vx) / 6) % 2;
+  for (const wx of [7, W - 15]) {
+    g.fillStyle = '#0a0b0e'; g.fillRect(wx, 12, 8, 6);
+    g.fillStyle = '#e8e8e8'; g.fillRect(wx + 1, 13, 6, 4);
+    g.fillStyle = '#3a3f4a'; g.fillRect(wx + 2, 14, 4, 2);
+    g.fillStyle = '#c8ccd4'; g.fillRect(wx + 3 + spin, 14, 1, 2);
+  }
+  // little Achara flags on the front wing, streaming back
+  g.fillStyle = '#c8ccd4'; g.fillRect(W - 10, 1, 1, 6);
+  drawFlagAcharaMini(W - 16, 1);
+  g.restore();
 }
 
 const GUARD = { speed: 26, surgeMul: 2.4, surgeT: 1.0, surgeCd: 2.4, alert: 58, link: 46 };
@@ -4178,26 +4478,133 @@ function drawHeartIcon(x, y, color) {
    opening and land on his head", and one ranged verb changes all of them at
    once without touching a single boss. */
 const ROSE_STUN = 1.7;
+/* Act 1's flags: three to start, three more at every pole raised, five from a
+   paying ? block, fifteen at most - about 26 over the act against its 21
+   walkers plus the limousine's guards, so you choose who to turn. */
+const AMMO = { cap: 15, block: 5, flagStart: 3, perPole: 3 };
+const ammoName = () => LEVEL.throwKind === 'flag' ? 'FLAGS' : 'ROSES';
 
 class ThrownRose extends Entity {
   constructor(x, y, dir) {
     super(x - 3, y, 6, 6);
     this.vx = dir * 215; this.vy = -115; this.dir = dir; this.t = 0; this.life = 2.2;
+    this.puff = ['#d6263c', '#3fae4a']; this.trail = ['#f05a6a', '#d6263c'];
+    this.grav = CFG.gravity * 0.45;
   }
   update(dt) {
     this.t += dt; this.life -= dt;
     this.hitWall = false;
-    this.vy = Math.min(this.vy + CFG.gravity * 0.45 * dt, CFG.maxFall);
+    this.vy = Math.min(this.vy + this.grav * dt, CFG.maxFall);
     moveAndCollide(this, dt, { oneWay: false });
     if (this.hitWall || this.onGround || this.life <= 0) {
       this.dead = true;
-      burst(this.cx, this.cy2, 6, { colors: ['#d6263c', '#3fae4a'], speed: 50, life: .4, size: 1 });
+      burst(this.cx, this.cy2, 6, { colors: this.puff, speed: 50, life: .4, size: 1 });
     }
     if (Math.random() < dt * 26)
-      burst(this.cx, this.cy2, 1, { colors: ['#f05a6a', '#d6263c'], speed: 12, grav: 40, life: .35, size: 1 });
+      burst(this.cx, this.cy2, 1, { colors: this.trail, speed: 12, grav: 40, life: .35, size: 1 });
   }
   get cy2() { return this.y + this.h / 2; }
   draw() { drawMiniRose(Math.round(this.x - 1), Math.round(this.y - 2)); }
+}
+
+/* Act 1's ammo: a hand flag on a stick, flapping as it flies. Flatter and
+   floatier than the rose: a walker is 17px tall, and the rose's lob clears his
+   head anywhere inside ~125px, which left a hit window only 30px deep. This
+   one rises 4px at most and stays at his height out to ~150px. */
+class ThrownFlag extends ThrownRose {
+  constructor(x, y, dir) {
+    super(x, y + 4, dir);           // thrown from the hip, not the shoulder
+    this.kind = 'flag';
+    this.vx = dir * 230; this.vy = -30; this.grav = 120;
+    this.puff = ['#d6263c', '#f4f4f4']; this.trail = ['#f4f4f4', '#d6263c'];
+  }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    const flap = Math.floor(this.t * 14) % 2;
+    g.fillStyle = '#8a5a2a'; g.fillRect(this.dir > 0 ? x + 6 : x - 1, y - 1, 1, 8);   // stick, leading
+    drawMiniFlag(this.dir > 0 ? x - 1 : x, y - 1 + flap);
+  }
+}
+
+/* A walker hit by a flag. He is gone from the enemy list at once (dead,
+   noKill - nothing to reap), and this actor plays out the rest: a hop as he
+   turns, then a walk back to wherever the militia stands. He always merges
+   within three seconds, wall or pit in the way or not, so a defector can never
+   be lost or left stuck on a ledge. */
+class Turncoat extends Entity {
+  constructor(w) {
+    super(w.x, w.y, w.w, w.h);
+    this.face = -(w.dir || w.face || 1);
+    this.vy = -130; this.t = 0; this.upper = w.upper;
+  }
+  update(dt) {
+    this.t += dt;
+    const p = game.player;
+    const cfg = crowd.cfg;
+    const target = crowd.active ? crowd.x : p.cx - cfg.gap * (p.face || 1);
+    if (this.t > 0.35) {
+      const d = target - this.cx;
+      this.face = d >= 0 ? 1 : -1;
+      this.vx = Math.abs(d) < 4 ? 0 : this.face * 70;
+    } else this.vx = 0;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: this.upper === true && this.t < 0.35 });
+    const there = this.t > 0.35 && Math.abs(target - this.cx) < 10 && this.onGround;
+    if (there || this.t > 3 || this.y > LEVEL_H_PX + 20) {
+      this.dead = true;
+      crowd.join(this.y > LEVEL_H_PX ? target : this.cx, 1);
+    }
+  }
+  draw() {
+    const bob = this.t > 0.35 && this.onGround && Math.floor(this.t * 8) % 2 ? -1 : 0;
+    drawMilitia(this.cx, this.bottom, this.face, this.t, bob);
+  }
+}
+
+// The rifle he lets go of: drops, lies there a moment, blinks out.
+class DroppedRifle {
+  constructor(x, y, dir) { this.x = x; this.y = y; this.vx = dir * 30; this.vy = -90; this.t = 0; this.dead = false; this.rest = false; }
+  update(dt) {
+    this.t += dt;
+    if (this.t > 1.6) { this.dead = true; return; }
+    if (this.rest) return;
+    const py = this.y;
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    // stops at a wall instead of drifting into it and landing on its face
+    const nx = this.x + this.vx * dt;
+    if (isSolid(tileAt(Math.floor(nx / TILE), Math.floor((this.y - 1) / TILE)))) this.vx = 0;
+    else this.x = nx;
+    this.y += this.vy * dt;
+    const gy = groundBelow(this.x, py - 1);
+    if (gy != null && this.vy > 0 && py <= gy - 1 && this.y >= gy - 1) { this.y = gy - 1; this.rest = true; }
+    if (this.y > LEVEL_H_PX + 20) this.dead = true;
+  }
+  draw() {
+    if (this.t > 1.2 && Math.floor(this.t * 12) % 2) return;
+    const x = Math.round(this.x) - 4, y = Math.round(this.y);
+    g.fillStyle = '#2b2b33'; g.fillRect(x, y - 1, 7, 1);
+    g.fillStyle = '#6a4a26'; g.fillRect(x + 6, y - 1, 3, 2);
+  }
+}
+
+/* 7x5 five-cross: one red cross through the middle and a dot in each white
+   quarter - at this size a dot is all a Bolnisi cross can be. */
+function drawMiniFlag(x, y) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = '#f4f4f4'; g.fillRect(x, y, 7, 5);
+  g.fillStyle = '#d6263c';
+  g.fillRect(x + 3, y, 1, 5); g.fillRect(x, y + 2, 7, 1);
+  g.fillRect(x + 1, y + 1, 1, 1); g.fillRect(x + 5, y + 1, 1, 1);
+  g.fillRect(x + 1, y + 3, 1, 1); g.fillRect(x + 5, y + 3, 1, 1);
+}
+
+// A soldier of the militia that changed sides, a new flag over his shoulder.
+function drawMilitia(cx, gy, face, t, bob = 0) {
+  drawSprite(ART.walker, { cx, bottom: gy, face }, { bob });
+  const sx = Math.round(cx - face * 2), sy = Math.round(gy - 25 + bob);
+  g.fillStyle = '#8a5a2a'; g.fillRect(sx, sy, 1, 11);
+  const wave = Math.floor(t * 4) % 2;
+  drawMiniFlag(face > 0 ? sx - 7 : sx + 1, sy + wave);
 }
 
 function resolveShots() {
@@ -4208,6 +4615,9 @@ function resolveShots() {
       r.dead = true;
       Stats.add('landed');
       spark(r.cx, r.cy2);
+      // only the rank and file change sides; Targamadze, his dogs and the
+      // limousine just get the ordinary stun
+      if (r.kind === 'flag' && e.constructor === Walker) { e.defect(); break; }
       // bosses shrug it off faster than the rank and file, but it still opens them
       e.stun = e.bossGrade ? ROSE_STUN * 0.7 : ROSE_STUN;
       floatText(e.cx, e.y - 10, 'STUNNED', '#ff8fd0');
@@ -4515,24 +4925,55 @@ const CROWD = { joinPerFlag: 2, max: 12, gap: 34, surgeEvery: 5.0, surgeReach: 7
 // that get drawn: three flags, three roses, two empty-handed.
 const CROWD_PROPS = ['flag', 'rose', null, 'rose', 'flag', null, 'flag', 'rose'];
 
+/* Act 1's crowd is the militia who switched sides (LEVEL.crowdCfg.militia):
+   fed by flags thrown at them rather than by flagpoles, a little smaller,
+   surging a little more often, and drawn as the soldiers they were. */
+// Where a militiaman in column mx stands, relative to the floor `ref`: that
+// floor or a lower one, the top of a step up to three tiles high, or null
+// for a gap or a wall.
+function militiaFooting(mx, ref) {
+  if (mx < 0 || mx >= LEVEL.w * TILE) return null;
+  let y = groundBelow(mx, ref - TILE / 2);
+  if (y == null) return null;
+  if (y < ref) {
+    const tx = Math.floor(mx / TILE);
+    while (y > 0 && isSolid(tileAt(tx, y / TILE - 1))) y -= TILE;
+    if (ref - y > 3 * TILE) return null;
+  }
+  return y;
+}
+
 const crowd = {
-  n: 0, x: 0, t: 0, surge: 0, flash: 0,
-  reset(px) { this.n = 0; this.x = px; this.t = 0; this.surge = 0; this.flash = 0; },
-  join(px) {
+  n: 0, x: 0, t: 0, surge: 0, flash: 0, said: false,
+  get cfg() { return { ...CROWD, ...(LEVEL.crowdCfg || {}) }; },
+  get active() { return this.n > 0; },
+  reset(px) { this.n = 0; this.x = px; this.t = 0; this.surge = 0; this.flash = 0; this.said = false; this.from = null; },
+  join(px, count = this.cfg.joinPerFlag) {
     if (this.n === 0) this.x = px;
-    this.n = Math.min(CROWD.max, this.n + CROWD.joinPerFlag);
+    this.n = Math.min(this.cfg.max, this.n + count);
     this.flash = 0.8;
   },
   update(dt) {
     if (this.n <= 0) return;
+    const cfg = this.cfg;
     this.t += dt; this.flash = Math.max(0, this.flash - dt);
     const p = game.player;
-    const want = p.cx - CROWD.gap * (p.face || 1);
+    let want = p.cx - cfg.gap * (p.face || 1);
+    /* The army stops at the ravine. Once the bridge has gone and he is over,
+       they line the near lip and cheer him on - Aslan's arena stays his. */
+    const b = LEVEL.bridge;
+    if (b && p.cx > b.from * TILE - 8) {
+      want = Math.min(want, b.from * TILE - 12);
+      if (!this.said && p.cx > b.from * TILE + 48) {
+        this.said = true; floatText(p.cx, p.y - 26, 'WE ARE WITH YOU!', '#ffd85e');
+      }
+    }
+    this.moving = Math.abs(want - this.x) > 3;
     this.x = lerp(this.x, want, 1 - Math.pow(0.06, dt));
 
     this.surge -= dt;
-    if (this.surge <= 0 && this.n >= CROWD.minToSurge) {
-      this.surge = CROWD.surgeEvery;
+    if (this.surge <= 0 && this.n >= cfg.minToSurge) {
+      this.surge = cfg.surgeEvery;
       let hit = 0;
       for (const e of game.enemies) {
         /* Gate holders are exempt as well as bosses: the street can shift a
@@ -4541,15 +4982,15 @@ const crowd = {
            but MidBoss does not - and must not be given one, it would halve his
            thrown-rose stun and make him immune to the khachapuri one-shot - so
            the filter keys off the thing that actually matters. */
-        if (e.dead || e.bossGrade || e.gate != null ||
-            Math.abs(e.cx - this.x) > CROWD.surgeReach) continue;
+        if (e.dead || e.bossGrade || e.gate != null || e.floats ||
+            Math.abs(e.cx - this.x) > cfg.surgeReach) continue;
         e.stun = Math.max(e.stun || 0, 1.4);
         hit++;
       }
       if (hit) {
         this.flash = 0.6; shake = 3; Sfx.gate();
-        floatText(this.x, p.y - 22, 'THE STREET!', '#ffd85e');
-        Chant.start('gadadeki', this.x, p.y - 36);
+        floatText(this.x, p.y - 22, cfg.militia ? 'STAND DOWN!' : 'THE STREET!', '#ffd85e');
+        Chant.start(cfg.chant || 'gadadeki', this.x, p.y - 36);
         burst(this.x, p.bottom - 4, 16,
               { colors: ['#d6263c', '#ffd85e', '#fff'], speed: 100, grav: 200, life: .8, size: 2 });
       }
@@ -4559,9 +5000,44 @@ const crowd = {
     if (this.n <= 0) return;
     // No fallback. Act 2's pits are 4 tiles wide so a stale row-13 default was
     // never visible; over Act 1's ravine the whole march stood on nothing.
-    const gy = groundBelow(this.x, game.player.bottom - 2);
-    if (gy == null) return;
+    const p = game.player;
+    const boat = seaRun.boat;
+    if (this.cfg.militia && boat && !game.room && (waterAt(p.cx) || waterAt(this.x))) {
+      // out at sea they ride the back of the banana
+      for (let i = 0; i < Math.min(this.n, 3); i++)
+        drawMilitia(boat.x + 5 + i * 9, boat.y + 3, 1, this.t + i * 0.37);
+      return;
+    }
+    /* The floor is read from his feet only while he is on them: mid-jump the
+       scan started above the bricks and stood the crowd on top of them. */
+    if (p.onGround || this.from == null) this.from = p.bottom - 2;
     const shown = Math.min(this.n, 8);
+    if (this.cfg.militia) {
+      /* The soldiers who changed sides, trailing away from him, facing him.
+         Each stands on the floor under him, steps up onto anything up to
+         three tiles high (a pipe), and the line ends at a gap or a wall -
+         nobody on the sea, over a pit or up the cellar wall, and no
+         fallback height. If the head of the line is in a wall (he faced
+         back at a gate), it starts nearer to him instead. */
+      const away = p.cx >= this.x ? -1 : 1, ref = this.from + 2;
+      let ax = this.x, ay = null;
+      for (let k = 0; k < 8 && ay == null; k++) { ax = this.x - away * k * 8; ay = militiaFooting(ax, ref); }
+      if (ay == null) return;
+      for (let i = 0; i < shown; i++) {
+        const mx = ax + away * (i * 11 + ((i * 37) % 5));
+        // judged against his floor, not the neighbour's: chained, the line
+        // climbed from a pipe top onto the floating brick beside it
+        const my = militiaFooting(mx, ref);
+        if (my == null) break;
+        const bob = this.moving && Math.floor(this.t * 6 + i * 1.7) % 2 ? -1 : 0;
+        drawMilitia(mx, my, p.cx >= mx ? 1 : -1, this.t + i * 0.37, bob);
+      }
+      if (this.flash > 0 && Math.floor(game.time * 10) % 2 === 0)
+        drawTextCentered(g, `${this.n} WITH YOU`, ax, ay - 34, '#ffd85e', 1);
+      return;
+    }
+    const gy = groundBelow(this.x, this.from);
+    if (gy == null) return;
     for (let i = 0; i < shown; i++) {
       // deterministic scatter and depth: no jitter frame to frame
       const ox = ((i * 37) % 9) - 4 - i * 9;
@@ -4676,6 +5152,358 @@ const bridgeRun = {
       this.dropUltra(false);
   },
 };
+/* ---------------------------------------------------------- riding
+
+   Things the player can stand on that are not tiles: the banana boat, and in
+   act 3 the crowd. Nothing else in the game collides entity with entity, so
+   this is its own small pass.
+
+   A rideable is { x, y (its top), w, dx, dy, vx, dropThrough } and is moved
+   BEFORE the player each frame. He lands on it from above, stays stuck to it
+   while it moves, and is carried by `carryVx`, which moveAndCollide adds to his
+   own horizontal speed - so a wall still stops him. carryVx survives a jump,
+   which is what lets you hop a patrol boat and come down on the banana again
+   instead of in the sea behind it. */
+function updateRideables(dt) {
+  for (const r of game.rideables) {
+    const ox = r.x, oy = r.y;
+    r.update(dt);
+    r.dx = r.x - ox; r.dy = r.y - oy;
+    r.vx = dt > 0 ? r.dx / dt : 0;
+  }
+}
+
+function landOnRideables(p, prevBottom) {
+  /* In the air he keeps pace with the boat he left, not the speed it had
+     when he jumped: hopping while the banana was still speeding up landed him
+     behind it, in the sea. */
+  if (p.lastRide && !p.onGround) p.carryVx = p.lastRide.vx;
+  if (p.dropT > 0) { p.ride = null; return; }
+  if (p.vy < 0) { p.ride = null; return; }
+  let best = null, top = Infinity;
+  for (const r of game.rideables) {
+    if (p.x + p.w <= r.x || p.x >= r.x + r.w) continue;
+    const fromAbove = prevBottom <= r.y + Math.max(2, 1 - r.dy) && p.bottom >= r.y;
+    const sticky = p.ride === r && Math.abs(p.bottom - r.y) <= 4 + Math.abs(r.dy);
+    if ((fromAbove || sticky) && r.y < top) { best = r; top = r.y; }
+  }
+  if (best) {
+    p.y = top - p.h; p.vy = 0; p.onGround = true;
+    p.ride = best; p.lastRide = best; p.carryVx = best.vx;
+  } else {
+    p.ride = null;
+    if (p.onGround) { p.carryVx = 0; p.lastRide = null; }   // back on solid ground
+  }
+}
+
+/* ---------------------------------------------------------- the sea (act 1)
+
+   140-204 is open water. A banana boat waits at the end of the pier; step on
+   and a speedboat tows it across while Aslan's patrol boats and mines come the
+   other way. Fall in and you are back on the pier with the boat docked - the
+   whole crossing is about ten seconds, so a retry is quick. */
+const SEA = { tow: 100, accel: 85, brake: 120, deck: 208, boardT: 0.4,
+              // hazards, keyed to the tile the banana's nose has reached
+              /* Spawned just off-screen right, which by tile ~189 is already
+                 past the beach - the last two used to appear on the sand,
+                 one mine right where the banana lands. Moved earlier, and
+                 the spawn is clamped to the water as well. */
+              schedule: [[148, 'launch'], [159, 'mine'], [170, 'launch'], [180, 'launch'],
+                         [184, 'mine', 48], [188, 'launch']] };
+
+function waterAt(px) {
+  for (const w of LEVEL.water || [])
+    if (px >= w.from * TILE && px < w.to * TILE) return w;
+  return null;
+}
+
+class BananaBoat {
+  constructor(x) {
+    this.x = x; this.dockX = x; this.y = SEA.deck; this.w = 44;
+    this.dx = 0; this.dy = 0; this.vx = 0; this.v = 0; this.t = 0;
+    this.state = 'docked'; this.onT = 0; this.dropThrough = false;
+    this.tugX = x + this.w + 34; this.tugGone = false;
+  }
+  get nose() { return this.x + this.w; }
+  update(dt) {
+    this.t += dt;
+    const p = game.player, beach = (LEVEL.water[0].to) * TILE;
+    if (this.state === 'docked') {
+      this.onT = p.ride === this ? this.onT + dt : 0;
+      if (this.onT > SEA.boardT) { this.state = 'towing'; Sfx.start(); floatText(this.cx, this.y - 30, 'HOLD ON!', '#ffd85e'); }
+    } else if (this.state === 'towing') {
+      this.v = Math.min(SEA.tow, this.v + SEA.accel * dt);
+      // the tug lets go of the rope and peels off six tiles out
+      if (this.nose > beach - 6 * TILE) { this.state = 'coasting'; floatText(this.tugX, this.y - 22, 'GOOD LUCK!', '#9ee8ff'); }
+    } else if (this.state === 'coasting') {
+      // brake so the nose kisses the sand, never runs up it
+      const left = beach - 2 - this.nose;
+      this.v = Math.max(0, Math.min(this.v, Math.sqrt(Math.max(0, 2 * SEA.brake * left))));
+      if (this.v <= 0.5) { this.v = 0; this.state = 'beached'; }
+    }
+    this.x += this.v * dt;
+    if (this.state === 'towing') this.tugX = this.nose + 34;
+    else if (this.state === 'coasting' || this.state === 'beached') this.tugX += 140 * dt;   // off it goes
+    /* A gentle bob only while it is moving, and only once it is a tile clear
+       of the pier: a rider still standing half over the pier lip was dipped
+       1px into its ground, and the wall test shoved him a whole tile back. */
+    const bob = this.v > 1 && this.x > this.dockX + TILE ? Math.round(Math.sin(this.t * 4)) : 0;
+    this.y = SEA.deck + bob;
+    if (this.v > 1 && Math.random() < dt * 30)
+      burst(this.x + 2, SEA.deck + 6, 1, { colors: ['#e8f4ff', '#9ec8e8'], speed: 30, grav: 120, life: .4, size: 1 });
+  }
+  get cx() { return this.x + this.w / 2; }
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    // tow rope, sagging, while there is a tug on the end of it
+    if (this.state === 'docked' || this.state === 'towing') {
+      g.fillStyle = '#d8c8a8';
+      const x0 = x + this.w, x1 = Math.round(this.tugX) - 14;
+      for (let i = x0; i < x1; i++) g.fillRect(i, y + 2 + Math.round(Math.sin((i - x0) / Math.max(1, x1 - x0) * Math.PI)), 1, 1);
+    }
+    // the banana: yellow tube, darker belly, a raised stepped nose, handle loops
+    g.fillStyle = '#c9a20f'; g.fillRect(x + 2, y + 4, this.w - 6, 5);
+    g.fillStyle = '#f2d22e'; g.fillRect(x + 2, y, this.w - 6, 5);
+    g.fillStyle = '#fff3a0'; g.fillRect(x + 4, y + 1, this.w - 12, 1);
+    g.fillStyle = '#f2d22e'; g.fillRect(x + this.w - 5, y - 2, 3, 6); g.fillRect(x + this.w - 3, y - 4, 2, 4);
+    g.fillStyle = '#5a3a18'; g.fillRect(x + this.w - 2, y - 5, 2, 2);
+    g.fillStyle = '#c9a20f'; g.fillRect(x, y + 1, 3, 6);
+    g.fillStyle = '#2b2b33';
+    for (const hx of [10, 20, 30]) { g.fillRect(x + hx, y - 2, 1, 2); g.fillRect(x + hx + 3, y - 2, 1, 2); g.fillRect(x + hx, y - 3, 4, 1); }
+  }
+  drawTug() {
+    if (this.tugGone) return;
+    const beach = LEVEL.water[0].to * TILE;
+    if (this.tugX - 16 > beach) { this.tugGone = true; return; }
+    const x = Math.round(this.tugX) - 14, y = SEA.deck - 3 + (this.v > 1 ? Math.round(Math.sin(this.t * 5 + 1)) : 0);
+    g.fillStyle = '#f4f4f4'; g.fillRect(x, y + 4, 30, 7);                // hull
+    g.fillStyle = '#d6263c'; g.fillRect(x, y + 8, 30, 2);                // stripe
+    g.fillStyle = '#f4f4f4'; g.fillRect(x + 26, y + 5, 4, 3); g.fillRect(x + 28, y + 3, 2, 2);  // bow
+    g.fillStyle = '#9fd8ff'; g.fillRect(x + 14, y, 6, 4);                // windshield
+    g.fillStyle = '#2b3a5e'; g.fillRect(x + 9, y - 1, 4, 5);             // driver
+    g.fillStyle = '#e8c39a'; g.fillRect(x + 9, y - 4, 4, 3);
+    g.fillStyle = '#3a3f4a'; g.fillRect(x - 3, y + 3, 4, 8);             // outboard
+    if (this.v > 1) { g.fillStyle = '#e8f4ff'; g.fillRect(x - 7, y + 9, 4, 2); }   // spray
+  }
+}
+
+// Aslan's coastguard, coming the other way. Jump it, or land on it and sink it.
+class PatrolBoat extends Entity {
+  constructor(x) { super(x, SEA.deck - 6, 30, 12); this.speed = -90; this.vx = this.speed; this.t = rand(0, 3); this.floats = true; this.kind = 'launch'; }
+  get selfDrawn() { return true; }
+  update(dt) {
+    this.t += dt;
+    // set every frame: the shared stun path zeroes vx, and a flag-stunned
+    // boat used to sit parked in the sea for good
+    this.vx = this.speed;
+    this.x += this.vx * dt;
+    // the sea ends at the pier, and so does the patrol
+    const w = (LEVEL.water || [])[0];
+    // a tile out, so its bow never reaches someone standing on the lip
+    if (w && this.x < (w.from + 1) * TILE) { this.dead = true; this.noKill = true; splash(this.cx, SEA.deck); return; }
+    this.y = SEA.deck - 6 + Math.round(Math.sin(this.t * 3));
+    if (this.x + this.w < cam.x - 120) this.dead = true, this.noKill = true;
+  }
+  onStomp(p) {
+    this.dead = true;
+    game.addCombo(p, this.cx, this.y, 300);
+    floatText(this.cx, this.y - 10, 'SUNK!', '#9ee8ff');
+    burst(this.cx, this.y + 6, 20, { colors: ['#e8f4ff', '#5a6270', '#9fd8ff'], speed: 110, life: .7, size: 2 });
+    shake = 4; Sfx.brick();
+  }
+  onBumped() {}
+  draw() {
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#3e4450'; g.fillRect(x, y + 5, 30, 7);
+    g.fillStyle = '#5a6270'; g.fillRect(x, y + 5, 30, 2);
+    g.fillStyle = '#3e4450'; g.fillRect(x - 3, y + 6, 4, 4); g.fillRect(x - 5, y + 7, 2, 2);   // bow points left
+    g.fillStyle = '#7a8290'; g.fillRect(x + 12, y, 12, 6);              // cabin
+    g.fillStyle = '#9fd8ff'; g.fillRect(x + 14, y + 1, 3, 2); g.fillRect(x + 19, y + 1, 3, 2);
+    // a little Achara flag on the stern
+    g.fillStyle = '#4a4f5c'; g.fillRect(x + 27, y - 6, 1, 11);
+    drawFlagAcharaMini(x + 28, y - 6);
+  }
+}
+
+class SeaMine extends Entity {
+  constructor(x) { super(x, SEA.deck - 2, 10, 10); this.t = rand(0, 3); this.floats = true; this.noKill = true; this.kind = 'mine'; }
+  get selfDrawn() { return true; }
+  update(dt) {
+    this.t += dt;
+    this.y = SEA.deck - 2 + Math.round(Math.sin(this.t * 2.5));
+    if (this.x + this.w < cam.x - 120) this.dead = true;
+  }
+  // there is no safe way to touch a mine
+  onStomp(p) { this.boom(p); }
+  boom(p) {
+    if (this.dead) return;
+    this.dead = true;
+    burst(this.cx, this.y + 4, 22, { colors: ['#ffd85e', '#ff8a5c', '#fff'], speed: 140, life: .6, size: 2 });
+    shake = 6; Sfx.brick();
+    if (p) p.hurt(this.cx);
+  }
+  onBumped() {}
+  draw() {
+    // round body, short horns on top, a chain down into the water - so it
+    // cannot be read as a little man standing on the sea
+    const x = Math.round(this.x), y = Math.round(this.y);
+    g.fillStyle = '#2b2b33';
+    g.fillRect(x + 3, y, 4, 1); g.fillRect(x + 1, y + 1, 8, 1);
+    g.fillRect(x, y + 2, 10, 5);
+    g.fillRect(x + 1, y + 7, 8, 1); g.fillRect(x + 3, y + 8, 4, 1);
+    g.fillStyle = '#5a6070';                                  // horns
+    g.fillRect(x + 2, y - 1, 1, 2); g.fillRect(x + 7, y - 1, 1, 2); g.fillRect(x + 4, y - 2, 2, 2);
+    g.fillStyle = '#4a4f5c'; g.fillRect(x + 2, y + 2, 3, 2);  // shine
+    g.fillStyle = '#3a3f4a'; g.fillRect(x + 4, y + 9, 2, 3);  // chain
+    if (Math.floor(this.t * 4) % 2 === 0) { g.fillStyle = '#e8434f'; g.fillRect(x + 6, y + 4, 2, 2); }
+  }
+}
+
+// the old Achara flag at a few pixels: crimson with a blue-and-white canton
+function drawFlagAcharaMini(x, y) {
+  g.fillStyle = '#b8323c'; g.fillRect(x, y, 6, 4);
+  g.fillStyle = '#2a4aa0'; g.fillRect(x, y, 3, 2);
+  g.fillStyle = '#f4f4f4'; g.fillRect(x + 1, y, 1, 2);
+}
+
+const seaRun = {
+  boat: null, next: 0,
+  reset() {
+    this.boat = null; this.next = 0; this.cleared = false;
+    const w = (LEVEL.water || [])[0];
+    if (!w) return;
+    this.boat = new BananaBoat(w.from * TILE);
+    game.rideables.push(this.boat);
+  },
+  // into the sea: the boat goes home and the patrols are called off
+  fail() {
+    if (!this.boat) return;
+    const b = this.boat;
+    b.x = b.dockX; b.v = 0; b.state = 'docked'; b.onT = 0; b.tugGone = false; b.tugX = b.x + b.w + 34;
+    this.clearHazards();
+    this.next = 0; this.cleared = false;
+  },
+  clearHazards() {
+    game.enemies = game.enemies.filter(e => !(e instanceof PatrolBoat || e instanceof SeaMine));
+  },
+  update(dt) {
+    const b = this.boat;
+    if (!b) return;
+    // standing back on the pier with the boat beached on the far side: bring it home
+    const p = game.player, w = LEVEL.water[0];
+    /* Back on the pier with the boat out - beached on the far side, or towing
+       on without him after he hopped off at the start: bring it home and call
+       the patrols off. An empty boat used to keep spawning them, and they
+       sailed on over the pier into him. */
+    // any part of him over the pier counts: by his centre, the last 5px of
+    // the lip read as sea and a patrol still reached him there
+    if (b.state !== 'docked' && p.onGround && !p.ride && p.x < w.from * TILE) { this.fail(); return; }
+    if (b.state === 'beached' && !this.cleared) {
+      for (const e of game.enemies)
+        if (e instanceof PatrolBoat || e instanceof SeaMine)
+          burst(e.cx, e.y + 4, 8, { colors: ['#e8f4ff', '#9ec8e8'], speed: 60, life: .4, size: 1 });
+      this.clearHazards(); this.cleared = true;
+    }
+    if (b.state !== 'towing') return;
+    const noseTile = b.nose / TILE;
+    while (this.next < SEA.schedule.length && noseTile >= SEA.schedule[this.next][0]) {
+      const [, kind, pair] = SEA.schedule[this.next++];
+      const end = w.to * TILE - TILE;
+      const x = Math.min(cam.x + VIEW_W + 24, end - 30 - (pair || 0));
+      if (kind === 'launch') game.enemies.push(new PatrolBoat(x));
+      else {
+        game.enemies.push(new SeaMine(x));
+        if (pair) game.enemies.push(new SeaMine(x + pair));
+      }
+      if (game.boss && Math.random() < 0.5) floatText(game.boss.cx, game.boss.y - 10, 'PATROL!', '#c9a0ff');
+    }
+  },
+};
+
+/* The water itself: a body behind everyone and a translucent waterline in
+   front, so boats and the banana sit IN it rather than on top of it. */
+function drawWater(front) {
+  for (const w of LEVEL.water || []) {
+    const x0 = w.from * TILE, x1 = w.to * TILE;
+    if (x1 < cam.x || x0 > cam.x + VIEW_W) continue;
+    const a = Math.max(x0, Math.floor(cam.x) - 2), b = Math.min(x1, Math.ceil(cam.x) + VIEW_W + 2);
+    const f = Math.floor(game.time * 3) % 2;
+    if (front) {
+      g.fillStyle = 'rgba(42,111,176,.55)';
+      g.fillRect(a, w.y + 2, b - a, 3);
+      continue;
+    }
+    g.fillStyle = '#1d4f86'; g.fillRect(a, w.y, b - a, LEVEL_H_PX - w.y);
+    g.fillStyle = '#2a6fb0'; g.fillRect(a, w.y, b - a, 10);
+    g.fillStyle = '#2462a0';
+    for (let x = a - (a % 4); x < b; x += 4) g.fillRect(x + ((x >> 2) % 2) * 2, w.y + 12, 2, 1);
+    g.fillStyle = '#7ec8f0';                            // the crest, two frames
+    for (let x = a; x < b; x++) if (((x >> 3) + f) % 2 === 0) g.fillRect(x, w.y + ((x >> 2) % 2), 1, 1);
+    g.fillStyle = '#e8f4ff';                            // foam where it meets the pier and the beach
+    g.fillRect(x0, w.y - 1, 3, 2); g.fillRect(x1 - 3, w.y - 1, 3, 2);
+  }
+}
+
+function splash(x, y) {
+  burst(x, y, 18, { colors: ['#e8f4ff', '#9ec8e8', '#fff'], speed: 120, grav: 320, life: .7, size: 2 });
+  Sfx.noise(0.3, 0.05);
+}
+
+/* A 760x240 sunset over the Black Sea for the backdrop behind the crossing:
+   dithered sky, Batumi's skyline behind you on the left, a lighthouse, the
+   sun ahead and low, two ships out to sea, and the far shore coming up on the
+   right as you near the beach. Drawn once at boot. */
+function buildSeaBackdrop() {
+  const W = 760, H = 150;
+  const c = document.createElement('canvas'); c.width = W; c.height = 240;
+  const x = c.getContext('2d');
+  const bands = ['#2a2350', '#3d2a5e', '#5a3466', '#7a3e66', '#a44e5c', '#cc6a50', '#e88a4a', '#f4ac58'];
+  for (let i = 0; i < bands.length; i++) {
+    const y0 = Math.round(i * H / bands.length), y1 = Math.round((i + 1) * H / bands.length);
+    x.fillStyle = bands[i]; x.fillRect(0, y0, W, y1 - y0);
+    if (i + 1 < bands.length) {                          // checker-dither the seam
+      x.fillStyle = bands[i + 1];
+      for (let px = 0; px < W; px += 2) x.fillRect(px + ((y1 - 1) % 2), y1 - 1, 1, 1);
+    }
+  }
+  const sunX = 430;
+  x.fillStyle = '#ffd890'; x.beginPath(); x.arc(sunX, H, 18, Math.PI, 0); x.fill();
+  x.fillStyle = '#fff2c0'; x.beginPath(); x.arc(sunX, H, 11, Math.PI, 0); x.fill();
+  // Batumi behind you: towers and blocks, and the hills over the city
+  x.fillStyle = '#5a3a5e';
+  for (let px = 0; px < 260; px++) x.fillRect(px, H - 10 - Math.round(Math.sin(px / 30) * 5 + 5), 1, 20);
+  x.fillStyle = '#4a2f52';
+  for (let i = 0; i < 24; i++) { const hx = 6 + i * 9, hh = 8 + ((i * 37) % 18); x.fillRect(hx, H - hh, 8, hh); }
+  x.fillStyle = '#ffe8a0';                               // a few lit windows
+  for (let i = 0; i < 40; i++) x.fillRect(8 + ((i * 53) % 210), H - 4 - ((i * 29) % 14), 1, 1);
+  // the lighthouse on the point
+  x.fillStyle = '#e8d8c8'; x.fillRect(282, H - 26, 4, 22);
+  x.fillStyle = '#c0242c'; x.fillRect(282, H - 20, 4, 3); x.fillRect(282, H - 12, 4, 3);
+  x.fillStyle = '#ffe890'; x.fillRect(281, H - 29, 6, 3);
+  x.fillStyle = '#3a2848'; x.fillRect(270, H - 4, 30, 4);
+  // ships out to sea
+  x.fillStyle = '#2a2040';
+  x.fillRect(360, H - 4, 18, 3); x.fillRect(366, H - 8, 6, 4);
+  x.fillRect(520, H - 3, 12, 2); x.fillRect(524, H - 6, 3, 3);
+  // the far shore, getting closer
+  x.fillStyle = '#6a3a5a';
+  for (let px = 560; px < W; px++) x.fillRect(px, H - 3 - Math.round((px - 560) / 22 + Math.sin(px / 14) * 2), 1, 10);
+  x.fillStyle = '#4a2f52';
+  for (let i = 0; i < 8; i++) { const hx = 640 + i * 14, hh = 6 + ((i * 41) % 10); x.fillRect(hx, H - 8 - hh, 10, hh); }
+  // the sea, with the sun's path broken up on it
+  for (let y = H; y < 240; y++) {
+    const k = (y - H) / (240 - H);
+    x.fillStyle = k < 0.15 ? '#c05a50' : k < 0.4 ? '#6a3a62' : '#2a3a6a';
+    x.fillRect(0, y, W, 1);
+    if (y % 3 === 0) {
+      x.fillStyle = '#ffd890';
+      const half = Math.round(14 * (1 - k) + 3);
+      for (let px = sunX - half; px < sunX + half; px += 3) x.fillRect(px + (y % 2), y, 2, 1);
+    }
+  }
+  return { canvas: c, w: W, h: 240 };
+}
+
 
 /* ---------------------------------------------------------- game state */
 
@@ -4715,7 +5543,7 @@ function post(en, spec) {
    come back to it later, so the two can never disagree about what a level
    contains. */
 const WORLD_KEYS = ['enemies', 'coins', 'items', 'flags', 'charmers', 'gates', 'hazards',
-                    'planks', 'shots', 'boss', 'heli', 'script', 'tea'];
+                    'planks', 'shots', 'rideables', 'boss', 'heli', 'script', 'tea'];
 
 /* Builds the contents of the current LEVEL into game.*. The grid has to be
    built first: enemies seat themselves on it. */
@@ -4740,9 +5568,212 @@ function populateWorld() {
   ];
   game.boss = null; game.heli = null;
   game.hazards = []; game.planks = []; game.script = null; game.tea = null; game.shots = [];
+  game.rideables = [];
+}
+
+/* ---------------------------------------------------------- rooms
+
+   A room is a small LEVEL-shaped level behind a pipe. Going in sets the act
+   aside whole - LEVEL, the grid by reference (so used ? blocks, broken bricks,
+   opened gates and a cut bridge are exactly as left), the camera and every
+   WORLD_KEYS list - and coming out puts it all back. LEVEL is assigned
+   directly, never through loadLevel(), which would retune the music. A room
+   is kept once visited, so its coins never come back; death and R go through
+   reset(), which forgets rooms along with everything else.
+
+   The militia come along: the crowd is not set aside, only moved to the
+   pipe. Its numbers live in one place and nothing can be lost between the
+   two levels. */
+const ROOM_INHERIT = ['throwKind', 'crowdCfg', 'oldFlag', 'subtitle', 'invincibleLabel',
+                      'heroRose', 'smashKind', 'music', 'start'];
+function normaliseRooms() {
+  for (const L of LEVELS)
+    for (const [id, r] of Object.entries(L.rooms || {})) {
+      for (const k of ROOM_INHERIT) if (r[k] === undefined) r[k] = L[k];
+      for (const k of ['blocks', 'pipes', 'coinRuns', 'items', 'enemies', 'flags', 'charmers', 'backdrops'])
+        if (!r[k]) r[k] = [];
+      Object.assign(r, { id, h: LEVEL_H, finishX: null, finalGate: null, bridge: null, water: null,
+                         bossTriggerX: null, crowd: false, card: null, rooms: null });
+    }
+}
+
+const WARP = { hold: 0.3, sink: 0.45, rise: 0.45 };
+const snapshotWorld = () => Object.fromEntries(WORLD_KEYS.map(k => [k, game[k]]));
+const restoreWorld = w => { for (const k of WORLD_KEYS) game[k] = w[k]; };
+
+// The pipe he is standing squarely on top of, if it goes anywhere.
+function warpPipeUnder(p) {
+  if (!p.onGround || p.ride) return null;
+  for (const pp of LEVEL.pipes) {
+    if (!pp.warp && !pp.exit) continue;
+    const x0 = pp.x * TILE;
+    if (Math.abs(p.bottom - pp.y * TILE) < 1 && p.cx >= x0 + 6 && p.cx <= x0 + 2 * TILE - 6) return pp;
+  }
+  return null;
+}
+
+/* Down held for 0.3s on the cap, not a tap: ducking a bullet or a dog while
+   standing on a pipe must never send him underground. */
+function checkWarp(dt) {
+  const p = game.player;
+  // a death, win or outro earlier this frame wins; a pipe must not override it
+  if (game.state !== 'play') { game.warpHold = 0; return; }
+  /* DOWN has to be let go between warps. Coming up out of 48 puts him on the
+     very pipe that leads back down, and a held key sent him straight back. */
+  if (game.warpLatch) {
+    if (Input.crouch()) { game.warpHold = 0; return; }
+    game.warpLatch = false;
+  }
+  const pp = Input.crouch() ? warpPipeUnder(p) : null;
+  game.warpHold = pp ? (game.warpHold || 0) + dt : 0;
+  if (!pp || game.warpHold < WARP.hold) return;
+  game.warpHold = 0;
+  p.h = p.standH; p.crouching = false; p.dropT = 0;
+  p.y = pp.y * TILE - p.h;
+  p.x = pp.x * TILE + TILE - p.w / 2;
+  p.vx = 0; p.vy = 0; p.carryVx = 0; p.lastRide = null;
+  game.shots = [];
+  /* Defectors still walking over join now, while game.planks is still the
+     level being left: merged after the swap, the room's own were cached away
+     with it and never came. */
+  for (const pl of game.planks)
+    if (pl instanceof Turncoat) { pl.dead = true; crowd.join(p.cx, 1); }
+  game.planks = game.planks.filter(pl => !pl.dead);
+  game.warp = { phase: 'sink', t: 0, pipe: pp, y0: p.y, clip: { y: pp.y * TILE, below: false } };
+  game.state = 'pipe';
+  Sfx.pipe();
+}
+
+function updateWarp(dt) {
+  const w = game.warp, p = game.player;
+  w.t += dt;
+  if (w.phase === 'sink') {
+    p.y = w.y0 + Math.min(1, w.t / WARP.sink) * (p.h + 2);
+    if (w.t < WARP.sink) return;
+    if (w.pipe.warp) enterRoom(w.pipe.warp); else exitRoom();
+    return;
+  }
+  // rise out of a floor pipe, or drop out of a ceiling one
+  const k = Math.min(1, w.t / WARP.rise);
+  p.y = w.y0 + (w.phase === 'rise' ? -1 : 1) * k * (p.h + 2);
+  if (w.t < WARP.rise) return;
+  // out of a ceiling pipe he is in mid-air, whatever the cap he left said
+  if (w.phase === 'drop') { p.onGround = false; p.coyote = 0; }
+  game.warp = null; game.state = 'play'; game.warpLatch = true;
+  p.vy = 0; p.invuln = Math.max(p.invuln, 0.5);
+}
+
+// Moved between levels: a fresh frame of effects, the crowd at his back.
+function afterWarp(p) {
+  particles = []; floats = []; bumps = [];
+  Chant.reset();
+  game.shots = [];
+  crowd.x = p.cx - crowd.cfg.gap * (p.face || 1); crowd.from = null;
+  p.ride = null; p.lastRide = null; p.carryVx = 0; p.vx = 0; p.vy = 0;
+  snapCamera();
+}
+
+function enterRoom(id) {
+  const room = LEVEL.rooms[id], p = game.player;
+  game.room = { id, LEVEL, grid, world: snapshotWorld(), pipe: game.warp.pipe };
+  LEVEL = room;
+  const kept = game.roomCache[id];
+  if (kept) { grid = kept.grid; restoreWorld(kept.world); }
+  else { buildGrid(); populateWorld(); Stats.add('rooms'); }
+  const way = room.pipes.find(pp => pp.hang);
+  const lip = (way.y + way.h) * TILE;
+  p.x = way.x * TILE + TILE - p.w / 2; p.y = lip - p.h - 2; p.face = 1;
+  afterWarp(p);
+  game.warp = { phase: 'drop', t: 0, y0: p.y, clip: { y: lip, below: true } };
+  floatText(p.cx + 60, lip + 24, room.title || 'BELOW', '#ffd85e');
+}
+
+function exitRoom() {
+  const r = game.room, p = game.player;
+  game.roomCache[r.id] = { grid, world: snapshotWorld() };
+  LEVEL = r.LEVEL; grid = r.grid; restoreWorld(r.world);
+  game.room = null;
+  const top = r.pipe.y * TILE;
+  p.x = r.pipe.x * TILE + TILE - p.w / 2; p.y = top + 2; p.face = 1;
+  afterWarp(p);
+  game.warp = { phase: 'rise', t: 0, y0: p.y, clip: { y: top, below: false } };
+}
+
+// A blinking arrow over a pipe that goes somewhere, once he is close to it.
+function drawWarpHints() {
+  if (game.state !== 'play') return;
+  const p = game.player;
+  for (const pp of LEVEL.pipes) {
+    if (!pp.warp && !pp.exit) continue;
+    const cx = pp.x * TILE + TILE;
+    if (Math.abs(p.cx - cx) > 40 || Math.floor(game.time * 3) % 2) continue;
+    const y = pp.y * TILE - 12 - (warpPipeUnder(p) === pp ? 0 : 4);
+    g.fillStyle = '#ffd85e';
+    g.fillRect(cx - 3, y, 7, 1); g.fillRect(cx - 2, y + 1, 5, 1);
+    g.fillRect(cx - 1, y + 2, 3, 1); g.fillRect(cx, y + 3, 1, 1);
+  }
+}
+
+/* The cellar's back wall: old brick, alcoves stacked with what was taken,
+   two bare bulbs. Dark, so the coins and the people in front stay readable. */
+function buildCellarBackdrop() {
+  /* paintZone draws backdrops at y = -cam.y * 0.55, and in a room the camera
+     sits on the floor (cam.y 60): art rows 53-181 are what shows between the
+     vault and the floor, so everything worth seeing is placed in that band. */
+  const W = 320, H = 240, FLOOR = 181;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  paintInto(c.getContext('2d'), () => {
+    g.fillStyle = '#1a1012'; g.fillRect(0, 0, W, H);
+    for (let y = 0; y < H; y += 8)
+      for (let x = -((y / 8) % 2) * 8; x < W; x += 16) {
+        const h = ((x * 7 + y * 13) >>> 0) % 5;
+        g.fillStyle = ['#3a2624', '#432a26', '#33211f', '#3d2724', '#2f1e1c'][h];
+        g.fillRect(x + 1, y + 1, 15, 7);
+      }
+    for (const ax of [40, 200]) {                       // two arched alcoves
+      g.fillStyle = '#24161a';
+      g.fillRect(ax, 104, 80, FLOOR - 104);
+      for (let k = 0; k < 8; k++) g.fillRect(ax + 8 - k, 88 + k * 2, 64 + k * 2, 2);
+      g.fillStyle = '#5a3a30';                           // the arch's rim
+      for (let k = 0; k < 8; k++) { g.fillRect(ax + 7 - k, 88 + k * 2, 1, 2); g.fillRect(ax + 72 + k, 88 + k * 2, 1, 2); }
+      g.fillRect(ax + 8, 87, 64, 1);
+      g.fillRect(ax - 1, 104, 1, FLOOR - 104); g.fillRect(ax + 80, 104, 1, FLOOR - 104);
+      // gold bars, stacked in a pyramid on the alcove floor
+      for (let row = 0; row < 4; row++)
+        for (let i = 0; i < 4 - row; i++) {
+          const bx = ax + 8 + row * 6 + i * 12, by = FLOOR - 6 - row * 6;
+          g.fillStyle = '#a06a10'; g.fillRect(bx, by, 11, 6);
+          g.fillStyle = '#e8b030'; g.fillRect(bx + 1, by, 9, 4);
+          g.fillStyle = '#ffe070'; g.fillRect(bx + 2, by + 1, 5, 1);
+        }
+      // and two sacks of money beside them
+      for (const [sx, sh] of [[56, 22], [68, 16]]) {
+        const sy = FLOOR - sh;                         // a round belly, a tied neck
+        g.fillStyle = '#6a5034'; g.fillRect(ax + sx - 2, sy + 7, 14, sh - 7);
+        g.fillStyle = '#9a7c52'; g.fillRect(ax + sx - 1, sy + 6, 12, sh - 7);
+        g.fillRect(ax + sx + 1, sy + 3, 8, 3);
+        g.fillStyle = '#b89a6a'; g.fillRect(ax + sx + 1, sy + 7, 3, sh - 10);
+        g.fillStyle = '#5a4026'; g.fillRect(ax + sx + 3, sy + 2, 4, 1);
+        g.fillStyle = '#9a7c52'; g.fillRect(ax + sx + 2, sy, 2, 2); g.fillRect(ax + sx + 6, sy, 2, 2);
+        g.fillStyle = '#e8b030'; g.fillRect(ax + sx + 3, sy + 10, 4, 4);   // a coin on the side
+        g.fillStyle = '#a06a10'; g.fillRect(ax + sx + 4, sy + 11, 2, 2);
+      }
+    }
+    for (const bx of [160, 0]) {                         // bare bulbs on a flex
+      g.fillStyle = '#0c0808'; g.fillRect(bx, 53, 1, 18);
+      g.fillStyle = 'rgba(255,220,140,.10)'; g.fillRect(bx - 18, 62, 37, 26);
+      g.fillStyle = 'rgba(255,220,140,.12)'; g.fillRect(bx - 10, 66, 21, 16);
+      g.fillStyle = '#fff0b0'; g.fillRect(bx - 2, 71, 5, 6);
+      g.fillStyle = '#ffffff'; g.fillRect(bx - 1, 72, 2, 2);
+    }
+  });
+  return { canvas: c, w: W, h: H };
 }
 
 function reset(toTitle = false, opts = {}) {
+  // out of any room first: everything below rebuilds the act itself
+  if (game.room) LEVEL = game.room.LEVEL;
+  game.room = null; game.roomCache = {}; game.warp = null; game.warpHold = 0; game.warpLatch = false;
   if (opts.levelIndex != null) loadLevel(opts.levelIndex);
   else if (toTitle) loadLevel(0);          // the title screen is always act one
   const carried = opts.score != null ? opts.score : (opts.keepScore ? game.score : 0);
@@ -4756,10 +5787,15 @@ function reset(toTitle = false, opts = {}) {
   Chant.reset();
 
   game.player = new Player(LEVEL.start.x * TILE, LEVEL.start.y * TILE);
+  if (LEVEL.throwKind === 'flag') {
+    game.player.roses = AMMO.flagStart;
+    if (!game.taughtThrow) game.player.throwHint = 8;
+  }
   populateWorld();
   game.flagsConverted = 0;
   game.death = null; game.bossBeaten = false;
   crowd.reset(LEVEL.start.x * TILE);
+  seaRun.reset();
   bridgeRun.reset();
   game.entry = null;
   game.score = carried; game.actScore = carried; game.endT = 0; game.time = 0;
@@ -4876,7 +5912,7 @@ const INTRO = {
   // Giorgi Targamadze, twice: Aslan's man with the dogs in act 1, a journalist in act 2
   mid1:   { art: 'mid',      l1: "ASLAN'S MAN",            l2: 'BROUGHT HIS DOGS',           bg: '#2d4a7a' },
   mid2:   { art: 'mid',      l1: 'ROUND 2',                l2: 'SAME MAN. NEW SUNGLASSES.',  bg: '#2d4a7a' },
-  mid3:   { art: 'mid',      l1: 'ROUND 3',                l2: 'HAS HEARD THE HELICOPTER',   bg: '#2d4a7a' },
+  limo:   { art: 'limo',     l1: "ASLAN'S SON",            l2: 'THE CITY BUDGET, ON WHEELS', bg: '#1c1c24', name: 'THE MAYOR' },
   aslan:  { art: 'boss',     l1: 'LION OF ACHARA',         l2: 'HELICOPTER ON STANDBY',      bg: '#3a2a5a', name: 'ASLAN' },
   anchor: { art: 'l2anchor', l1: 'YOU AGAIN?',             l2: 'NOW A HUMBLE JOURNALIST',    bg: '#1c2436' },
   sleepy: { art: 'l3sleepy', l1: 'MINISTER OF DOZING',     l2: 'DO NOT WAKE HIM. REALLY.',   bg: '#3a4a6a' },
@@ -4888,6 +5924,7 @@ const INTRO_FULL = 2.3, INTRO_SHORT = 0.9;
 
 function introKey(e) {
   if (e instanceof FlyingBoss) return 'aslan';
+  if (e instanceof Limo) return 'limo';
   if (e instanceof Anchor) return 'anchor';
   if (e instanceof Dardubala) return 'edika';
   if (e instanceof Sleepy) return 'sleepy';
@@ -5289,7 +6326,7 @@ function camTargetY() {
 
 function updateCamera(dt) {
   const p = game.player;
-  const want = clamp(p.vx * CAM.lead, -CAM.leadMax, CAM.leadMax);
+  const want = clamp((p.vx + (p.carryVx || 0)) * CAM.lead, -CAM.leadMax, CAM.leadMax);
   cam.lead = lerp(cam.lead ?? want, want, 1 - Math.pow(CAM.leadEase, dt));
 
   cam.x = lerp(cam.x, camTargetX(), 1 - Math.pow(CAM.xEase, dt));
@@ -5592,8 +6629,18 @@ function update(rawDt) {
     game.hazards = game.hazards.filter(h => !h.dead);
     for (const pl of game.planks) pl.update(dt);
     game.planks = game.planks.filter(pl => !pl.dead);
-    if (LEVEL.crowd) crowd.update(dt);
+    if (crowd.active) crowd.update(dt);
     Chant.update(dt);
+    updateEffects(dt);
+    updateCamera(dt);
+    return;
+  }
+
+  if (game.state === 'pipe') {
+    game.time += dt;
+    Stats.tick(dt);
+    updateWarp(dt);
+    if (crowd.active) crowd.update(dt);
     updateEffects(dt);
     updateCamera(dt);
     return;
@@ -5625,13 +6672,16 @@ function update(rawDt) {
 
   game.time += dt;
   Stats.tick(dt);
+  updateRideables(dt);
   game.player.update(dt);
+  if (!game.room) seaRun.update(dt);
 
   /* `!game.bossBeaten` matters: his exit sets game.boss to null, and the
      player is still standing well past the trigger line when it does, so
      without it he was immediately respawned at full health the frame after
      escaping. */
-  if (!game.boss && !game.bossBeaten && game.player.cx > LEVEL.bossTriggerX * TILE) {
+  if (!game.boss && !game.bossBeaten && LEVEL.bossTriggerX != null &&
+      game.player.cx > LEVEL.bossTriggerX * TILE) {
     game.boss = new FlyingBoss(game.player.cx + 200, 60);
     floatText(game.player.cx, game.player.y - 24, 'HE IS HERE', '#c9a0ff');
     shake = 4; flash = 0.45; Sfx.deny();
@@ -5651,7 +6701,9 @@ function update(rawDt) {
          stand on one-way tiles under their own collision rules, and this path
          does their moving for them while they are stunned. They set `upper` in
          their constructors for exactly this line. */
-      moveAndCollide(e, dt, { oneWay: e.upper === true });
+      // things afloat stay afloat: gravity would sink a stunned patrol boat
+      if (e.floats) e.vy = 0;
+      else moveAndCollide(e, dt, { oneWay: e.upper === true });
       if (Math.random() < dt * 12)
         burst(e.cx + rand(-6, 6), e.y, 1, { colors: ['#ff8fd0', '#fff'], speed: 14, grav: -20, life: .6, size: 1 });
     } else e.update(dt);
@@ -5668,8 +6720,8 @@ function update(rawDt) {
   game.hazards = game.hazards.filter(h => !h.dead);
   for (const pl of game.planks) pl.update(dt);
   game.planks = game.planks.filter(pl => !pl.dead);
-  bridgeRun.update(dt);
-  if (LEVEL.crowd) crowd.update(dt);
+  if (!game.room) bridgeRun.update(dt);
+  if (crowd.active) crowd.update(dt);
   Chant.update(dt);
   for (const r of game.shots) r.update(dt);
   game.shots = game.shots.filter(r => !r.dead);
@@ -5695,6 +6747,7 @@ function update(rawDt) {
   updateEffects(dt);
   updateCamera(dt);
   BossIntro.check();
+  checkWarp(dt);
 }
 
 /* ---------------------------------------------------------- rendering */
@@ -5905,10 +6958,25 @@ function drawBackdrop() {
   }
 }
 
+/* Dressed stone for a cellar's floor, walls and vault: two courses a tile,
+   joints staggered, a worn light edge wherever it faces the room. */
+function drawCellarStone(px, py, tx, ty, top) {
+  g.fillStyle = '#4b4250'; g.fillRect(px, py, TILE, TILE);
+  g.fillStyle = (tx * 3 + ty * 5) % 4 === 0 ? '#554a5a' : '#463d4b';
+  g.fillRect(px + 1, py + 1, 7, 6); g.fillRect(px + 9, py + 9, 6, 6);
+  g.fillStyle = '#2a2430';
+  g.fillRect(px, py + 7, TILE, 1); g.fillRect(px, py + 15, TILE, 1);
+  const j = (tx + ty) % 2 ? 4 : 12;
+  g.fillRect(px + j, py, 1, 7); g.fillRect(px + ((j + 8) % 16), py + 8, 1, 7);
+  if (top) { g.fillStyle = '#7d7088'; g.fillRect(px, py, TILE, 1); }
+  if (!isSolid(tileAt(tx, ty + 1))) { g.fillStyle = '#231e28'; g.fillRect(px, py + TILE - 2, TILE, 2); }
+}
+
 function drawTile(t, px, py, tx, ty) {
   switch (t) {
     case T.GROUND: {
       const top = !isSolid(tileAt(tx, ty - 1));
+      if (LEVEL.tiles === 'cellar') { drawCellarStone(px, py, tx, ty, top); break; }
       g.fillStyle = PAL.dirt; g.fillRect(px, py, TILE, TILE);
       g.fillStyle = PAL.dirtDark;
       g.fillRect(px, py + TILE - 3, TILE, 3);
@@ -6014,18 +7082,20 @@ function drawTile(t, px, py, tx, ty) {
         g.fillStyle = PAL.pipeEdge; g.fillRect(px + TILE - 1, py, 1, TILE);
       }
 
-      if (top) {
+      // a pipe hanging from a ceiling (a room's way in) has its lip at the bottom
+      const ly = top ? py : tileAt(tx, ty + 1) === T.AIR ? py + TILE - 6 : null;
+      if (ly != null) {
         // the lip only overhangs on the pipe's actual outer edges
         const x0 = px - (L ? 2 : 0);
         const w  = TILE + (L ? 2 : 0) + (R ? 2 : 0);
-        g.fillStyle = PAL.pipe; g.fillRect(x0, py, w, 6);
-        if (L) g.fillStyle = PAL.pipeLite, g.fillRect(x0 + 1, py + 1, 4, 4);
-        if (R) g.fillStyle = PAL.pipeDark, g.fillRect(x0 + w - 4, py + 1, 3, 4);
+        g.fillStyle = PAL.pipe; g.fillRect(x0, ly, w, 6);
+        if (L) g.fillStyle = PAL.pipeLite, g.fillRect(x0 + 1, ly + 1, 4, 4);
+        if (R) g.fillStyle = PAL.pipeDark, g.fillRect(x0 + w - 4, ly + 1, 3, 4);
         g.fillStyle = PAL.pipeEdge;
-        g.fillRect(x0, py, w, 1);                   // top edge
-        g.fillRect(x0, py + 5, w, 1);               // underside of the lip
-        if (L) g.fillRect(x0, py, 1, 6);
-        if (R) g.fillRect(x0 + w - 1, py, 1, 6);
+        g.fillRect(x0, ly, w, 1);                   // top edge
+        g.fillRect(x0, ly + 5, w, 1);               // underside of the lip
+        if (L) g.fillRect(x0, ly, 1, 6);
+        if (R) g.fillRect(x0 + w - 1, ly, 1, 6);
       }
       break;
     }
@@ -6318,6 +7388,14 @@ class LevelFlag extends Entity {
     game.score += 300;
     game.flagsConverted++; Stats.add('flags');
     if (LEVEL.crowd) crowd.join(this.x);
+    /* The ammo shows up as a blink of the HUD counter, not another floating
+       line: the pole already floats +300 and every other one starts a chant
+       in the same spot, and a third label made the three unreadable. */
+    if (LEVEL.throwKind === 'flag') {
+      const p = game.player;
+      p.roses = Math.min(p.roses + AMMO.perPole, AMMO.cap);
+      p.ammoFlash = 0.8;
+    }
     floatText(this.x + 9, this.y - 6, '+300', '#ffd85e');
     // every other flag the street answers - every one would be a drone
     if (!this.tv && game.flagsConverted % 2 === 1) Chant.start('sakartvelo', this.x + 9, this.y - 20);
@@ -6443,6 +7521,11 @@ function drawEntities() {
      travelling across the screen. A second frame per character would let a
      proper two-frame cycle go back in. */
   for (const e of game.enemies) {
+    /* Anything that draws itself does so here. Without this branch an enemy
+       with no case of its own fell through to the walker sprite at the bottom
+       - the sea mines and patrol boats first showed up as soldiers standing
+       on the water. */
+    if (e.selfDrawn) { e.draw(); continue; }
     shadowUnder(e);
     if (e instanceof Dog) {
       drawDog(e.x, e.y, e.face, e.t);
@@ -6640,14 +7723,22 @@ function drawEntities() {
   for (const h of game.hazards) h.draw();
   for (const pl of game.planks) pl.draw();
   for (const r of game.shots) r.draw();
-  if (LEVEL.crowd) crowd.draw();
+  if (crowd.active) crowd.draw();
   Chant.draw();
   if (game.tea) drawTeaScene();
   if (game.heli) drawHeli(game.heli.x, game.heli.y, game.heli.t);
 
   const p = game.player;
   if (game.death) drawSprite(ART.death, game.death);
-  const blink = game.death || (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0);
+  // going into a pipe or coming out of one: only the part outside it shows
+  const wc = game.warp && game.warp.clip;
+  if (wc) {
+    g.save(); g.beginPath();
+    if (wc.below) g.rect(cam.x - 50, wc.y, VIEW_W + 100, VIEW_H + 100);
+    else g.rect(cam.x - 50, wc.y - VIEW_H - 100, VIEW_W + 100, VIEW_H + 100);
+    g.clip();
+  }
+  const blink = game.death || (!wc && p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0);
   if (!blink) {
     shadowUnder(p);
     // Landing compresses, takeoff extends. This was inverted before — he
@@ -6703,6 +7794,8 @@ function drawEntities() {
         drawHeartIcon(p.cx + Math.cos(a) * 9 - 3, p.y - 10 + Math.sin(a) * 3, '#ff7aa8');
       }
   }
+
+  if (wc) g.restore();
 
   // finish line: Georgian flag on the pole
   if (LEVEL.finishX == null) return;
@@ -6860,11 +7953,13 @@ function drawHud() {
   drawText(g, String(game.score).padStart(6, '0'), 52, 19, UNM.white, 1, UNM.redDk);
   drawBallot(VIEW_W - 16, 5, 11, 11, 1);
   if (game.player.combo > 1)
-    drawText(g, `COMBO X${Math.min(game.player.combo, 8)}`, 8, 30, '#ff5ec4', 1);
+    // right-hand side: the ammo line now owns the left of this row in act 1
+    drawTextRight(g, `COMBO X${Math.min(game.player.combo, 8)}`, VIEW_W - 8, 30, '#ff5ec4', 1);
   if (Music.muted) drawTextRight(g, 'MUSIC OFF', VIEW_W - 8, 44, '#8890a4', 1);
   if (game.player.roses > 0) {
-    drawMiniRose(8, 29);
-    drawText(g, `ROSES X${game.player.roses}`, 15, 30, '#ff8fd0', 1);
+    if (LEVEL.throwKind === 'flag') drawMiniFlag(7, 31); else drawMiniRose(8, 29);
+    const gained = game.player.ammoFlash > 0 && Math.floor(game.time * 10) % 2 === 0;
+    drawText(g, `${ammoName()} X${game.player.roses}`, 16, 30, gained ? '#ffd85e' : '#ff8fd0', 1);
     // shown until they actually throw one, then never again
     if (game.player.throwHint > 0 && Math.floor(game.time * 3) % 2 === 0)
       drawText(g, 'PRESS X TO THROW', 15, 40, '#ffd85e', 1);
@@ -7244,8 +8339,13 @@ function renderWorld() {
   g.save();
   g.translate(-Math.round(cam.x) + sx, -Math.round(cam.y) + sy);
   drawTiles();
+  drawWater(false);
   drawLevelFlags();
+  for (const r of game.rideables) r.draw();
+  if (seaRun.boat && !game.room) seaRun.boat.drawTug();
+  drawWarpHints();
   drawEntities();
+  drawWater(true);
   drawGatePrompts();
   drawParticles();
   drawDebug();
@@ -7315,7 +8415,7 @@ function hotkeys() {
   /* R restarts the act you are in, keeping the score you entered it with -
      the same deal as dying. Only mid-act: the end screens handle R
      themselves, and a scene or the name entry must never be thrown away. */
-  if (Input.justDown('KeyR') && (game.state === 'play' || game.state === 'escape')) {
+  if (Input.justDown('KeyR') && (game.state === 'play' || game.state === 'escape' || game.state === 'pipe')) {
     if (Stats.run) Stats.run.restarts++;
     reset(false, { levelIndex: game.levelIndex, score: game.actScore });
   }
@@ -7346,6 +8446,14 @@ function frame(now) {
   fitCanvas();
   Difficulty.load();
   await loadAll();
+  ART.seaBg = buildSeaBackdrop();          // drawn in code, not loaded
+  ART.cellarBg = buildCellarBackdrop();
+  // the limousine's portrait for its boss card: the car, mayor waving
+  ART.limo = (() => {
+    const c = document.createElement('canvas'); c.width = LIMO.w; c.height = LIMO.h + 18;
+    paintInto(c.getContext('2d'), () => paintLimo(0, 18, 1, 0.1, true, false));
+    return { canvas: c, w: c.width, h: c.height };
+  })();
   /* Every act, each against its own grid.
 
      validateLevel reads `grid` for the bump-headroom and buried-pickup checks,
@@ -7356,7 +8464,11 @@ function frame(now) {
 
      Doing it per level also closes the older gap where only act 1 was ever
      checked, because LEVEL was still bound to LEVEL_1 at this point. */
-  for (let i = 0; i < LEVELS.length; i++) { loadLevel(i); buildGrid(); validateLevel(); }
+  normaliseRooms();
+  for (let i = 0; i < LEVELS.length; i++) {
+    loadLevel(i); buildGrid(); validateLevel();
+    for (const r of Object.values(LEVELS[i].rooms || {})) { LEVEL = r; buildGrid(); validateLevel(); validateRoom(r); }
+  }
   validateText();
   loadLevel(0);
   const missing = Object.keys(SPRITES).filter(k => ART[k].isPlaceholder);
