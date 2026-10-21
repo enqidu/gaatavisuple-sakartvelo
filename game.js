@@ -1001,7 +1001,7 @@ addEventListener('keyup', e => Input.keys.delete(e.code));
 const T = { AIR: 0, GROUND: 1, BRICK: 2, QUESTION: 3, USED: 4, PLATFORM: 5, PIPE: 6, GATE: 7, BRIDGE: 8 };
 
 const LEVEL_1 = {
-  w: 300, h: LEVEL_H,
+  w: 314, h: LEVEL_H,
   // the boulevard, a sunset over the sea for the crossing, the boulevard again
   backdrops: [
     { art: 'bg',    fromX: 0,   par: 0.34, tile: true },
@@ -1021,21 +1021,21 @@ const LEVEL_1 = {
   ],
   winLines: [['ASLANI GAIQTSA', '#ffd85e'], ['ACHARA TAVISUPALIA!', '#7ae07a']],
   start: { x: 3, y: 11 },
-  finishX: 291,
+  finishX: 305,
   /* The sea at 140-204 (the banana boat) pushed everything after it 60 tiles
      along; relative to each other the bridge, the ravine, the gates and the
      arena are exactly where they were, so their measurements still hold.
 
      Endgame runs in clean stages so nothing overlaps:
-       260  third gate boss (General Netkachov)
-       266  his gate — opens when he dies
-       270  pipe (a step to jump from during the fight)
-       268+ boss arena: Aslan starts diving
-       286  final gate — opens when Aslan is beaten
-       291  flag                                                            */
+       254-279  General Netkachov's arena, more than a screen wide
+       280  his gate — opens when he dies
+       284  pipe (a step to jump from during the fight)
+       282+ boss arena: Aslan starts diving
+       300  final gate — opens when Aslan is beaten
+       305  flag                                                            */
   finalBoss: 'ASLAN',
   bossTriggerX: 128,   // he appears here and stalks you, out of reach
-  bossArenaX: 268,     // only past here does he commit to dives you can punish
+  bossArenaX: 282,     // only past here does he commit to dives you can punish
 
   /* The ravine (was 179-194, now 239-254 after the sea) is a FIFTEEN-tile gap spanned by a
      bridge that gets blown as he steps on it, and the ultra powder that drops
@@ -1049,7 +1049,7 @@ const LEVEL_1 = {
      tapped. Seventeen is where the ultra itself starts falling short. */
   /* 140-204 is open sea now, not a 4-tile pit: the banana boat crosses it.
      See LEVEL_1.water and boatRun. */
-  ground: [[0, 58], [62, 90], [94, 140], [204, 239], [254, 300]],
+  ground: [[0, 58], [62, 90], [94, 140], [204, 239], [254, 314]],
   water: [{ from: 140, to: 204, y: 212 }],
   bridge: { from: 239, to: 254, row: 13 },
   oldFlag: 'achara',       // act 1 flies Achara's flag, not the 1918 one
@@ -1091,10 +1091,24 @@ const LEVEL_1 = {
     { x: 229, y: 9,  w: 1, t: T.QUESTION },
     { x: 233, y: 10, w: 3, t: T.PLATFORM },
 
-    { x: 256, y: 10, w: 4, t: T.PLATFORM },
-    { x: 264, y: 8,  w: 2, t: T.BRICK },   // trimmed to keep column 266 clear for the gate
+    /* The General's arena. Everything here is for the fight with him:
+         261  a low step: up here his shots pass underneath
+         265  a ? block that pays two flags ((265*7 + 8*13) % 3 == 0) - throw
+              them at him for a stun - and is the stepping stone up to...
+         267  ...a high ledge over his head with a rose on it, a breather. His
+              bombs still land on the floor, so the fight is always down there
+         274  a low step on the far side, so the perch is not only at one end
+       All of it at row 8 or above, or one-way: he is 52px tall and walks
+       through one-way tiles, and a solid block below row 9 would catch his
+       head. */
+    { x: 261, y: 10, w: 3, t: T.PLATFORM },
+    { x: 265, y: 8,  w: 1, t: T.QUESTION },
+    { x: 266, y: 8,  w: 1, t: T.BRICK },      // widens the stepping stone to two tiles
+    { x: 267, y: 6,  w: 4, t: T.PLATFORM },
     { x: 274, y: 10, w: 3, t: T.PLATFORM },
-    { x: 281, y: 9,  w: 3, t: T.PLATFORM },
+
+    { x: 288, y: 10, w: 3, t: T.PLATFORM },
+    { x: 295, y: 9,  w: 3, t: T.PLATFORM },
   ],
 
   pipes: [
@@ -1105,7 +1119,7 @@ const LEVEL_1 = {
        pipe, landed on the single tile at 178 and was already over the edge,
        with no ground to build up the speed the crossing needs. */
     { x: 225, y: 10, h: 3 },
-    { x: 270, y: 11, h: 2 },
+    { x: 284, y: 11, h: 2 },
   ],
 
   coinRuns: [
@@ -1120,8 +1134,8 @@ const LEVEL_1 = {
     // 230 not 226, and 260 not 261: both used to run into the masonry beside
     // them and spawn coins inside solid tiles, where they cannot be collected
     { x: 218, y: 5,  n: 3 }, { x: 230, y: 9,  n: 4 },
-    { x: 255, y: 9,  n: 4 }, { x: 260, y: 8,  n: 4 },
-    { x: 275, y: 8,  n: 3 },
+    { x: 261, y: 8,  n: 3 }, { x: 267, y: 4,  n: 4 },
+    { x: 274, y: 8,  n: 3 }, { x: 289, y: 8,  n: 3 },
   ],
 
   // khachapuri = temporary invincibility, rose = heal one heart.
@@ -1139,13 +1153,14 @@ const LEVEL_1 = {
     { x: 118, y: 10, t: 'powder' },      // among the walkers past the first gate
     { x: 210, y: 8,  t: 'rose' },        // on the 210-212 ledge, past the beach
     { x: 223, y: 10, t: 'powder' },      // among the walkers past the limousine
-    { x: 269, y: 10, t: 'khachapuri' },  // the act's one invincibility: a reward
+    { x: 269, y: 5,  t: 'rose' },        // on the General's high ledge
+    { x: 283, y: 10, t: 'khachapuri' },  // the act's one invincibility: a reward
                                          // for the General, past his gate, before Aslan
-    { x: 278, y: 9,  t: 'rose' },
+    { x: 292, y: 9,  t: 'rose' },
   ],
 
   // Flagpoles flying the old republic flag; touching one changes it over.
-  flags: [12, 45, 76, 108, 206, 231, 278],   // 231 not 246: 246 is over the ravine
+  flags: [12, 45, 76, 108, 206, 231, 292],   // 231 not 246: 246 is over the ravine
 
   // Placed to make a stretch awkward rather than to pad it out: on the run-up
   // to a gap, beside a gate, and in the boss arena.
@@ -1153,9 +1168,8 @@ const LEVEL_1 = {
      at 58-62 and her pull dragged the player over the edge — then the respawn
      put him back inside her radius, so she pulled him straight in again. An
      unbreakable loop that drained a heart per cycle. See validateLevel(). */
-  /* 263 not 258: the ultra crossing lands him around 255 and her pull radius
-     is 62px, so at 258 she caught him the instant he completed the one jump
-     the act forces him to make. */
+  /* None past the ravine: the ultra crossing lands him around 255, her pull
+     radius is 62px, and that is the General's arena. */
   charmers: [30, 42, 106, 228],   // 106 not 102: clear of the gate at 101
 
   /* Each mid boss holds a gate shut. `gate` is the tile column that stays
@@ -1186,13 +1200,13 @@ const LEVEL_1 = {
     { t: 'walker', x: 222 }, { t: 'walker', x: 230 },
     { t: 'walker', x: 232 },
     { t: 'walker', x: 234, up: true },    // the 233-235 ledge, last one before the bridge
-    { t: 'general', x: 260, gate: 266 },  // General Netkachov
-    { t: 'walker', x: 268 },
+    { t: 'general', x: 268, gate: 280 },  // General Netkachov
+    { t: 'walker', x: 282 },
   ],
 
   // Opens only when Aslan is beaten, so the flag cannot be reached by walking
   // past the fight.
-  finalGate: 286,
+  finalGate: 300,
 
   /* Under the boulevard, through the pipe at 48: where the money went. Thirty
      tiles of vault - stone floor, walls and ceiling - full of coins, two
@@ -3582,7 +3596,7 @@ class Anchor extends Entity {
    in brass. Each bomb of his own that goes off on him is one hit, and he
    staggers for a moment, harmless, so the player can step clear. */
 const GENERAL = { hp: 4, w: 30, h: 52, pace: 30, cycle: 2.1, aim: 0.7, gap: 0.32,
-                  volley: 3, bullet: 150, stagger: 1.4, lob: 0.7, backOff: 1.3 };
+                  volley: 3, bullet: 150, stagger: 1.4, lob: 0.7, backOff: 1.3, landing: 4 };
 
 class General extends Entity {
   constructor(tx, gate = null) {
@@ -3593,10 +3607,11 @@ class General extends Entity {
     this.hp = GENERAL.hp;
     this.phase = 'pace'; this.phaseT = 0; this.left = 0; this.gap = 0;
     this.turn = 0; this.back = 0; this.taunt = 0;
-    /* Kept three tiles back from the lip of the ravine, so the player lands
-       from the jump in clear floor rather than on top of him. */
+    /* The whole arena is his except the first few tiles past the lip of the
+       ravine, so the player lands from the jump in clear floor rather than
+       on top of him. */
     this.home = spanAround(tx);
-    if (this.home) this.home.lo = Math.max(this.home.lo, (tx - 3) * TILE);
+    if (this.home) this.home.lo += GENERAL.landing * TILE;
     this.greeted = false;
   }
   get bossGrade() { return true; }
