@@ -72,8 +72,8 @@ reached.
 
 ## Music
 
-`assets/music.m4a` (AAC, about a third the size of the original mp3), looping at
-0.4 volume. It starts on the keypress that
+`assets/music-8bit.m4a`: the theme bit-crushed to an 8-bit sound (6-bit samples,
+~11kHz) and stored as 64k AAC, looping at a low 0.18 volume. It starts on the keypress that
 leaves the title screen, never at load: browsers refuse audio until a real user
 gesture, so a `play()` on page load just throws and leaves the track silently
 dead.
@@ -593,14 +593,15 @@ megabyte of load time and buys nothing.
 ### The soundtrack
 
 `ChipTune` holds named loops and `LEVEL.music` picks one; anything it does not
-recognise falls back to `assets/music.m4a`.
+recognise falls back to `assets/music-8bit.m4a`.
 
 `TRACKS` holds recorded files by name and `TUNES` holds synthesised loops;
 `LEVEL.music` names either, and anything unrecognised falls back to `main`.
 
-**All three acts play `assets/music.m4a`, and it restarts with every level** —
-entering an act, and restarting one after a death. `Music.cue()` does that from
-`reset()`, deliberately *not* from `retune()`: retune fires on any `loadLevel`,
+**All three acts play `assets/music-8bit.m4a`, and it carries on across levels** —
+entering an act, and restarting one after a death, pick the song up where it
+is; only a new run from the title starts it from the top. `Music.cue()` does that
+from `reset()`, deliberately *not* from `retune()`: retune fires on any `loadLevel`,
 including the boot loop that validates all three acts, and re-cueing there
 would fight itself.
 

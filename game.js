@@ -654,7 +654,7 @@ const Sfx = (() => {
 /* ---------------------------------------------------------- chiptune
 
    Two synthesised loops, so acts do not have to share one recorded track.
-   `LEVEL.music` names one; anything else falls back to assets/music.m4a.
+   `LEVEL.music` names one; anything else falls back to assets/music-8bit.m4a.
 
      dark  - D natural minor, 84bpm, i-VI-III-VII. Square bass, a sparse
              triangle line that leaves most of the bar empty, a noise tick on
@@ -812,13 +812,18 @@ const ChipTune = (() => {
    TUNES above; anything unrecognised falls back to `main`. Elements are made
    on demand and kept, so switching acts does not re-download. */
 const TRACKS = {
-  main:  'assets/music.m4a',            // AAC: about a third the size of the mp3
+  /* The theme, bit-crushed to an 8-bit sound (6-bit samples held four at a
+     time, ~11kHz) and stored as 64k AAC. Trimmed to 11.15s-4:30.1 of the
+     original: it opened on eleven seconds of near-silence and closed on 1.4s
+     of it, which on a loop is a dead gap every time the song comes round. A new file name rather than a new
+     music.m4a, so GitHub Pages' cache cannot keep serving the old track. */
+  main:  'assets/music-8bit.m4a',
 };
 
 const Music = (() => {
   const els = {};
   let muted = false, armed = false, liveTrack = null;
-  const BASE_VOL = 0.4;
+  const BASE_VOL = 0.18;                    // kept low: background, under the effects
   let level = 1, fadeTimer = null;          // 0..1 multiplier on BASE_VOL
 
   function applyLevel() {
@@ -898,11 +903,17 @@ const Music = (() => {
 
   return {
     start() { armed = true; pick(true); },
-    /* Called by reset(), so the track starts over every time a level does -
-       entering an act, and restarting one after a death. Deliberately not in
-       retune(): retune fires on any loadLevel, including the boot loop that
-       validates all three acts, and re-cueing there would fight itself. */
-    cue() { forced = null; if (armed) pick(true); },
+    /* Called by reset() - entering an act, and restarting one after a
+       death. The song carries on from where it is rather than starting over:
+       one track across all three acts, so restarting it on every level and
+       every death meant hearing the same opening over and over. Only start(),
+       a new run from the title, goes back to the top. Still clears `forced`
+       (the credits) and restores the level after a duck.
+
+       Deliberately not in retune(): retune fires on any loadLevel, including
+       the boot loop that validates all three acts, and re-cueing there would
+       fight itself. */
+    cue() { forced = null; if (armed) pick(); },
     /* Hand the soundtrack to a named tune or track until the next cue(). Does
        nothing before the first keypress, like everything else here. */
     force(name) {
@@ -6128,7 +6139,7 @@ function reset(toTitle = false, opts = {}) {
   game.advance = false;
   game.state = toTitle ? 'title' : 'play';
   if (!toTitle) Stats.beginAct(game.levelIndex);
-  if (typeof Music !== 'undefined') Music.cue();   // the track starts over with the level
+  if (typeof Music !== 'undefined') Music.cue();   // the track carries on into the level
   cam.x = 0; cam.y = clamp(LEVEL_H_PX - VIEW_H, 0, 1e9);
 }
 
