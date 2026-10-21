@@ -1120,23 +1120,21 @@ const LEVEL_1 = {
 
   // khachapuri = temporary invincibility, rose = heal one heart.
   // Placed just before the hard sections rather than inside them.
-  /* Powder sits ahead of every boss so a death is never a walk back in
-     without it, and ahead of the tall stretches it exists to open up. */
+  /* Powder is handed out among the walkers, never at a boss's door: you
+     find it in a fight with the rank and file, not as a ration for the big
+     one. */
   items: [
-    { x: 50,  y: 10, t: 'powder' },      // before the first mid boss
+    { x: 26,  y: 10, t: 'powder' },      // among the first walkers
+    { x: 50,  y: 10, t: 'powder' },
     { x: 100, y: 10, t: 'rose' },
     { x: 30,  y: 10, t: 'rose' },
     { x: 130, y: 10, t: 'rose' },
     { x: 236, y: 10, t: 'rose' },
-    { x: 118, y: 10, t: 'powder' },      // before the boss trigger
+    { x: 118, y: 10, t: 'powder' },      // among the walkers past the first gate
     { x: 210, y: 8,  t: 'rose' },        // on the 210-212 ledge, past the beach
-    { x: 214, y: 10, t: 'powder' },      // before the limousine
-    /* Past the landing, not on it. At 255 it sat one tile off the far lip and
-       handed the double jump straight back, so any later fall was re-crossed
-       with powder+ultra rather than the ultra alone. */
-    { x: 259, y: 9,  t: 'powder' },      // before the third gate boss
-    { x: 262, y: 9,  t: 'khachapuri' },  // the act's one invincibility
-    { x: 272, y: 10, t: 'powder' },      // inside the arena, before Aslan
+    { x: 223, y: 10, t: 'powder' },      // among the walkers past the limousine
+    { x: 269, y: 10, t: 'khachapuri' },  // the act's one invincibility: a reward
+                                         // for the General, past his gate, before Aslan
     { x: 278, y: 9,  t: 'rose' },
   ],
 
@@ -1152,7 +1150,7 @@ const LEVEL_1 = {
   /* 263 not 258: the ultra crossing lands him around 255 and her pull radius
      is 62px, so at 258 she caught him the instant he completed the one jump
      the act forces him to make. */
-  charmers: [30, 42, 106, 228, 263],   // 106 not 102: clear of the gate at 101
+  charmers: [30, 42, 106, 228],   // 106 not 102: clear of the gate at 101
 
   /* Each mid boss holds a gate shut. `gate` is the tile column that stays
      solid until he dies, so the level cannot be run past — every mid boss is
@@ -1354,7 +1352,7 @@ const LEVEL_2 = {
     { x: 105, y: 8,  t: 'rose' },
     { x: 165, y: 8,  t: 'rose' },
     { x: 134, y: 7,  t: 'matsoni' },     // the act's one invincibility
-    { x: 150, y: 8,  t: 'powder' },
+    { x: 124, y: 10, t: 'powder' },      // among the reporters, not at the studio door
     { x: 156, y: 10, t: 'rose' },
   ],
 
@@ -1477,17 +1475,17 @@ const LEVEL_3 = {
   ],
 
   items: [
-    { x: 36,  y: 10, t: 'powder' },
-    { x: 89,  y: 8,  t: 'powder' },
+    { x: 24,  y: 10, t: 'powder' },      // among the guards, not at Sleepy's gate
+    { x: 70,  y: 10, t: 'powder' },      // among the guards, not at Svani's gate
     { x: 66,  y: 9,  t: 'rose' },
     { x: 118, y: 8,  t: 'rose' },
     { x: 50,  y: 10, t: 'rose' },
     { x: 100, y: 8,  t: 'rose' },
     { x: 182, y: 10, t: 'rose' },
-    { x: 136, y: 10, t: 'powder' },
+    { x: 120, y: 10, t: 'powder' },      // among the guards, not at the Bomber's gate
     { x: 164, y: 9,  t: 'rose' },
     { x: 172, y: 8,  t: 'rose' },
-    { x: 190, y: 10, t: 'powder' },
+    { x: 166, y: 10, t: 'powder' },      // among the guards, not at the arena
     /* Moved out of the arena. At 193 it was inside it, so the fight opened
        with nine seconds of invincibility and the first two hits were free. */
     { x: 140, y: 9,  t: 'tea' },         // the act's one invincibility
@@ -4053,6 +4051,56 @@ class Bomb extends Entity {
      hp 2  MAN  - as above but quicker off the mark
      hp 1  FOX  + a second fox. Only one of them is really him; the other
                   pops when stomped.                                        */
+/* The fox's rhythm, shared by Edika and his phantom, and readable on
+   purpose. It used to run flat out at you with random hops twice a second and
+   a chance of a second pounce, so it sat on top of the player bouncing - a
+   still player was in contact on 180 frames out of 600. Now it is four beats:
+     prowl   trots up to a couple of tiles away and waits there, facing you
+     crouch  stops and flashes "!" - harmless, this is the warning
+     pounce  ONE leap at where you stood when it crouched
+     pant    lands and sits (Edika: the stomp window; the phantom: a rest)
+   `onLand` is called once per pounce, on touchdown. */
+const FOX = { trot: 78, keep: 44, crouch: 0.55, air: 0.69, leap: -300, maxRun: 170 };
+
+function foxCycle(e, dt, { prowl, pant, onLand }) {
+  const p = game.player;
+  const d = p.cx - e.cx;
+  switch (e.phase) {
+    case 'prowl':
+      // turn only when clearly on the other side, so it does not flicker
+      if (Math.abs(d) > 20) e.dir = Math.sign(d);
+      e.vx = Math.abs(d) > FOX.keep ? e.dir * FOX.trot : 0;
+      if (e.phaseT > prowl && e.engagedFox && e.onGround) {
+        e.phase = 'crouch'; e.phaseT = 0; e.dir = Math.sign(d) || e.dir;
+        Sfx.deny();
+      }
+      break;
+    case 'crouch':
+      e.vx = 0;
+      if (e.phaseT > FOX.crouch) {
+        e.phase = 'pounce'; e.phaseT = 0;
+        e.vy = FOX.leap;
+        e.vx = clamp((p.cx - e.cx) / FOX.air, -FOX.maxRun, FOX.maxRun);
+        e.dir = Math.sign(e.vx) || e.dir;
+      }
+      break;
+    case 'pounce':
+      if (e.onGround && e.phaseT > 0.2) {
+        e.vx = 0; e.phase = 'pant'; e.phaseT = 0;
+        burst(e.cx, e.bottom, 14,
+              { colors: ['#dde3ec', '#fff'], speed: 90, grav: 300, life: .5, size: 2, spread: Math.PI });
+        if (onLand) onLand();
+      }
+      break;
+    case 'pant':
+      e.vx = 0;                     // dead stop: the window is a still target
+      if (e.phaseT > pant) { e.phase = 'prowl'; e.phaseT = 0; }
+      break;
+    default:
+      e.phase = 'prowl'; e.phaseT = 0;
+  }
+}
+
 /* The second fox at the last stage. Behaves like him and hurts on contact,
    but stomping it only pops it - the real one still owes you a hit. */
 class DecoyFox extends Entity {
@@ -4067,14 +4115,12 @@ class DecoyFox extends Entity {
   /* The real Edika got a grace after every hit; this one never did, and it is
      spawned a couple of tiles from a player who has just landed a stomp and is
      still standing there. So the second fox was the one killing on sight. */
-  get harmless() { return this.grace > 0; }
+  get harmless() { return this.grace > 0 || this.phase === 'crouch' || this.phase === 'pant'; }
   update(dt) {
     this.t += dt; this.phaseT += dt;
     this.grace = Math.max(0, (this.grace ?? 0) - dt);
     this.turnCd = Math.max(0, this.turnCd - dt);
     this.hitWall = false;
-    const p = game.player;
-    const d = p.cx - this.cx;
     if (this.grace > 0) {                 // hold still until it is fair to move
       this.vx = 0;
       this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
@@ -4082,12 +4128,13 @@ class DecoyFox extends Entity {
       this.face = this.dir;
       return;
     }
-    if (Math.abs(d) > 12) this.dir = Math.sign(d);
-    this.vx = this.dir * DARD.foxRun * 0.85;
-    if (this.onGround && Math.random() < dt * 2.0) this.vy = -180;
+    // the same rhythm as Edika, a little slower, and its rest is not a window
+    this.engagedFox = true;
+    foxCycle(this, dt, { prowl: DARD.prowl * 1.5, pant: 1.2 });
     /* He is spawned on whichever step Edika was standing on, so he has to be
        able to stand on it - and to come after you off it. */
-    tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
+    if (this.phase === 'prowl')
+      tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
     this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
     this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
     moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
@@ -4130,8 +4177,8 @@ class DecoyFox extends Entity {
    of a second pounce that carries him out of reach is roughly halved. The
    man's window is nudged up to match. */
 const DARD = { hp: 4, pace: 30, slamEvery: 2.8, windup: 0.62, winded: 2.2, quipEvery: 3.1,
-               foxRun: 118, foxLeap: -330, prowl: 1.15, pounce: 0.95, pant: 2.2,
-               debris: 3, doublePounce: 0.20,
+               prowl: 1.4, pant: 2.2,
+               debris: 3,
                /* Only the man shoots. It keeps the two forms asking for
                   different things: duck the man, jump the fox. */
                shootEvery: 2.1, aim: 0.5,
@@ -4215,7 +4262,7 @@ class Dardubala extends Entity {
        a beat to watch, not a punish. */
     return this.grace > 0 ||
            this.phase === 'winded' || this.phase === 'windup' ||
-           this.phase === 'pant'   || this.phase === 'aim';
+           this.phase === 'pant'   || this.phase === 'aim' || this.phase === 'crouch';
   }
   /* Latches. Without it, retreating back past the arena line switched his
      slams off, so he never opened a window and the fight deadlocked - a bot
@@ -4245,60 +4292,22 @@ class Dardubala extends Entity {
       Sfx.bump();
     }
 
-    // ---- fox form: prowl, pounce, pant. Nothing like the man's rhythm.
+    // ---- fox form: prowl, crouch, pounce, pant. Nothing like the man's rhythm.
     if (this.isFox) {
-      const p = game.player;
-      const d = p.cx - this.cx;
-      if (this.phase !== 'prowl' && this.phase !== 'pounce' && this.phase !== 'pant') {
-        this.phase = 'prowl'; this.phaseT = 0;
-      }
-      switch (this.phase) {
-        case 'prowl':
-          if (Math.abs(d) > 12) this.dir = Math.sign(d);
-          this.vx = this.dir * DARD.foxRun;
-          if (this.onGround && Math.random() < dt * 2.2) this.vy = -190;   // skittish hops
-          if (this.phaseT > DARD.prowl && this.engaged) {
-            this.phase = 'pounce'; this.phaseT = 0;
-            if (this.onGround) this.vy = DARD.foxLeap;
-            this.dir = Math.sign(d) || this.dir;
-            Sfx.deny();
-          }
-          break;
-        case 'pounce':
-          this.vx = this.dir * DARD.foxRun * 1.5;
-          if (this.phaseT > DARD.pounce || (this.onGround && this.phaseT > 0.35)) {
-            burst(this.cx, this.bottom, 14,
-                  { colors: ['#dde3ec', '#fff'], speed: 90, grav: 300, life: .5, size: 2, spread: Math.PI });
-            // a second leap often follows, so standing behind him is not an answer
-            if (!this.chained && Math.random() < DARD.doublePounce) {
-              this.chained = true;
-              this.phaseT = 0;
-              this.dir = Math.sign(p.cx - this.cx) || this.dir;
-              if (this.onGround) this.vy = DARD.foxLeap * 0.85;
-              shake = 3;
-            } else {
-              this.chained = false;
-              this.phase = 'pant'; this.phaseT = 0;
-              const fy = groundBelow(this.cx, this.bottom + 2) ?? (13 * TILE);
-              // was #e8eef8: a white wave on pale stone, effectively invisible
-              for (const d of [-1, 1]) game.hazards.push(new Shockwave(this.cx, fy, d, '#7ec8f0'));
-            }
-          }
-          break;
-        case 'pant':
-          /* Dead stop, not a decay. Coasting through the one window he can be
-             stomped on meant lining up a landing on a moving target - which is
-             most of what "impossible to catch him vulnerable" was. */
-          this.vx = 0;
-          if (this.phaseT > DARD.pant) { this.phase = 'prowl'; this.phaseT = 0; }
-          break;
-      }
-      if (this.engaged && !this.scriptedOut)
+      this.engagedFox = this.engaged;
+      foxCycle(this, dt, { prowl: DARD.prowl, pant: DARD.pant, onLand: () => {
+        const fy = groundBelow(this.cx, this.bottom + 2) ?? (13 * TILE);
+        // was #e8eef8: a white wave on pale stone, effectively invisible
+        for (const d of [-1, 1]) game.hazards.push(new Shockwave(this.cx, fy, d, '#7ec8f0'));
+      } });
+      // follows you between the steps, but only while prowling - a climb in
+      // the middle of a pounce is what made his leaps look random
+      if (this.engaged && !this.scriptedOut && this.phase === 'prowl')
         tierChase(this, dt, { climb: DARD.climb, run: DARD.climbRun, every: DARD.tierEvery });
       this.hopCd = Math.max(0, (this.hopCd ?? 0) - dt);
       this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
       moveAndCollide(this, dt, { oneWay: this.dropT <= 0 });
-      // the prowl hop is 20px and the pounce only comes round every 1.15s
+      // a pipe in his way while prowling: hop it rather than pace against it
       if (hopWall(this)) { /* over */ }
       else if (this.onGround && this.hitWall && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
       leash(this);
@@ -7925,7 +7934,9 @@ function drawEntities() {
       g.globalAlpha = shimmer + 0.16;
       drawSprite(ART.l3foxrun, e, { tint: 'rgba(90,170,235,.55)' });
       g.restore();
-      if (Math.floor(game.time * 6) % 2 === 0)
+      if (e.phase === 'crouch' && Math.floor(game.time * 14) % 2 === 0)
+        drawTextCentered(g, '!', e.cx, e.y - 12, '#7ec8f0', 2);
+      else if (Math.floor(game.time * 6) % 2 === 0)
         drawTextCentered(g, '?', e.cx, e.y - 12, '#7ec8f0', 1);
     } else if (e instanceof Dardubala) {
       if (e.foxed) { drawFox(e.cx - 11, e.y + 8, -1, game.time); continue; }
@@ -7954,7 +7965,7 @@ function drawEntities() {
         });
         if (sitting && Math.floor(game.time * 8) % 2 === 0)
           drawTextCentered(g, 'STOMP HIM', e.cx, e.y - 12, '#7ae07a', 1);
-        if (e.phase === 'pounce' && Math.floor(game.time * 14) % 2 === 0)
+        if (e.phase === 'crouch' && Math.floor(game.time * 14) % 2 === 0)
           drawTextCentered(g, '!', e.cx, e.y - 12, '#ff5ec4', 2);
         continue;
       }
