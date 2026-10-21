@@ -1122,6 +1122,9 @@ const LEVEL_1 = {
   items: [
     { x: 50,  y: 10, t: 'powder' },      // before the first mid boss
     { x: 100, y: 10, t: 'rose' },
+    { x: 30,  y: 10, t: 'rose' },
+    { x: 130, y: 10, t: 'rose' },
+    { x: 236, y: 10, t: 'rose' },
     { x: 118, y: 10, t: 'powder' },      // before the boss trigger
     { x: 210, y: 8,  t: 'rose' },        // on the 210-212 ledge, past the beach
     { x: 214, y: 10, t: 'powder' },      // before the limousine
@@ -1344,6 +1347,9 @@ const LEVEL_2 = {
     { x: 74,  y: 8,  t: 'rose' },
     { x: 102, y: 8,  t: 'powder' },
     { x: 120, y: 8,  t: 'rose' },
+    { x: 40,  y: 8,  t: 'rose' },
+    { x: 105, y: 8,  t: 'rose' },
+    { x: 165, y: 8,  t: 'rose' },
     { x: 134, y: 7,  t: 'matsoni' },     // the act's one invincibility
     { x: 150, y: 8,  t: 'powder' },
     { x: 156, y: 10, t: 'rose' },
@@ -1472,6 +1478,9 @@ const LEVEL_3 = {
     { x: 89,  y: 8,  t: 'powder' },
     { x: 66,  y: 9,  t: 'rose' },
     { x: 118, y: 8,  t: 'rose' },
+    { x: 50,  y: 10, t: 'rose' },
+    { x: 100, y: 8,  t: 'rose' },
+    { x: 182, y: 10, t: 'rose' },
     { x: 136, y: 10, t: 'powder' },
     { x: 164, y: 9,  t: 'rose' },
     { x: 172, y: 8,  t: 'rose' },
@@ -2647,7 +2656,7 @@ function tierChase(e, dt, { climb = -430, run = 96, every = 1.6, reach = 240 } =
 
    A different fight from both Targamadzes: you are not timing a dog-walker's
    lunge, you are jumping a car and then running it down. */
-const LIMO = { hp: 3, rev: 0.6, speed: 150, accel: 420, wave: 1.4, grace: 0.9, guards: 2, w: 56, h: 18 };
+const LIMO = { hp: 3, rev: 0.6, speed: 150, accel: 420, wave: 1.4, grace: 0.9, guards: 0, w: 56, h: 18 };
 
 class Limo extends Entity {
   constructor(tx, gate = null) {
@@ -4478,10 +4487,10 @@ function drawHeartIcon(x, y, color) {
    opening and land on his head", and one ranged verb changes all of them at
    once without touching a single boss. */
 const ROSE_STUN = 1.7;
-/* Act 1's flags: three to start, three more at every pole raised, five from a
+/* Act 1's flags: three to start, three more at every pole raised, two from a
    paying ? block, fifteen at most - about 26 over the act against its 21
    walkers plus the limousine's guards, so you choose who to turn. */
-const AMMO = { cap: 15, block: 5, flagStart: 3, perPole: 3 };
+const AMMO = { cap: 15, block: 2, flagStart: 3, perPole: 3 };
 const ammoName = () => LEVEL.throwKind === 'flag' ? 'FLAGS' : 'ROSES';
 
 class ThrownRose extends Entity {
