@@ -53,6 +53,12 @@ const CFG = {
      could take a second heart before you had moved. drawEntities blinks him
      through it, so the window reads as being briefly a ghost. */
   hurtInvuln:  2.6,
+  /* After landing on a boss - a hit or a bounce - nothing can hurt you for
+     this long. Bosses change phase under your feet when you stomp them (Aslan
+     rises, a man turns into a fox, a car pulls away) and that change used to
+     cost a heart on the very frame you earned the hit. Not blinked: it is not
+     damage, so it should not look like it. */
+  stompSafe:   0.6,
   // The death pop runs on its own, lighter gravity so it hangs and reads as a
   // beat rather than a blink. Roughly 1.9s from hit to off-screen.
   deathVel:    -215,
@@ -2017,7 +2023,7 @@ class Player extends Entity {
   }
 
   hurt(fromX) {
-    if (this.invuln > 0 || this.invincible > 0 || game.state !== 'play') return;
+    if (this.invuln > 0 || this.invincible > 0 || this.stompSafe > 0 || game.state !== 'play') return;
     Stats.add('hits');
     punch(this.cx < fromX ? -4 : 4, 0);
     /* Riding, or in a hop off something carrying him over water: knockback
@@ -2257,6 +2263,7 @@ class Player extends Entity {
     // above the frequency the eye reads as walking — it just looked like a jitter.
     this.runT += Math.abs(this.vx) * dt / 16;
     this.invuln = Math.max(0, this.invuln - dt);
+    this.stompSafe = Math.max(0, (this.stompSafe ?? 0) - dt);
 
     const wasInv = this.invincible;
     this.invincible = Math.max(0, this.invincible - dt);
@@ -2731,7 +2738,7 @@ class Limo extends Entity {
   takeHit(p) {
     if (this.dead) return;
     this.hp--; this.hitFlash = 0.4; this.grace = LIMO.grace;
-    shake = 7; freeze = 0.09; Sfx.stomp();
+    shake = 4; freeze = 0.05; Sfx.stomp();
     burst(this.cx, this.y, 22, { colors: ['#14151a', '#c8ccd4', '#ffd85e'], speed: 150, size: 2 });
     if (this.hp <= 0) {
       this.dead = true;
@@ -3684,7 +3691,7 @@ class General extends Entity {
           game.hazards.push(new Bullet(this.cx + this.aimDir * 20, this.bottom - ride,
                                        this.aimDir, 'shot', GENERAL.bullet));
           this.left--; this.gap = GENERAL.gap;
-          shake = Math.max(shake, 2); Sfx.bump();
+          Sfx.bump();
         }
         if (this.left <= 0 && this.gap <= 0) { this.phase = 'pace'; this.phaseT = 0; }
         break;
@@ -3735,7 +3742,7 @@ class General extends Entity {
   blastHit(p) {
     if (this.hp <= 0 || this.scriptedOut) return;
     this.hp--; this.hitFlash = 0.45;
-    shake = 9; freeze = 0.1; flash = 0.35;
+    shake = 4; freeze = 0.05; flash = 0.25;
     burst(this.cx, this.y + this.h / 2, 26, { colors: ['#ff8a5c', '#ffd85e', '#fff'], speed: 170, size: 3 });
     if (this.hp > 0) {
       this.phase = 'stagger'; this.phaseT = 0;
@@ -3940,7 +3947,7 @@ class Bomber extends Entity {
   get maxHp() { return BOMBER.hp; }
   blastHit(p) {
     this.hp--; this.hitFlash = 0.4;
-    shake = 7; freeze = 0.09; flash = 0.3;
+    shake = 4; freeze = 0.05; flash = 0.25;
     burst(this.cx, this.y + this.h / 2, 24, { colors: ['#ff8a5c', '#ffd85e', '#fff'], speed: 160, size: 3 });
     if (this.hp <= 0) {
       this.dead = true;
@@ -4002,13 +4009,16 @@ class Bomb extends Entity {
   explode() {
     if (this.dead) return;
     this.dead = true;
-    shake = 6; Sfx.brick();
+    shake = 4; Sfx.brick();
     burst(this.cx, this.cy2, 26, { colors: ['#ffd85e', '#ff8a5c', '#e8434f', '#fff'], speed: 190, size: 3, life: .7 });
     const ring = r => ({ x: this.cx - r, y: this.y + 4 - r, w: r * 2, h: r * 2 });
     const box = ring(BOMBER.blast);
     const p = game.player;
     // the player gets the smaller radius, so escaping your own punt is fair
-    if (aabb(ring(BOMBER.blastP), p) && p.invincible <= 0) p.hurt(this.cx);
+    /* A bomb you kicked back is yours: it goes off on HIM, a step from where
+       you landed the kick, and catching you in that blast punished the only
+       move that hurts him. Only his own throws can hurt you. */
+    if (!this.punted && aabb(ring(BOMBER.blastP), p) && p.invincible <= 0) p.hurt(this.cx);
     for (const e of game.enemies) {
       if (e.dead || e === this) continue;
       if (!aabb(box, e)) continue;
@@ -4351,7 +4361,7 @@ class Dardubala extends Entity {
           const fy = this.bottom;
           game.hazards.push(new Bullet(this.cx + this.aimDir * 8,
                                        fy - BULLET.ride, this.aimDir));
-          shake = 3; Sfx.bump();
+          Sfx.bump();
           burst(this.cx + this.aimDir * 10, fy - BULLET.ride + 2, 10,
                 { colors: ['#ffd85e', '#ff8a5c', '#fff'], speed: 90, grav: 60, life: .4, size: 1 });
           this.shoot = DARD.shootEvery + rand(-0.3, 0.5);
@@ -4437,7 +4447,7 @@ class Dardubala extends Entity {
     this.vx = (Math.sign(this.cx - (p ? p.cx : this.cx)) || 1) * 120;
     if (this.onGround) this.vy = -150;
     this.phase = this.isFox ? 'prowl' : 'pace'; this.phaseT = 0;
-    shake = 7; freeze = 0.1; flash = 0.35; Sfx.stomp();
+    shake = 4; freeze = 0.05; flash = 0.25; Sfx.stomp();
     burst(this.cx, this.y + this.h / 2, 26,
           { colors: this.isFox ? ['#dde3ec', '#fff', '#c9a0ff'] : ['#c9a0ff', '#ffd85e', '#fff'],
             speed: 180, size: 3 });
@@ -4524,7 +4534,10 @@ class FlyingBoss extends Entity {
      you, and side contact still cost a heart, so walking in to take the free
      stomp cost more than it gained. A test bot playing the window perfectly
      lost all three hearts in eight seconds without landing a single hit. */
-  get harmless() { return this.vulnerable; }
+  /* ...and while he rises back up afterwards. Recover starts on the frame
+     you stomp him, at your feet, and he climbed straight through you - a
+     clean hit cost a heart. */
+  get harmless() { return this.vulnerable || this.phase === 'recover'; }
 
   /* He stalks from tile 128 but only fights from tile 196.
 
@@ -4629,7 +4642,7 @@ class FlyingBoss extends Entity {
     if (!this.vulnerable) {
       this.denyFlash = 0.5;
       floatText(this.cx, this.y - 8, 'OUT OF REACH', '#c9a0ff'); spark(this.cx, this.y, 'clank'); Sfx.clank();
-      shake = 5; flash = 0.4; freeze = 0.08; Sfx.deny();
+      shake = 2; Sfx.deny();
       burst(this.cx, this.y + this.h / 2, 18, { colors: ['#6b3fa0', '#c9a0ff', '#fff'], speed: 115 });
       return;
     }
@@ -4643,7 +4656,7 @@ class FlyingBoss extends Entity {
     this.hp--;
     this.hitFlash = 0.4;
     this.phase = 'recover'; this.phaseT = 0;      // knocked straight out of the window
-    shake = 6; freeze = 0.1; flash = 0.35; Sfx.stomp();
+    shake = 4; freeze = 0.05; flash = 0.25; Sfx.stomp();
     burst(this.cx, this.y + this.h / 2, 22, { colors: ['#e8434f', '#ffd85e', '#fff'], speed: 150, size: 3 });
 
     if (this.hp <= 0) {
@@ -6705,6 +6718,7 @@ function resolveEnemies(dt) {
     const band     = open ? e.h * 0.9 : e.h * 0.5;
     const feetAbove = p.bottom - p.vy * dt <= e.y + band;
     if (falling && feetAbove) {
+      if (isBoss) p.stompSafe = CFG.stompSafe;
       stompFx(p, e);
       e.onStomp(p);
       Sfx.chain = 0;
