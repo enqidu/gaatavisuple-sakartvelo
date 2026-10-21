@@ -88,6 +88,9 @@ const SPRITES = {
   jump:   { src: 'assets/jump.png',   h: 30, hitW: 0.55, hitH: 0.92, color: '#2b3a5e' },
   walker: { src: 'assets/walker.png', h: 19, hitW: 0.70, hitH: 0.90, color: '#4a7a2f' },
   mid:    { src: 'assets/mid.png',    h: 30, hitW: 0.80, hitH: 0.82, color: '#2d4a7a' },
+  /* Netkachov. Until the art exists the file 404s and boot paints him in code
+     instead (see paintGeneral); his hitbox is GENERAL's, not the art's. */
+  general: { src: 'assets/general.png', h: 54, hitW: 0.60, hitH: 0.96, color: '#3f5a36' },
   boss:   { src: 'assets/boss.png',   h: 34, hitW: 0.55, hitH: 0.90, color: '#1a1a1a' },
   death:  { src: 'assets/death.png',  h: 32, hitW: 0.55, hitH: 0.90, color: '#5a2b2b' },
   lady:   { src: 'assets/lady.png',   h: 29, hitW: 0.50, hitH: 0.90, color: '#c2456f' },
@@ -1018,7 +1021,7 @@ const LEVEL_1 = {
      arena are exactly where they were, so their measurements still hold.
 
      Endgame runs in clean stages so nothing overlaps:
-       260  third gate boss (Targamadze, round two)
+       260  third gate boss (General Netkachov)
        266  his gate — opens when he dies
        270  pipe (a step to jump from during the fight)
        268+ boss arena: Aslan starts diving
@@ -1179,7 +1182,7 @@ const LEVEL_1 = {
     { t: 'walker', x: 222 }, { t: 'walker', x: 230 },
     { t: 'walker', x: 232 },
     { t: 'walker', x: 234, up: true },    // the 233-235 ledge, last one before the bridge
-    { t: 'mid',    x: 260, gate: 266 },   // Targamadze, round two
+    { t: 'general', x: 260, gate: 266 },  // General Netkachov
     { t: 'walker', x: 268 },
   ],
 
@@ -1515,7 +1518,7 @@ let LEVEL = LEVEL_1;
    here and hit the temporal dead zone. The body only runs at spawn time. */
 function enemyKind(t) {
   return ({
-    walker: Walker, mid: MidBoss, limo: Limo,
+    walker: Walker, mid: MidBoss, limo: Limo, general: General,
     l2girl: PressGirl, l2girl2: PressGirl2, l2man: PressMan,
     l2anchor: Anchor, l2camera: StudioCamera,
     l3guard: Guard, l3sleepy: Sleepy, l3svani: Svani,
@@ -3564,6 +3567,283 @@ class Anchor extends Entity {
   }
 }
 
+/* General Yuri Netkachov, act 1's third gate, in place of Targamadze's
+   second round. A giant in a peaked cap with a pistol in one hand and a bomb in
+   the other, so he asks for both answers the act has taught: the Bullet lanes
+   (duck the high shot, jump the low one) and Act 3's bombs (stomp one to punt
+   it back, because it is the only thing that hurts him).
+
+   Stomping the man himself only bounces you off: he is armoured to the knee
+   in brass. Each bomb of his own that goes off on him is one hit, and he
+   staggers for a moment, harmless, so the player can step clear. */
+const GENERAL = { hp: 4, w: 30, h: 52, pace: 30, cycle: 2.1, aim: 0.7, gap: 0.32,
+                  volley: 3, bullet: 150, stagger: 1.4, lob: 0.7, backOff: 1.3 };
+
+class General extends Entity {
+  constructor(tx, gate = null) {
+    super(tx * TILE, 0, GENERAL.w, GENERAL.h);
+    this.gate = gate;
+    this.y = groundYAt(tx) - this.h;
+    this.dir = -1; this.turnCd = 0; this.hitFlash = 0; this.t = 0;
+    this.hp = GENERAL.hp;
+    this.phase = 'pace'; this.phaseT = 0; this.left = 0; this.gap = 0;
+    this.turn = 0; this.back = 0; this.taunt = 0;
+    /* Kept three tiles back from the lip of the ravine, so the player lands
+       from the jump in clear floor rather than on top of him. */
+    this.home = spanAround(tx);
+    if (this.home) this.home.lo = Math.max(this.home.lo, (tx - 3) * TILE);
+    this.greeted = false;
+  }
+  get bossGrade() { return true; }
+  get bossName() { return 'NETKACHOV'; }
+  get maxHp() { return GENERAL.hp; }
+  get rage() { return this.hp <= 2 ? 1.35 : 1; }
+  get harmless() { return this.phase === 'aim' || this.phase === 'lob' || this.phase === 'stagger'; }
+  // wakes the way the limousine does: when you are close enough to be seen
+  get engaged() {
+    if (Math.abs(game.player.cx - this.cx) < 170) this.woke = true;
+    return this.woke === true;
+  }
+  get selfDrawn() { return true; }
+  draw() {
+    const flash = this.hitFlash > 0 && Math.floor(this.hitFlash * 24) % 2 === 0;
+    if (ART.general.painted) paintGeneral(this.x, this.y, this.face || 1, this.t, flash, this.phase);
+    else {
+      drawSprite(ART.general, this, { tint: flash ? 'rgba(255,255,255,.9)' : null });
+      // the sprite has no bomb or muzzle of its own, so they go on top
+      const f = this.face || 1;
+      if (this.phase === 'lob') {
+        const bx = Math.round(this.cx + f * 8 - 4), by = Math.round(this.y - 9);
+        g.fillStyle = '#1a1a1a'; g.fillRect(bx, by, 8, 8);
+        g.fillStyle = '#4a4a4a'; g.fillRect(bx + 1, by + 1, 3, 2);
+        g.fillStyle = Math.floor(this.t * 12) % 2 ? '#ff8a5c' : '#ffd85e'; g.fillRect(bx + 5, by - 3, 2, 3);
+      } else if (this.phase === 'volley' && Math.floor(this.t * 30) % 2 === 0) {
+        g.fillStyle = '#ffd85e';
+        g.fillRect(Math.round(this.cx + f * 18 - 1), Math.round(this.bottom - (this.low ? BULLET.lowRide : BULLET.ride)) - 1, 3, 5);
+      }
+    }
+    if (this.taunt > 0) drawTextCentered(g, 'ARMOURED', this.cx, this.y - 12, '#ff8a5c', 1);
+    if (this.phase === 'lob' && Math.floor(game.time * 8) % 2 === 0)
+      drawTextCentered(g, 'BOMB!', this.cx, this.y - 14, '#ff8a5c', 1);
+    // the lane tell, drawn along the floor he is on, at the height it will fly
+    if (this.phase === 'aim' || this.phase === 'volley') {
+      const fy = this.bottom - (this.low ? BULLET.lowRide : BULLET.ride);
+      const d = this.aimDir || 1;
+      if (Math.floor(game.time * 14) % 2 === 0) {
+        g.fillStyle = this.low ? 'rgba(126,200,240,.60)' : 'rgba(244,244,244,.55)';
+        for (let k = 1; k < 14; k++)
+          g.fillRect(Math.round(this.cx + d * (20 + k * 9)), Math.round(fy) + 2, 4, 1);
+      }
+      if (this.phase === 'aim') drawTextCentered(g, this.low ? 'JUMP' : 'DUCK', this.cx, this.y - 12, '#ff8a5c', 1);
+    }
+  }
+  update(dt) {
+    this.t += dt; this.phaseT += dt;
+    this.turnCd = Math.max(0, this.turnCd - dt);
+    this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.taunt = Math.max(0, this.taunt - dt);
+    this.back = Math.max(0, this.back - dt);
+    this.hitWall = false;
+    if (this.scriptedOut) { this.vx = 0; return; }
+    const p = game.player;
+    const d = p.cx - this.cx;
+
+    if (this.engaged && !this.greeted) {
+      this.greeted = true;
+      floatText(this.cx, this.y - 18, 'ATTENTION!', '#ffd85e');
+      shake = 3; Sfx.deny();
+    }
+
+    switch (this.phase) {
+      case 'pace':
+        this.vx = this.dir * GENERAL.pace * this.rage;
+        if (this.engaged && this.phaseT > GENERAL.cycle / this.rage) {
+          this.turn++;
+          this.aimDir = Math.sign(d) || this.dir;
+          this.dir = this.aimDir;
+          if (this.turn % 2 === 1) {
+            // a shot: alternately at head height (duck) and at the ankle (jump)
+            this.low = Math.floor(this.turn / 2) % 2 === 1;
+            this.phase = 'aim';
+          } else {
+            this.phase = 'lob'; this.bombs = this.hp <= 2 ? 2 : 1;
+          }
+          this.phaseT = 0; Sfx.deny();
+        }
+        break;
+      case 'aim':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > GENERAL.aim / this.rage) {
+          this.phase = 'volley'; this.phaseT = 0;
+          this.left = this.low ? 2 : GENERAL.volley; this.gap = 0;
+        }
+        break;
+      case 'volley':
+        this.vx *= Math.pow(0.05, dt);
+        this.gap -= dt;
+        if (this.gap <= 0 && this.left > 0) {
+          const ride = this.low ? BULLET.lowRide : BULLET.ride;
+          game.hazards.push(new Bullet(this.cx + this.aimDir * 20, this.bottom - ride,
+                                       this.aimDir, 'shot', GENERAL.bullet));
+          this.left--; this.gap = GENERAL.gap;
+          shake = Math.max(shake, 2); Sfx.bump();
+        }
+        if (this.left <= 0 && this.gap <= 0) { this.phase = 'pace'; this.phaseT = 0; }
+        break;
+      case 'lob':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > GENERAL.lob / this.rage) {
+          // never nearer than four tiles, same rule as the Bomber: the bomb
+          // has to be reachable without standing inside him
+          const away = Math.sign(d) || this.dir;
+          const reach = clamp(Math.abs(d), BOMBER.throwMin, BOMBER.throwMax);
+          game.enemies.push(new Bomb(this.cx, this.y + 14, away, this, reach / BOMBER.carry));
+          Sfx.bump();
+          if (--this.bombs > 0) this.phaseT = 0;
+          else {
+            this.dir = -away; this.back = GENERAL.backOff;
+            this.phase = 'pace'; this.phaseT = 0;
+          }
+        }
+        break;
+      case 'stagger':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.phaseT > GENERAL.stagger) { this.phase = 'pace'; this.phaseT = 0; }
+        break;
+    }
+
+    this.vy = Math.min(this.vy + CFG.gravity * dt, CFG.maxFall);
+    moveAndCollide(this, dt, { oneWay: false });
+    const ahead = Math.floor((this.dir > 0 ? this.x + this.w + 2 : this.x - 2) / TILE);
+    const below = Math.floor((this.bottom + 3) / TILE);
+    const ledge = this.onGround && !isSolid(tileAt(ahead, below)) && !isOneWay(tileAt(ahead, below));
+    if ((this.hitWall || ledge) && this.turnCd <= 0) { this.dir *= -1; this.turnCd = TURN_CD; }
+    leash(this);
+    if (this.phase === 'pace' || this.phase === 'stagger') this.face = this.dir;
+    else this.face = this.aimDir || this.dir;
+  }
+  onStomp(p) {
+    p.vy = CFG.stompBounce * 0.85;
+    this.taunt = 0.8;
+    floatText(this.cx, this.y - 8, 'USE HIS BOMBS', '#ff8a5c'); spark(this.cx, this.y, 'clank'); Sfx.clank();
+    shake = 3; Sfx.deny();
+  }
+  // the khachapuri one-shot cannot get through the brass either
+  chip(p) {
+    if (this.taunt > 0) return;
+    this.taunt = 0.8;
+    floatText(this.cx, this.y - 8, 'USE HIS BOMBS', '#ff8a5c'); Sfx.clank();
+  }
+  blastHit(p) {
+    if (this.hp <= 0 || this.scriptedOut) return;
+    this.hp--; this.hitFlash = 0.45;
+    shake = 9; freeze = 0.1; flash = 0.35;
+    burst(this.cx, this.y + this.h / 2, 26, { colors: ['#ff8a5c', '#ffd85e', '#fff'], speed: 170, size: 3 });
+    if (this.hp > 0) {
+      this.phase = 'stagger'; this.phaseT = 0;
+      floatText(this.cx, this.y - 8, `${this.hp} LEFT`, '#ffd85e');
+      return;
+    }
+    this.dead = true;
+    game.addCombo(p, this.cx, this.y, 2500);
+    floatText(this.cx, this.y - 18, 'THE GENERAL RETIRES', '#ffd85e');
+    shake = 12; flash = 0.6; freeze = 0.15; Sfx.stomp();
+    burst(this.cx, this.y + this.h / 2, 36,
+          { colors: ['#ffd85e', '#ff8a5c', '#3f5a36'], speed: 200, size: 3 });
+    Stats.boss('general');
+    Feel.finisher(this.cx, this.y + this.h / 2, 'small');
+    if (this.gate != null) openGate(this.gate);
+  }
+}
+
+/* The general, 30x52, in parade greens: a peaked cap the size of a dinner
+   plate with gold oak leaves on the band and the peak, a heavy clean-shaven
+   face going grey at the temples, star epaulettes, a rack of ribbons with a
+   gold star over it, and gold name plates. Drawn facing right and mirrored. */
+function paintGeneral(x, y, face, t, flash, phase) {
+  x = Math.round(x); y = Math.round(y);
+  const W = GENERAL.w;
+  g.save();
+  if (face < 0) { g.translate(x + W, y); g.scale(-1, 1); } else g.translate(x, y);
+  const r = (c, a, b, w = 1, h = 1) => { g.fillStyle = flash ? '#fff' : c; g.fillRect(a, b, w, h); };
+  const GR = '#3f5a36', GD = '#2c4127', GL = '#557549', GOLD = '#e8c24a', GOLDD = '#a8842a';
+  const SK = '#e8b49a', SKD = '#c98e78', SKL = '#f4cbb4';
+  const step = Math.floor(t * 5) % 2, walking = phase === 'pace';
+
+  // trousers with the general's red stripe, boots
+  r(GD, 6, 46, 8, 4); r(GD, 16, 46, 8, 4);
+  r('#c0303a', 9, 46, 1, 4); r('#c0303a', 19, 46, 1, 4);
+  r('#121212', 5, 50 - (walking && step ? 1 : 0), 10, 2 + (walking && step ? 1 : 0));
+  r('#121212', 15, 50 - (walking && !step ? 1 : 0), 10, 2 + (walking && !step ? 1 : 0));
+
+  // tunic: broad, shaded at the edges, buttoned down the middle
+  r(GR, 3, 23, 24, 24);
+  r(GD, 3, 23, 2, 24); r(GD, 25, 23, 2, 24); r(GD, 3, 45, 24, 2);
+  r(GL, 6, 26, 2, 16);
+  r(GD, 15, 27, 1, 19);
+  r(GOLD, 14, 30); r(GOLD, 14, 35); r(GOLD, 14, 40);
+  // open collar over a khaki shirt, lapels
+  r('#cbbd94', 13, 22, 5, 5); r('#b0a27a', 13, 22, 5, 1);
+  r(GD, 11, 22, 3, 6); r(GD, 17, 22, 3, 6);
+  r(GL, 12, 23, 1, 4); r(GL, 18, 23, 1, 4);
+  r(GOLD, 12, 25); r(GOLD, 18, 25);                       // collar pins
+  // epaulettes: dark board, gold piping, one big star
+  r('#22331e', 2, 22, 8, 3); r('#22331e', 21, 22, 8, 3);
+  r(GOLD, 2, 22, 8, 1); r(GOLD, 21, 22, 8, 1);
+  r(GOLD, 5, 23, 2, 2); r(GOLD, 24, 23, 2, 2);
+  // ribbon rack, with the gold star over it
+  r(GOLD, 22, 26); r(GOLD, 21, 27, 3, 1); r(GOLDD, 22, 28);
+  const rib = ['#e8434f', '#f4f4f4', '#4a7ad8', '#e8c24a', '#7ae07a', '#e8434f',
+               '#4a7ad8', '#e8434f', '#e8c24a', '#f4f4f4', '#e8434f', '#4a7ad8'];
+  for (let i = 0; i < 12; i++) r(rib[i], 18 + (i % 4) * 2, 30 + Math.floor(i / 4), 2, 1);
+  // the hanging medal: striped ribbon, gold disc
+  r('#4a7ad8', 11, 30, 1, 3); r('#e8c24a', 12, 30, 1, 3); r('#e8434f', 13, 30, 1, 3);
+  r(GOLD, 11, 33, 3, 3); r(GOLDD, 12, 34);
+  // two small badges on the left breast, name plates
+  r('#e8434f', 6, 31, 2, 2); r(GOLD, 8, 31, 2, 2);
+  r(GOLD, 5, 38, 8, 2); r(GOLDD, 6, 38, 6, 1);
+  r(GOLD, 17, 38, 8, 2); r(GOLDD, 18, 38, 6, 1);
+
+  // the back arm, hanging
+  r(GR, 0, 24, 4, 17); r(GD, 0, 24, 1, 17); r(SKD, 0, 41, 4, 3);
+  if (phase === 'lob') {                       // bomb arm up, fist and bomb overhead
+    r(GR, 26, 8, 4, 16); r(GL, 28, 8, 1, 16); r(SK, 26, 5, 4, 3);
+    const flick = Math.floor(t * 12) % 2 === 0;
+    r('#1a1a1a', 24, -5, 8, 8); r('#4a4a4a', 25, -4, 3, 2);
+    r(flick ? '#ffd85e' : '#ff8a5c', 29, -8, 2, 3);
+  } else {                                     // pistol arm out in front
+    r(GR, 25, 26, 7, 4); r(GD, 25, 29, 7, 1); r(SK, 31, 26, 3, 4);
+    r('#1a1a1a', 31, 24, 8, 3); r('#1a1a1a', 31, 27, 3, 4); r('#4a4a4a', 32, 24, 6, 1);
+    if (phase === 'volley' && Math.floor(t * 30) % 2 === 0) r('#ffd85e', 39, 23, 3, 5);
+  }
+
+  // neck and a heavy, square face
+  r(SKD, 11, 19, 9, 4);
+  r(SK, 9, 9, 13, 12); r(SKL, 11, 10, 8, 3);
+  r(SKD, 9, 15, 1, 6); r(SKD, 21, 15, 1, 6); r(SKD, 10, 20, 11, 1);   // jowls
+  r(SK, 8, 12, 1, 4); r(SK, 22, 12, 1, 4); r(SKD, 22, 13, 1, 2);       // ears
+  r('#b8b8b0', 9, 10, 1, 4); r('#b8b8b0', 21, 10, 1, 4);               // grey temples
+  r('#c8a088', 11, 12, 3, 1); r('#c8a088', 17, 12, 3, 1);              // brows
+  r('#f4f4f4', 11, 13, 3, 1); r('#f4f4f4', 17, 13, 3, 1);
+  r('#5a8ab8', 13, 13); r('#5a8ab8', 19, 13);                          // pale eyes
+  r(SKD, 11, 14, 3, 1); r(SKD, 17, 14, 3, 1);                          // bags
+  r(SKD, 15, 14, 1, 3); r(SKD, 14, 16, 3, 1);                          // nose
+  r('#a8605a', 13, 18, 5, 1); r(SKD, 13, 19, 5, 1);                    // set mouth
+
+  // the cap: a wide green crown, the dark band with gold oak leaves, the
+  // eagle and cockade, and a black peak embroidered in gold
+  r(GR, 9, 0, 13, 1); r(GR, 6, 1, 19, 1); r(GR, 4, 2, 23, 4);
+  r(GL, 8, 1, 10, 1); r(GL, 6, 2, 12, 1);
+  r(GD, 4, 5, 23, 1);
+  r(GOLD, 14, 1, 3, 1); r(GOLD, 13, 2); r(GOLD, 17, 2);                // eagle
+  r('#1e2c1a', 6, 6, 19, 3);
+  for (let i = 0; i < 9; i++) r(i % 2 ? GOLD : GOLDD, 7 + i * 2, 7 - (i % 2), 1, 1);
+  r(GOLD, 14, 5, 3, 3); r('#e8434f', 15, 6);                           // cockade
+  r('#121212', 8, 9, 18, 2); r('#121212', 20, 9, 7, 1);
+  r(GOLD, 10, 9, 2, 1); r(GOLD, 14, 9, 2, 1); r(GOLD, 18, 9, 2, 1); r(GOLD, 22, 9, 2, 1);
+  g.restore();
+}
+
 /* Only the artwork differs. Named classes rather than a factory because
    reset() builds enemies with `new (enemyKind(t))(...)`. */
 class PressGirl  extends Journalist { constructor(tx) { super(tx, 'l2girl',  'high');   } }
@@ -3741,7 +4021,7 @@ class Bomb extends Entity {
          detonated it at 19px three times in a row and the fight was over
          before it started. Punting one back into him is meant to BE the kill,
          so that is the only thing that counts. */
-      if (e instanceof Bomber) { if (this.punted) e.blastHit(p); }
+      if (e instanceof Bomber || e instanceof General) { if (this.punted) e.blastHit(p); }
       else if (e instanceof Bomb) {                                  // chains
         e.fuse = Math.min(e.fuse, 0.2);
         e.punted = e.punted || this.punted;    // a chain off a punt is still yours
@@ -5918,9 +6198,10 @@ const Interlude = {
    Triggered by the same rule that puts the boss's health bar on screen, so
    the card ends exactly where the bar appears. */
 const INTRO = {
-  // Giorgi Targamadze, twice: Aslan's man with the dogs in act 1, a journalist in act 2
+  // Giorgi Targamadze, twice: Aslan's man with the dogs in act 1, a journalist in act 2.
+  // His second round in act 1 went to General Netkachov.
   mid1:   { art: 'mid',      l1: "ASLAN'S MAN",            l2: 'BROUGHT HIS DOGS',           bg: '#2d4a7a' },
-  mid2:   { art: 'mid',      l1: 'ROUND 2',                l2: 'SAME MAN. NEW SUNGLASSES.',  bg: '#2d4a7a' },
+  general: { art: 'general', l1: 'GENERAL YURI NETKACHOV', l2: 'GIANT. ARMED. EXPLOSIVE.',   bg: '#2a3a1c', name: 'NETKACHOV' },
   limo:   { art: 'limo',     l1: "ASLAN'S SON",            l2: 'THE CITY BUDGET, ON WHEELS', bg: '#1c1c24', name: 'THE MAYOR' },
   aslan:  { art: 'boss',     l1: 'LION OF ACHARA',         l2: 'HELICOPTER ON STANDBY',      bg: '#3a2a5a', name: 'ASLAN' },
   anchor: { art: 'l2anchor', l1: 'YOU AGAIN?',             l2: 'NOW A HUMBLE JOURNALIST',    bg: '#1c2436' },
@@ -5934,6 +6215,7 @@ const INTRO_FULL = 2.3, INTRO_SHORT = 0.9;
 function introKey(e) {
   if (e instanceof FlyingBoss) return 'aslan';
   if (e instanceof Limo) return 'limo';
+  if (e instanceof General) return 'general';
   if (e instanceof Anchor) return 'anchor';
   if (e instanceof Dardubala) return 'edika';
   if (e instanceof Sleepy) return 'sleepy';
@@ -8457,6 +8739,11 @@ function frame(now) {
   await loadAll();
   ART.seaBg = buildSeaBackdrop();          // drawn in code, not loaded
   ART.cellarBg = buildCellarBackdrop();
+  if (ART.general.isPlaceholder) ART.general = (() => {
+    const c = document.createElement('canvas'); c.width = 42; c.height = GENERAL.h + 10;
+    paintInto(c.getContext('2d'), () => paintGeneral(0, 10, 1, 0.1, false, 'pace'));
+    return { canvas: c, w: c.width, h: c.height, painted: true };
+  })();
   // the limousine's portrait for its boss card: the car, mayor waving
   ART.limo = (() => {
     const c = document.createElement('canvas'); c.width = LIMO.w; c.height = LIMO.h + 18;
